@@ -1,6 +1,6 @@
 //
 // This code was taken from the Vulkan tutorial website:
-// https://vulkan-tutorial.com/en/
+// https://vulkan-tutorial.com
 //
 
 #define VK_USE_PLATFORM_WIN32_KHR
@@ -138,7 +138,7 @@ private:
 
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
-        windowHandle = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "My First Vulkan Project", nullptr, nullptr);
+        windowHandle = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "TANG", nullptr, nullptr);
         glfwSetWindowUserPointer(windowHandle, this);
         glfwSetFramebufferSizeCallback(windowHandle, framebufferResizeCallback);
 
@@ -730,9 +730,9 @@ private:
     void createGraphicsPipeline()
     {
 
-        // Shaders
-        auto vertShaderCode = readFile("../src/shaders/vert.spv");
-        auto fragShaderCode = readFile("../src/shaders/frag.spv");
+        // Read the compiled shaders
+        auto vertShaderCode = readFile("../out/shaders/vert.spv");
+        auto fragShaderCode = readFile("../out/shaders/frag.spv");
 
         VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
         VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
