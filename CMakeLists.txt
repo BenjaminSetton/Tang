@@ -15,6 +15,8 @@ set(CMAKE_SOURCE_DIR ${PROJECT_SOURCE_DIR})
 # Source files
 set(SOURCES
 	src/main.cpp
+	src/shaders/shader.vert
+	src/shaders/shader.frag
 )
 
 # Header files
