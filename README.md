@@ -1,7 +1,7 @@
 # TANG
 A simple graphics framework that allows any project to quickly display stuff on the screen
 
-![Tang Logo](data/logo.png)
+![Tang Logo](logo.png)
 
 ## DISCLAIMER
 
