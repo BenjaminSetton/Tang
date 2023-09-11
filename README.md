@@ -19,3 +19,10 @@ NOTES:
 ## RESOURCES
 
 - Vulkan Tutorial - https://vulkan-tutorial.com
+
+## DEPENDENCIES
+
+- Vulkan SDK (graphics API)
+- GLFW (OS window handling)
+- GLM (math library)
+- stb (image loading)

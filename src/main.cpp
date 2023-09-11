@@ -11,6 +11,7 @@
 #include <glfw3native.h>
 
 #define GLM_FORCE_RADIANS
+#define GLM_FORCE_ALIGNED_GENTYPES
 #include <glm.hpp>
 #include <gtc/matrix_transform.hpp>
 
