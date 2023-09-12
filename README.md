@@ -26,3 +26,4 @@ NOTES:
 - GLFW (OS window handling)
 - GLM (math library)
 - stb (image loading)
+- tiny_obj (OBJ model loading)
