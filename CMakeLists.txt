@@ -35,23 +35,23 @@ add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS})
 # DEPENDENCIES
 
 # VULKAN
-set(VULKAN_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/dependencies/Vulkan/include")
-set(VULKAN_LIB "${CMAKE_SOURCE_DIR}/dependencies/Vulkan/lib/vulkan-1.lib")
+set(VULKAN_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/src/dependencies/Vulkan/include")
+set(VULKAN_LIB "${CMAKE_SOURCE_DIR}/src/dependencies/Vulkan/lib/vulkan-1.lib")
 target_link_libraries(${PROJECT_NAME} PRIVATE ${VULKAN_LIB})
 
 # GLFW
-set(GLFW_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/dependencies/GLFW/include")
-set(GLFW_LIB "${CMAKE_SOURCE_DIR}/dependencies/GLFW/lib/glfw3.lib")
+set(GLFW_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/src/dependencies/GLFW/include")
+set(GLFW_LIB "${CMAKE_SOURCE_DIR}/src/dependencies/GLFW/lib/glfw3.lib")
 target_link_libraries(${PROJECT_NAME} PRIVATE ${GLFW_LIB})
 
 # GLM
-set(GLM_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/dependencies/GLM/include")
+set(GLM_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/src/dependencies/GLM/include")
 
 # stb
-set(STB_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/dependencies/stb/include")
+set(STB_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/src/dependencies/stb/include")
 
 #tiny_obj
-set(TINY_OBJ_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/dependencies/tinyobj/include")
+set(TINY_OBJ_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/src/dependencies/tinyobj/include")
 
 # Include dependency header directories.
 target_include_directories(${PROJECT_NAME} PRIVATE ${VULKAN_INCLUDE_DIR})

@@ -38,6 +38,9 @@ static constexpr uint32_t WINDOW_WIDTH = 1920;
 static constexpr uint32_t WINDOW_HEIGHT = 1080;
 static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
 
+static const std::string MODEL_PATH = "../src/data/models/viking_room.obj";
+static const std::string TEXTURE_PATH = "../src/data/textures/viking_room.png";
+
 static std::vector<const char*> validationLayers = {
     "VK_LAYER_KHRONOS_validation"
 };
@@ -1373,7 +1376,7 @@ private:
     void createTextureImage()
     {
         int width, height, channels;
-        stbi_uc* pixels = stbi_load("../data/textures/texture.jpg", &width, &height, &channels, STBI_rgb_alpha);
+        stbi_uc* pixels = stbi_load("../src/data/textures/texture.jpg", &width, &height, &channels, STBI_rgb_alpha);
         if (pixels == nullptr)
         {
             throw std::runtime_error("Failed to load texture!");
