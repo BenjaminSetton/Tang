@@ -50,8 +50,12 @@ set(GLM_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/dependencies/GLM/include")
 # stb
 set(STB_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/dependencies/stb/include")
 
+#tiny_obj
+set(TINY_OBJ_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/dependencies/tinyobj/include")
+
 # Include dependency header directories.
 target_include_directories(${PROJECT_NAME} PRIVATE ${VULKAN_INCLUDE_DIR})
 target_include_directories(${PROJECT_NAME} PRIVATE ${GLFW_INCLUDE_DIR})
 target_include_directories(${PROJECT_NAME} PRIVATE ${GLM_INCLUDE_DIR})
 target_include_directories(${PROJECT_NAME} PRIVATE ${STB_INCLUDE_DIR})
+target_include_directories(${PROJECT_NAME} PRIVATE ${TINY_OBJ_INCLUDE_DIR})
