@@ -15,13 +15,17 @@ set(CMAKE_SOURCE_DIR ${PROJECT_SOURCE_DIR})
 # Source files
 set(SOURCES
 	src/main.cpp
+	src/asset_loader.cpp
+	
+	# Shaders
 	src/shaders/shader.vert
 	src/shaders/shader.frag
 )
 
 # Header files
 set(HEADERS
-	# TODO
+	src/asset_loader.h
+	src/log_utils.h
 )
 
 # Set the output directories
