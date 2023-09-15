@@ -12,20 +12,34 @@ endif()
 # Set the source directory
 set(CMAKE_SOURCE_DIR ${PROJECT_SOURCE_DIR})
 
+# Header files
+set(HEADERS
+	src/tang.h
+	src/asset_loader.h
+	src/asset_types.h
+	src/renderer.h
+	
+	src/buffer/buffer.h
+	src/buffer/vertex_buffer.h
+	src/buffer/index_buffer.h
+	
+	src/utils/logger.h
+	src/utils/assert.h
+)
+
 # Source files
 set(SOURCES
+	src/tang.cpp
 	src/main.cpp
 	src/asset_loader.cpp
+	
+	src/buffer/buffer.cpp
+	src/buffer/vertex_buffer.cpp
+	src/buffer/index_buffer.cpp
 	
 	# Shaders
 	src/shaders/shader.vert
 	src/shaders/shader.frag
-)
-
-# Header files
-set(HEADERS
-	src/asset_loader.h
-	src/log_utils.h
 )
 
 # Set the output directories
@@ -54,9 +68,12 @@ set(GLM_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/src/dependencies/GLM/include")
 # stb
 set(STB_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/src/dependencies/stb/include")
 
-#assimp
+# assimp
 set(ASSIMP_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/src/dependencies/assimp/include")
 set(ASSIMP_LIB "${CMAKE_SOURCE_DIR}/src/dependencies/assimp/lib")
+
+# SRC UTILS
+set(SRC_UTILS "${CMAKE_SOURCE_DIR}/src/utils")
 
 # Include dependency header directories.
 target_include_directories(${PROJECT_NAME} PRIVATE ${VULKAN_INCLUDE_DIR})
@@ -64,3 +81,6 @@ target_include_directories(${PROJECT_NAME} PRIVATE ${GLFW_INCLUDE_DIR})
 target_include_directories(${PROJECT_NAME} PRIVATE ${GLM_INCLUDE_DIR})
 target_include_directories(${PROJECT_NAME} PRIVATE ${STB_INCLUDE_DIR})
 target_include_directories(${PROJECT_NAME} PRIVATE ${ASSIMP_INCLUDE_DIR})
+
+# Include src utilility directories
+target_include_directories(${PROJECT_NAME} PRIVATE ${SRC_UTILS})

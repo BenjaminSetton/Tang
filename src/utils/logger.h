@@ -1,3 +1,5 @@
+#ifndef LOGGER_H
+#define LOGGER_H
 
 #include <iostream>
 
@@ -19,3 +21,5 @@ namespace TANG
 		std::cerr << "[INFO] " << msg << std::endl;
 	}
 }
+
+#endif

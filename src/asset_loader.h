@@ -1,5 +1,6 @@
+#ifndef ASSET_LOADER_H
+#define ASSET_LOADER_H
 
-#include <glm.hpp>
 #include <iostream>
 #include <string>
 #include <unordered_map>
@@ -9,65 +10,16 @@
 #include "assimp/Importer.hpp"
 #include "assimp/postprocess.h"
 
-#include "log_utils.h"
+#include "asset_types.h"
+#include "logger.h"
 
 namespace TANG
 {
-	// TODO - Find a better place for these definitions!
-	struct Vertex
-	{
-		Vertex() : pos(0.0f, 0.0f, 0.0f), normal(0.0f, 0.0f, 0.0f), uv(0.0f, 0.0f, 0.0f)
-		{
-		}
-		~Vertex() { }
-		// Too lazy to implement copy-constructor; should work just fine in this case
-
-		glm::vec3 pos;
-		glm::vec3 normal;
-		glm::vec3 uv;
-	};
-
-	struct Texture
-	{
-		Texture() : data(nullptr), size(0.0f, 0.0f), bytesPerPixel(0)
-		{
-		}
-		~Texture() { }
-		Texture(const Texture& other)
-		{
-			// Temporary debug :)
-			LogWarning("Deep-copying texture!");
-
-			data = new char[other.size.x * other.size.y * bytesPerPixel];
-			size = other.size;
-			bytesPerPixel = other.bytesPerPixel;
-		}
-
-		void* data;
-		glm::vec2 size;
-		uint32_t bytesPerPixel; // Guaranteed to be 4 by assimp loader
-	};
-
-	struct Mesh
-	{
-		std::vector<Vertex> vertices;
-		std::vector<uint32_t> indices;
-		//std::vector<Material> materials;
-	};
-
-	struct Asset
-	{
-		std::string name;
-		std::vector<Mesh> meshes;
-		std::vector<Texture> textures;
-	};
-
 	// Defines utilities for loading assets from file.
 	// Uses assimp for FBX loading, there is currently no plan for supporting multiple
 	// asset-loading libraries which is why the library code is not abstracted away
 	class LoaderUtils
 	{
-
 	public:
 
 		static bool Load(std::string_view filePath)
@@ -152,6 +104,9 @@ namespace TANG
 
 			auto assetContainer = AssetContainer::GetInstance()->container;
 			assetContainer[filePath] = asset;
+
+			// We're good to go!
+			return true;
 		}
 
 		static bool Unload(std::string_view filePath)
@@ -214,3 +169,5 @@ namespace TANG
 
 	};
 }
+
+#endif

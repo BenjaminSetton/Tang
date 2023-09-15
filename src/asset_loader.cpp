@@ -14,8 +14,9 @@ namespace TANG
 
 	const Asset* AssetContainer::GetAsset(std::string_view name) const
 	{
-		for (const auto& asset : container)
+		for (const auto& iter : container)
 		{
+			Asset* asset = iter.second;
 			if (asset->name == name) return asset;
 		}
 
