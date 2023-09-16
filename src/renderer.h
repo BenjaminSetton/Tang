@@ -12,35 +12,10 @@
 
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <glfw3native.h>
-//
-//#define GLM_FORCE_RADIANS
-//#define GLM_FORCE_DEPTH_ZERO_TO_ONE
-//#define GLM_FORCE_ALIGNED_GENTYPES
-//#include <glm.hpp>
-//#include <gtc/matrix_transform.hpp>
-//
-//#define GLM_ENABLE_EXPERIMENTAL
-//#include <gtx/hash.hpp>
-//
-//#define STB_IMAGE_IMPLEMENTATION
-//#include <stb_image.h>
 
-//#include <array>
-//#include <algorithm>
-//#include <chrono>
-//#include <cstdlib>
-//#include <cstdint>
-//#include <fstream>
-//#include <glm.hpp>
-//#include <iostream>
-//#include <optional>
-//#include <set>
-//#include <stdexcept>
-//#include <unordered_map>
+#include <unordered_map>
 #include <vector>
 
-
-//#include "asset_loader.h"
 #include "asset_types.h"
 #include "buffer/vertex_buffer.h"
 #include "buffer/index_buffer.h"
@@ -49,6 +24,14 @@
 struct QueueFamilyIndices;
 struct SwapChainSupportDetails;
 struct UniformBufferObject;
+
+enum QueueType
+{
+	GRAPHICS_QUEUE,
+	PRESENT_QUEUE,
+	TRANSFER_QUEUE,
+	QUEUE_COUNT			// NOTE! This value must come last at all times!! This is used to count the number of values inside this enum
+};
 
 struct AssetResources
 {
@@ -99,7 +82,7 @@ namespace TANG
 		void InitWindow();
 		void InitVulkan();
 
-		void drawFrame();
+		void DrawFrame();
 
 		void createInstance();
 
@@ -120,9 +103,9 @@ namespace TANG
 		////////////////////////////////////////
 		void pickPhysicalDevice();
 
-		bool isDeviceSuitable(VkPhysicalDevice device);
+		bool IsDeviceSuitable(VkPhysicalDevice device);
 
-		QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
+		QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
 
 		SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
 
@@ -139,7 +122,7 @@ namespace TANG
 		//  LOGICAL DEVICE
 		//
 		////////////////////////////////////////
-		void createLogicalDevice();
+		void CreateLogicalDevice();
 
 		////////////////////////////////////////
 		//
@@ -163,9 +146,9 @@ namespace TANG
 
 		void createFramebuffers();
 
-		void createCommandPool();
+		void CreateCommandPools();
 
-		void createCommandBuffers();
+		void CreateCommandBuffers(QueueType poolType);
 
 		void createSyncObjects();
 
@@ -179,7 +162,7 @@ namespace TANG
 			VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties,
 			VkImage& image, VkDeviceMemory& imageMemory);
 
-		void createTextureImage();
+		void CreateTextureImage();
 
 		void createDescriptorPool();
 
@@ -203,9 +186,10 @@ namespace TANG
 
 		void updateUniformBuffer(uint32_t currentFrame);
 
-		VkCommandBuffer BeginSingleTimeCommands();
+		VkCommandBuffer BeginSingleTimeCommands(VkCommandPool pool);
 
-		void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
+		// The commandPoolType parameter must match the pool type that was used to allocate the command buffer in the corresponding BeginSingleTimeCommands() function call!
+		void EndSingleTimeCommands(VkCommandBuffer commandBuffer, QueueType commandPoolType);
 
 		void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels);
 
@@ -217,7 +201,7 @@ namespace TANG
 
 		bool hasStencilComponent(VkFormat format);
 
-		void generateMipmaps(VkImage image, VkFormat imageFormat, int32_t texWidth, int32_t texHeight, uint32_t mipLevels);
+		void GenerateMipmaps(VkImage image, VkFormat imageFormat, int32_t texWidth, int32_t texHeight, uint32_t mipLevels);
 
 		VkSampleCountFlagBits getMaxUsableSampleCount();
 
@@ -235,8 +219,7 @@ namespace TANG
 
 		VkSurfaceKHR surface;
 
-		VkQueue graphicsQueue;
-		VkQueue presentQueue;
+		std::unordered_map<QueueType, VkQueue> queues;
 
 		VkSwapchainKHR swapChain;
 		std::vector<VkImage> swapChainImages;
@@ -252,7 +235,7 @@ namespace TANG
 
 		std::vector<VkFramebuffer> swapChainFramebuffers;
 
-		VkCommandPool commandPool;
+		std::unordered_map<QueueType, VkCommandPool> commandPools;
 		std::vector<VkCommandBuffer> commandBuffers;
 
 		std::vector<VkSemaphore> imageAvailableSemaphores;
