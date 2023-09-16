@@ -1,7 +1,7 @@
 
-#include "assert.h"
 #include "asset_loader.h"
 #include "renderer.h"
+#include "utils/sanity_check.h"
 #include "tang.h"
 
 namespace TANG
@@ -10,25 +10,27 @@ namespace TANG
 
 	void Initialize()
 	{
-		assert(false && "TODO - Implement");
+		TNG_ASSERT_MSG(false, "TODO - Implement");
 	}
 
 	void Shutdown()
 	{
-		assert(false && "TODO - Implement");
+		TNG_ASSERT_MSG(false, "TODO - Implement");
 	}
 
 	// STATE CALLS
 	void LoadAsset(const char* name)
 	{
-		assert(false && "TODO - Implement");
-		//LoaderUtils::Load(name);
-		//rendererHandle.LoadAssetResources(name);
+		TNG_ASSERT_MSG(false, "TODO - Implement");
+		Asset* asset = LoaderUtils::Load(name);
+		if (asset == nullptr) return;
+
+		rendererHandle.CreateAssetResources(asset);
 	}
 
 	// UPDATE CALLS
 	void DrawAsset(const char* name)
 	{
-		assert(false && "TODO - Implement");
+		TNG_ASSERT_MSG(false, "TODO - Implement");
 	}
 }

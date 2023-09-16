@@ -3,6 +3,8 @@
 
 namespace TANG
 {
+	AssetContainer* AssetContainer::instance = nullptr;
+
 	AssetContainer::AssetContainer() { }
 
 	AssetContainer::~AssetContainer()

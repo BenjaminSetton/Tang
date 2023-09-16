@@ -18,13 +18,14 @@ set(HEADERS
 	src/asset_loader.h
 	src/asset_types.h
 	src/renderer.h
+	src/vertex_type.h
 	
 	src/buffer/buffer.h
 	src/buffer/vertex_buffer.h
 	src/buffer/index_buffer.h
 	
 	src/utils/logger.h
-	src/utils/assert.h
+	src/utils/sanity_check.h
 )
 
 # Source files
@@ -32,6 +33,7 @@ set(SOURCES
 	src/tang.cpp
 	src/main.cpp
 	src/asset_loader.cpp
+	src/renderer.cpp
 	
 	src/buffer/buffer.cpp
 	src/buffer/vertex_buffer.cpp
@@ -70,10 +72,8 @@ set(STB_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/src/dependencies/stb/include")
 
 # assimp
 set(ASSIMP_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/src/dependencies/assimp/include")
-set(ASSIMP_LIB "${CMAKE_SOURCE_DIR}/src/dependencies/assimp/lib")
-
-# SRC UTILS
-set(SRC_UTILS "${CMAKE_SOURCE_DIR}/src/utils")
+set(ASSIMP_LIB "${CMAKE_SOURCE_DIR}/src/dependencies/assimp/lib/Debug/assimp-vc143-mtd.lib")
+target_link_libraries(${PROJECT_NAME} PRIVATE ${ASSIMP_LIB})
 
 # Include dependency header directories.
 target_include_directories(${PROJECT_NAME} PRIVATE ${VULKAN_INCLUDE_DIR})
@@ -82,5 +82,10 @@ target_include_directories(${PROJECT_NAME} PRIVATE ${GLM_INCLUDE_DIR})
 target_include_directories(${PROJECT_NAME} PRIVATE ${STB_INCLUDE_DIR})
 target_include_directories(${PROJECT_NAME} PRIVATE ${ASSIMP_INCLUDE_DIR})
 
-# Include src utilility directories
-target_include_directories(${PROJECT_NAME} PRIVATE ${SRC_UTILS})
+# Copy the assimp DLL into the exe's directory
+set(ASSIMP_DLL "${CMAKE_SOURCE_DIR}/src/dependencies/assimp/dll/Debug/assimp-vc143-mtd.dll")
+
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${ASSIMP_DLL}"
+        $<TARGET_FILE_DIR:${PROJECT_NAME}>)

@@ -3,23 +3,13 @@
 
 #include <glm.hpp>
 
-#include "logger.h"
+#include "utils/logger.h"
+#include "vertex_type.h"
+
+typedef uint32_t IndexType;
 
 namespace TANG
 {
-	struct Vertex
-	{
-		Vertex() : pos(0.0f, 0.0f, 0.0f), normal(0.0f, 0.0f, 0.0f), uv(0.0f, 0.0f, 0.0f)
-		{
-		}
-		~Vertex() { }
-		// Too lazy to implement copy-constructor; default should work just fine in this case
-
-		glm::vec3 pos;
-		glm::vec3 normal;
-		glm::vec3 uv;
-	};
-
 	// Maybe this has to be moved somewhere else, specifically more texture-related?
 	struct Texture
 	{
@@ -32,7 +22,7 @@ namespace TANG
 			// Temporary debug :)
 			LogWarning("Deep-copying texture!");
 
-			data = new char[other.size.x * other.size.y * bytesPerPixel];
+			data = new char[static_cast<uint32_t>(other.size.x) * static_cast<uint32_t>(other.size.y) * bytesPerPixel];
 			size = other.size;
 			bytesPerPixel = other.bytesPerPixel;
 		}
@@ -44,8 +34,8 @@ namespace TANG
 
 	struct Mesh
 	{
-		std::vector<Vertex> vertices;
-		std::vector<uint32_t> indices;
+		std::vector<VertexType> vertices;
+		std::vector<IndexType> indices;
 		//std::vector<Material> materials;
 	};
 

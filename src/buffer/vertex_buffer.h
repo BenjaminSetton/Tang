@@ -5,7 +5,7 @@
 
 namespace TANG
 {
-	class VertexBuffer : Buffer
+	class VertexBuffer : public Buffer
 	{
 	public:
 
@@ -13,9 +13,9 @@ namespace TANG
 		~VertexBuffer();
 		VertexBuffer(const VertexBuffer& other);
 
-		void Create(VkDevice& logicalDevice, VkDeviceSize size);
+		void Create(VkPhysicalDevice& physicalDevice, VkDevice& logicalDevice, VkDeviceSize size) override;
 
-		void MapData(VkDevice& logicalDevice, VkCommandBuffer& commandBuffer, void* data, VkDeviceSize bufferSize);
+		void MapData(VkPhysicalDevice& physicalDevice, VkDevice& logicalDevice, VkCommandBuffer& commandBuffer, void* data, VkDeviceSize bufferSize) override;
 
 	private:
 	};
