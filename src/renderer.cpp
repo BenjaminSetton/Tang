@@ -1,12 +1,5 @@
 #include "renderer.h"
 
-//#define VK_USE_PLATFORM_WIN32_KHR
-//#define GLFW_INCLUDE_VULKAN
-//#include <glfw3.h>
-//
-//#define GLFW_EXPOSE_NATIVE_WIN32
-//#include <glfw3native.h>
-
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #define GLM_FORCE_ALIGNED_GENTYPES
@@ -29,14 +22,10 @@
 #include <iostream>
 #include <optional>
 #include <set>
-//#include <stdexcept>
 #include <unordered_map>
 #include <vector>
 
 #include "asset_loader.h"
-//#include "buffer/vertex_buffer.h"
-//#include "buffer/index_buffer.h"
-//#include "utils/sanity_check.h"
 
 static constexpr uint32_t WINDOW_WIDTH = 1920;
 static constexpr uint32_t WINDOW_HEIGHT = 1080;
@@ -312,6 +301,11 @@ namespace TANG
 		}
 
 		assetResources.clear();
+	}
+
+	bool Renderer::WindowShouldClose()
+	{
+		return glfwWindowShouldClose(windowHandle);
 	}
 
 	void Renderer::Initialize()

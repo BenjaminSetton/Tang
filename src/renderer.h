@@ -65,6 +65,9 @@ namespace TANG
 		void DestroyAssetResources(Asset* asset);
 		void DestroyAllAssetResources();
 
+		// TODO - Abstract this out into a window class, this really shouldn't be part of the renderer
+		bool WindowShouldClose();
+
 		bool framebufferResized = false;
 
 	private:

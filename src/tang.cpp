@@ -10,20 +10,39 @@ namespace TANG
 
 	void Initialize()
 	{
-		TNG_ASSERT_MSG(false, "TODO - Implement");
+		rendererHandle.Initialize();
+	}
+
+	void Update(float deltaTime)
+	{
+		UNUSED(deltaTime);
+		rendererHandle.Update();
 	}
 
 	void Shutdown()
 	{
-		TNG_ASSERT_MSG(false, "TODO - Implement");
+		rendererHandle.DestroyAllAssetResources();
+		LoaderUtils::UnloadAll();
+		rendererHandle.Shutdown();
 	}
 
 	// STATE CALLS
+	bool WindowShouldClose()
+	{
+		// NOTE - This is definitely going to move to a separate Window class at some point...
+		//        This function call should not be part of the renderer, it's just that GLFW
+		//        and the renderer class are too tightly coupled atm
+		return rendererHandle.WindowShouldClose();
+	}
+
 	void LoadAsset(const char* name)
 	{
-		TNG_ASSERT_MSG(false, "TODO - Implement");
 		Asset* asset = LoaderUtils::Load(name);
-		if (asset == nullptr) return;
+		// If Load() returns nullptr, we know it didn't allocate memory on the heap, so no need to de-allocate anything here
+		if (asset == nullptr)
+		{
+			LogError("Failed to load asset '%s'", name);
+		}
 
 		rendererHandle.CreateAssetResources(asset);
 	}
@@ -33,4 +52,6 @@ namespace TANG
 	{
 		TNG_ASSERT_MSG(false, "TODO - Implement");
 	}
+
+
 }

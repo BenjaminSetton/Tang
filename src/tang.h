@@ -29,9 +29,12 @@
 namespace TANG
 {
 	void Initialize();
+	void Update(float deltaTime);
 	void Shutdown();
 
 	// STATE CALLS
+	bool WindowShouldClose();
+
 	void LoadAsset(const char* name);
 
 	// UPDATE CALLS

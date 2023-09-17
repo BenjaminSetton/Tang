@@ -16,6 +16,6 @@ layout(location = 1) out vec2 outUV;
 void main() {
     gl_Position = ubo.proj * ubo.view * ubo.model * vec4(inPosition, 1.0);
 
-    outNormal = inNormal;
+    outNormal = (ubo.model * vec4(inNormal, 1.0)).xyz;
     outUV = inUV;
 }
