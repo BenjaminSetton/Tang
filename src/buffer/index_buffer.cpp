@@ -23,8 +23,18 @@ namespace TANG
 		vkFreeMemory(logicalDevice, bufferMemory, nullptr);
 
 		// Destroy staging buffer
+		if(stagingBuffer) vkDestroyBuffer(logicalDevice, stagingBuffer, nullptr);
+		if(stagingBufferMemory) vkFreeMemory(logicalDevice, stagingBufferMemory, nullptr);
+	}
+
+	void IndexBuffer::DestroyIntermediateBuffers(VkDevice logicalDevice)
+	{
+		// Destroy staging buffer
 		vkDestroyBuffer(logicalDevice, stagingBuffer, nullptr);
 		vkFreeMemory(logicalDevice, stagingBufferMemory, nullptr);
+
+		stagingBuffer = VK_NULL_HANDLE;
+		stagingBufferMemory = VK_NULL_HANDLE;
 	}
 
 	void IndexBuffer::MapData(VkDevice& logicalDevice, VkCommandBuffer& commandBuffer, void* data, VkDeviceSize bufferSize)

@@ -13,6 +13,8 @@ namespace TANG
 		~Buffer();
 		Buffer(const Buffer& other);
 
+		void operator=(const Buffer& other);
+
 		// Pure virtual function. Derived classes are meant to override this function and call up to Buffer::CreateBase() to specify
 		// the type of buffer they are.
 		virtual void Create(VkPhysicalDevice& physicalDevice, VkDevice& logicalDevice, VkDeviceSize size) = 0;

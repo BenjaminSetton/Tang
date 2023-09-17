@@ -242,26 +242,26 @@ namespace TANG
 			// Create the vertex buffer
 			uint64_t numBytes = currMesh.vertices.size() * sizeof(VertexType);
 
-			VertexBuffer vb;
+			VertexBuffer& vb = resources.vertexBuffers[i];
 			vb.Create(physicalDevice, logicalDevice, numBytes);
 
 			VkCommandBuffer commandBuffer = BeginSingleTimeCommands(commandPools[TRANSFER_QUEUE]);
 			vb.MapData(logicalDevice, commandBuffer, currMesh.vertices.data(), numBytes);
 			EndSingleTimeCommands(commandBuffer, TRANSFER_QUEUE);
 
-			resources.vertexBuffers[i] = vb;
-
 			// Create the index buffer
 			numBytes = currMesh.indices.size() * sizeof(IndexType);
 
-			IndexBuffer ib;
+			IndexBuffer& ib = resources.indexBuffers[i];
 			ib.Create(physicalDevice, logicalDevice, numBytes);
 
 			commandBuffer = BeginSingleTimeCommands(commandPools[TRANSFER_QUEUE]);
 			ib.MapData(logicalDevice, commandBuffer, currMesh.indices.data(), numBytes);
 			EndSingleTimeCommands(commandBuffer, TRANSFER_QUEUE);
 
-			resources.indexBuffers[i] = ib;
+			// Destroy the staging buffers
+			vb.DestroyIntermediateBuffers(logicalDevice);
+			ib.DestroyIntermediateBuffers(logicalDevice);
 
 			// Accumulate the index count of this mesh;
 			totalIndexCount += currMesh.indices.size();
@@ -347,11 +347,11 @@ namespace TANG
 		}
 
 		// Destroy all command pools
-		uint32_t poolCount = static_cast<uint32_t>(commandPools.size());
-		for (uint32_t i = 0; i < poolCount; i++)
+		for (const auto& iter : commandPools)
 		{
-			vkDestroyCommandPool(logicalDevice, commandPools.begin()->second, nullptr);
+			vkDestroyCommandPool(logicalDevice, iter.second, nullptr);
 		}
+		commandPools.clear();
 
 		vkDestroyPipeline(logicalDevice, graphicsPipeline, nullptr);
 		vkDestroyPipelineLayout(logicalDevice, pipelineLayout, nullptr);

@@ -17,6 +17,8 @@ namespace TANG
 
 		void Destroy(VkDevice& logicalDevice) override;
 
+		void DestroyIntermediateBuffers(VkDevice logicalDevice);
+
 		void MapData(VkDevice& logicalDevice, VkCommandBuffer& commandBuffer, void* data, VkDeviceSize bufferSize) override;
 
 	private:

@@ -6,7 +6,15 @@ namespace TANG
 {
 	Buffer::Buffer() { }
 	Buffer::~Buffer() { }
-	Buffer::Buffer(const Buffer& other) { }
+	Buffer::Buffer(const Buffer& other)
+	{
+		LogWarning("Buffer was copied from copy constructor!");
+	}
+
+	void Buffer::operator=(const Buffer& other)
+	{
+		LogWarning("Buffer was copied from assignment operator!");
+	}
 
 	// Returns the member variable "buffer"
 	VkBuffer Buffer::GetBuffer()
