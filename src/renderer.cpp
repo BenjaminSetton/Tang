@@ -81,8 +81,8 @@ struct QueueFamilyIndices
 	QueueFamilyIndices(const QueueFamilyIndices& other)
 	{
 		queueFamilies[GRAPHICS_QUEUE] = other.queueFamilies.at(GRAPHICS_QUEUE);
-		queueFamilies[PRESENT_QUEUE] = other.queueFamilies.at(PRESENT_QUEUE);
-		queueFamilies[GRAPHICS_QUEUE] = other.queueFamilies.at(GRAPHICS_QUEUE);
+		queueFamilies[PRESENT_QUEUE]  = other.queueFamilies.at(PRESENT_QUEUE);
+		queueFamilies[TRANSFER_QUEUE] = other.queueFamilies.at(TRANSFER_QUEUE);
 	}
 
 	std::unordered_map<QueueType, QueueFamilyIndexType> queueFamilies;
@@ -95,7 +95,7 @@ struct QueueFamilyIndices
 	bool IsComplete()
 	{
 		return IsValid(queueFamilies[GRAPHICS_QUEUE]) &&
-			   IsValid(queueFamilies[PRESENT_QUEUE]) &&
+			   IsValid(queueFamilies[PRESENT_QUEUE])  &&
 			   IsValid(queueFamilies[TRANSFER_QUEUE]);
 	}
 };
@@ -246,7 +246,7 @@ namespace TANG
 			vb.Create(physicalDevice, logicalDevice, numBytes);
 
 			VkCommandBuffer commandBuffer = BeginSingleTimeCommands(commandPools[TRANSFER_QUEUE]);
-			vb.MapData(physicalDevice, logicalDevice, commandBuffer, currMesh.vertices.data(), numBytes);
+			vb.MapData(logicalDevice, commandBuffer, currMesh.vertices.data(), numBytes);
 			EndSingleTimeCommands(commandBuffer, TRANSFER_QUEUE);
 
 			resources.vertexBuffers[i] = vb;
@@ -258,7 +258,7 @@ namespace TANG
 			ib.Create(physicalDevice, logicalDevice, numBytes);
 
 			commandBuffer = BeginSingleTimeCommands(commandPools[TRANSFER_QUEUE]);
-			ib.MapData(physicalDevice, logicalDevice, commandBuffer, currMesh.indices.data(), numBytes);
+			ib.MapData(logicalDevice, commandBuffer, currMesh.indices.data(), numBytes);
 			EndSingleTimeCommands(commandBuffer, TRANSFER_QUEUE);
 
 			resources.indexBuffers[i] = ib;
@@ -339,12 +339,6 @@ namespace TANG
 		vkDestroyDescriptorPool(logicalDevice, descriptorPool, nullptr);
 		vkDestroyDescriptorSetLayout(logicalDevice, descriptorSetLayout, nullptr);
 
-		//vkDestroyBuffer(logicalDevice, indexBuffer, nullptr);
-		//vkFreeMemory(logicalDevice, indexBufferMemory, nullptr);
-
-		//vkDestroyBuffer(logicalDevice, vertexBuffer, nullptr);
-		//vkFreeMemory(logicalDevice, vertexBufferMemory, nullptr);
-
 		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
 		{
 			vkDestroySemaphore(logicalDevice, imageAvailableSemaphores[i], nullptr);
@@ -413,7 +407,7 @@ namespace TANG
 		createUniformBuffers();
 		createDescriptorPool();
 		createDescriptorSets();
-		for(uint32_t i = 0; i < QueueType::QUEUE_COUNT; i++) CreateCommandBuffers(static_cast<QueueType>(i));
+		CreateCommandBuffers(GRAPHICS_QUEUE);
 		createSyncObjects();
 	}
 
@@ -702,6 +696,7 @@ namespace TANG
 		std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
 		vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
 
+		int32_t graphicsTransferQueue = -1;
 		int i = 0;
 		for (const auto& queueFamily : queueFamilies)
 		{
@@ -723,12 +718,27 @@ namespace TANG
 			// Check that the device supports a transfer queue
 			if (queueFamily.queueFlags & VK_QUEUE_TRANSFER_BIT)
 			{
-				indices.queueFamilies[TRANSFER_QUEUE] = i;
+				// Choose a different queue from the graphics queue, if possible
+				if (indices.queueFamilies[GRAPHICS_QUEUE] == i)
+				{
+					graphicsTransferQueue = i;
+				}
+				else
+				{
+					indices.queueFamilies[TRANSFER_QUEUE] = i;
+				}
 			}
 
 			if (indices.IsComplete()) break;
 
 			i++;
+		}
+
+		// If we couldn't find a different queue for the TRANSFER and GRAPHICS operations, then simply
+		// use the same queue for both (if it supports TRANSFER operations)
+		if (!indices.IsValid(TRANSFER_QUEUE) && graphicsTransferQueue != -1)
+		{
+			indices.queueFamilies[TRANSFER_QUEUE] = graphicsTransferQueue;
 		}
 
 		// Check that we filled in all of our queue families, otherwise log a warning
@@ -1337,9 +1347,6 @@ namespace TANG
 
 	void Renderer::CreateCommandBuffers(QueueType poolType)
 	{
-		// Command buffers for the present queue are not necessary (I think)
-		if (poolType == PRESENT_QUEUE) return;
-
 		commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
 
 		VkCommandBufferAllocateInfo allocInfo{};
@@ -1741,7 +1748,7 @@ namespace TANG
 
 		if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS)
 		{
-			throw std::runtime_error("Failed to record command buffers!");
+			LogError("Failed to record command buffers!");
 		}
 	}
 
@@ -1812,6 +1819,8 @@ namespace TANG
 
 	VkCommandBuffer Renderer::BeginSingleTimeCommands(VkCommandPool pool)
 	{
+		VkResult res;
+
 		VkCommandBufferAllocateInfo allocInfo{};
 		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
@@ -1819,19 +1828,29 @@ namespace TANG
 		allocInfo.commandBufferCount = 1;
 
 		VkCommandBuffer commandBuffer;
-		vkAllocateCommandBuffers(logicalDevice, &allocInfo, &commandBuffer);
+		res = vkAllocateCommandBuffers(logicalDevice, &allocInfo, &commandBuffer);
+		if (res != VK_SUCCESS)
+		{
+			LogError("Failed to allocate single-time command buffer!");
+		}
 
 		VkCommandBufferBeginInfo beginInfo{};
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 		beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-		vkBeginCommandBuffer(commandBuffer, &beginInfo);
+		res = vkBeginCommandBuffer(commandBuffer, &beginInfo);
+		if (res != VK_SUCCESS)
+		{
+			LogError("Failed to begin command buffer!");
+		}
 
 		return commandBuffer;
 	}
 
 	void Renderer::EndSingleTimeCommands(VkCommandBuffer commandBuffer, QueueType commandPoolType)
 	{
+		VkResult res;
+
 		vkEndCommandBuffer(commandBuffer);
 
 		VkSubmitInfo submitInfo{};
@@ -1839,8 +1858,17 @@ namespace TANG
 		submitInfo.commandBufferCount = 1;
 		submitInfo.pCommandBuffers = &commandBuffer;
 
-		vkQueueSubmit(queues[GRAPHICS_QUEUE], 1, &submitInfo, VK_NULL_HANDLE);
-		vkQueueWaitIdle(queues[GRAPHICS_QUEUE]);
+		res = vkQueueSubmit(queues[commandPoolType], 1, &submitInfo, VK_NULL_HANDLE);
+		if (res != VK_SUCCESS)
+		{
+			LogError("Failed to submit single-time command buffer!");
+		}
+
+		res = vkQueueWaitIdle(queues[commandPoolType]);
+		if (res != VK_SUCCESS)
+		{
+			LogError("Failed to wait until queue was idle when submitting single-time command buffer");
+		}
 
 		vkFreeCommandBuffers(logicalDevice, commandPools[commandPoolType], 1, &commandBuffer);
 	}
@@ -1987,7 +2015,7 @@ namespace TANG
 			throw std::runtime_error("Texture image does not support linear blitting!");
 		}
 
-		VkCommandBuffer commandBuffer = BeginSingleTimeCommands(commandPools[TRANSFER_QUEUE]);
+		VkCommandBuffer commandBuffer = BeginSingleTimeCommands(commandPools[GRAPHICS_QUEUE]);
 
 		VkImageMemoryBarrier barrier{};
 		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -2068,7 +2096,7 @@ namespace TANG
 			0, nullptr,
 			1, &barrier);
 
-		EndSingleTimeCommands(commandBuffer, TRANSFER_QUEUE);
+		EndSingleTimeCommands(commandBuffer, GRAPHICS_QUEUE);
 	}
 
 	VkSampleCountFlagBits Renderer::getMaxUsableSampleCount()

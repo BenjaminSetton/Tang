@@ -8,13 +8,6 @@ namespace TANG
 	Buffer::~Buffer() { }
 	Buffer::Buffer(const Buffer& other) { }
 
-	void Buffer::Destroy(VkDevice& logicalDevice)
-	{
-		// NOTE - This assumes we did not use a custom allocator
-		vkDestroyBuffer(logicalDevice, buffer, nullptr);
-		vkFreeMemory(logicalDevice, bufferMemory, nullptr);
-	}
-
 	// Returns the member variable "buffer"
 	VkBuffer Buffer::GetBuffer()
 	{
@@ -27,7 +20,7 @@ namespace TANG
 		return bufferMemory;
 	}
 
-	void Buffer::CopyFromBuffer(VkCommandBuffer& commandBuffer, VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size)
+	void Buffer::CopyFromBuffer(VkCommandBuffer commandBuffer, VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size)
 	{
 		VkBufferCopy copyRegion{};
 		copyRegion.size = size;

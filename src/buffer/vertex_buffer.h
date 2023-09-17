@@ -15,9 +15,15 @@ namespace TANG
 
 		void Create(VkPhysicalDevice& physicalDevice, VkDevice& logicalDevice, VkDeviceSize size) override;
 
-		void MapData(VkPhysicalDevice& physicalDevice, VkDevice& logicalDevice, VkCommandBuffer& commandBuffer, void* data, VkDeviceSize bufferSize) override;
+		void Destroy(VkDevice& logicalDevice) override;
+
+		void MapData(VkDevice& logicalDevice, VkCommandBuffer& commandBuffer, void* data, VkDeviceSize bufferSize) override;
 
 	private:
+
+		// Store the staging buffer so that we can delete it properly after ending and submitting the command buffer
+		VkBuffer stagingBuffer;
+		VkDeviceMemory stagingBufferMemory;
 	};
 }
 
