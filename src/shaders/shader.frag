@@ -19,5 +19,6 @@ void main() {
 
     //vec4 sampleColor = texture(texSampler, inUV);
 
-    outColor = vec4(diffuseColor, 1.0) + ambientIntensity;
+    //outColor = vec4(diffuseColor, 1.0) + ambientIntensity;
+    outColor = vec4(inNormal, 1.0f);
 }
