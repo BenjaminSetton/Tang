@@ -42,6 +42,7 @@ namespace TANG
 		if (asset == nullptr)
 		{
 			LogError("Failed to load asset '%s'", name);
+			return;
 		}
 
 		rendererHandle.CreateAssetResources(asset);
