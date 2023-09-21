@@ -43,7 +43,7 @@ namespace TANG
 			return instance;
 		}
 
-		const Asset* GetAsset(std::string_view name) const;
+		Asset* GetAsset(std::string_view name) const;
 
 	private:
 
@@ -147,6 +147,9 @@ namespace TANG
 
 			std::string baseName = std::filesystem::path(filePath).stem().u8string();
 			assetContainer[baseName] = asset;
+
+			// Calculate UUID
+			asset->uuid = GetUUID();
 
 			// We're good to go!
 			return asset;

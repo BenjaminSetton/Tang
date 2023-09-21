@@ -20,30 +20,30 @@
 #include "buffer/vertex_buffer.h"
 #include "buffer/index_buffer.h"
 #include "utils/sanity_check.h"
-
-struct QueueFamilyIndices;
-struct SwapChainSupportDetails;
-struct UniformBufferObject;
-
-enum QueueType
-{
-	GRAPHICS_QUEUE,
-	PRESENT_QUEUE,
-	TRANSFER_QUEUE,
-	QUEUE_COUNT			// NOTE! This value must come last at all times!! This is used to count the number of values inside this enum
-};
-
-struct AssetResources
-{
-	std::vector<TANG::VertexBuffer> vertexBuffers;
-	std::vector<TANG::IndexBuffer> indexBuffers;
-	uint64_t numIndices = 0;							// Used when calling vkCmdDrawIndexed
-	void* assetPtr = nullptr;							// Used to track what asset these resources were created on. In good theory this pointer should never
-														// change as long as the asset is "alive", since the pointer is retrieved from the AssetContainer
-};
+#include "utils/uuid.h"
 
 namespace TANG
 {
+	struct QueueFamilyIndices;
+	struct SwapChainSupportDetails;
+	struct UniformBufferObject;
+
+	enum QueueType
+	{
+		GRAPHICS_QUEUE,
+		PRESENT_QUEUE,
+		TRANSFER_QUEUE,
+		QUEUE_COUNT			// NOTE! This value must come last at all times!! This is used to count the number of values inside this enum
+	};
+
+	struct AssetResources
+	{
+		std::vector<TANG::VertexBuffer> vertexBuffers;
+		std::vector<TANG::IndexBuffer> indexBuffers;
+		uint64_t numIndices = 0;							// Used when calling vkCmdDrawIndexed
+		UUID uuid;
+	};
+
 	class Renderer {
 	public:
 
@@ -52,6 +52,13 @@ namespace TANG
 		void Update();
 
 		void Shutdown();
+
+		// Helper functions for setting and retrieving the asset draw state of a particular asset.
+		// The asset draw state is cleared every frame, so SetAssetDrawState must be called on a
+		// per-frame basis to draw assets. In other words, assets will not be drawn unless SetAssetDrawState()
+		// is explicitly called that frame
+		void SetAssetDrawState(UUID uuid);
+		bool GetAssetDrawState(UUID uuid);
 
 		// Loads an asset which implies grabbing the vertices and indices from the asset container
 		// and creating vertex/index buffers to contain them. It also includes creating all other
@@ -181,7 +188,7 @@ namespace TANG
 
 		void createColorResources();
 
-		void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+		void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
 		void recreateSwapChain();
 
@@ -271,6 +278,8 @@ namespace TANG
 		VkImage colorImage;
 		VkDeviceMemory colorImageMemory;
 		VkImageView colorImageView;
+
+		std::unordered_map<UUID, bool> assetDrawStates;
 	};
 
 }

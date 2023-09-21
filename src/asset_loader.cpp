@@ -14,7 +14,7 @@ namespace TANG
 		container.clear();
 	}
 
-	const Asset* AssetContainer::GetAsset(std::string_view name) const
+	Asset* AssetContainer::GetAsset(std::string_view name) const
 	{
 		for (const auto& iter : container)
 		{

@@ -48,61 +48,6 @@ static const bool enableValidationLayers = false;
 static const bool enableValidationLayers = true;
 #endif
 
-struct QueueFamilyIndices
-{
-	typedef uint32_t QueueFamilyIndexType;
-
-	// If anything changes with the QueueType enum, make sure to change this struct as well!
-	static_assert(static_cast<uint32_t>(QUEUE_COUNT) == 3);
-
-	QueueFamilyIndices()
-	{
-		queueFamilies[GRAPHICS_QUEUE] = std::numeric_limits<QueueFamilyIndexType>::max();
-		queueFamilies[PRESENT_QUEUE]  = std::numeric_limits<QueueFamilyIndexType>::max();
-		queueFamilies[TRANSFER_QUEUE] = std::numeric_limits<QueueFamilyIndexType>::max();
-	}
-
-	~QueueFamilyIndices()
-	{
-		// Nothing to do here
-	}
-
-	QueueFamilyIndices(const QueueFamilyIndices& other)
-	{
-		queueFamilies[GRAPHICS_QUEUE] = other.queueFamilies.at(GRAPHICS_QUEUE);
-		queueFamilies[PRESENT_QUEUE]  = other.queueFamilies.at(PRESENT_QUEUE);
-		queueFamilies[TRANSFER_QUEUE] = other.queueFamilies.at(TRANSFER_QUEUE);
-	}
-
-	std::unordered_map<QueueType, QueueFamilyIndexType> queueFamilies;
-
-	bool IsValid(QueueFamilyIndexType index)
-	{
-		return index != std::numeric_limits<QueueFamilyIndexType>::max();
-	}
-
-	bool IsComplete()
-	{
-		return IsValid(queueFamilies[GRAPHICS_QUEUE]) &&
-			   IsValid(queueFamilies[PRESENT_QUEUE])  &&
-			   IsValid(queueFamilies[TRANSFER_QUEUE]);
-	}
-};
-
-struct SwapChainSupportDetails
-{
-	VkSurfaceCapabilitiesKHR capabilities;
-	std::vector<VkSurfaceFormatKHR> formats;
-	std::vector<VkPresentModeKHR> presentModes;
-};
-
-struct UniformBufferObject
-{
-	glm::mat4 model;
-	glm::mat4 view;
-	glm::mat4 proj;
-};
-
 static std::vector<char> readFile(const std::string& fileName)
 {
 	std::ifstream file(fileName, std::ios::ate | std::ios::binary);
@@ -196,6 +141,61 @@ void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT
 
 namespace TANG
 {
+	struct QueueFamilyIndices
+	{
+		typedef uint32_t QueueFamilyIndexType;
+
+		// If anything changes with the QueueType enum, make sure to change this struct as well!
+		static_assert(static_cast<uint32_t>(QUEUE_COUNT) == 3);
+
+		QueueFamilyIndices()
+		{
+			queueFamilies[GRAPHICS_QUEUE] = std::numeric_limits<QueueFamilyIndexType>::max();
+			queueFamilies[PRESENT_QUEUE] = std::numeric_limits<QueueFamilyIndexType>::max();
+			queueFamilies[TRANSFER_QUEUE] = std::numeric_limits<QueueFamilyIndexType>::max();
+		}
+
+		~QueueFamilyIndices()
+		{
+			// Nothing to do here
+		}
+
+		QueueFamilyIndices(const QueueFamilyIndices& other)
+		{
+			queueFamilies[GRAPHICS_QUEUE] = other.queueFamilies.at(GRAPHICS_QUEUE);
+			queueFamilies[PRESENT_QUEUE] = other.queueFamilies.at(PRESENT_QUEUE);
+			queueFamilies[TRANSFER_QUEUE] = other.queueFamilies.at(TRANSFER_QUEUE);
+		}
+
+		std::unordered_map<QueueType, QueueFamilyIndexType> queueFamilies;
+
+		bool IsValid(QueueFamilyIndexType index)
+		{
+			return index != std::numeric_limits<QueueFamilyIndexType>::max();
+		}
+
+		bool IsComplete()
+		{
+			return IsValid(queueFamilies[GRAPHICS_QUEUE]) &&
+				IsValid(queueFamilies[PRESENT_QUEUE]) &&
+				IsValid(queueFamilies[TRANSFER_QUEUE]);
+		}
+	};
+
+	struct SwapChainSupportDetails
+	{
+		VkSurfaceCapabilitiesKHR capabilities;
+		std::vector<VkSurfaceFormatKHR> formats;
+		std::vector<VkPresentModeKHR> presentModes;
+	};
+
+	struct UniformBufferObject
+	{
+		glm::mat4 model;
+		glm::mat4 view;
+		glm::mat4 proj;
+	};
+
 	void Renderer::Update()
 	{
 		while (!glfwWindowShouldClose(windowHandle))
@@ -256,8 +256,12 @@ namespace TANG
 			totalIndexCount += currMesh.indices.size();
 		}
 
+		// Insert the asset's uuid into the assetDrawState map. We do not render it
+		// upon insertion by default
+		assetDrawStates.insert({ asset->uuid, false });
+
 		resources.numIndices = totalIndexCount;
-		resources.assetPtr = asset;
+		resources.uuid = asset->uuid;
 	}
 
 	void Renderer::DestroyAssetBuffersHelper(AssetResources& resources)
@@ -281,8 +285,11 @@ namespace TANG
 		{
 			AssetResources& resources = *iter;
 
-			if (resources.assetPtr == asset)
+			if (resources.uuid == asset->uuid)
 			{
+				// Remove this assets' entry from the assetDrawState container
+				assetDrawStates.erase(asset->uuid);
+
 				DestroyAssetBuffersHelper(resources);
 
 				// Remove this specific set of asset resources from the vector
@@ -301,6 +308,9 @@ namespace TANG
 		}
 
 		assetResources.clear();
+
+		// Clear the asset draw states
+		assetDrawStates.clear();
 	}
 
 	bool Renderer::WindowShouldClose()
@@ -316,6 +326,8 @@ namespace TANG
 
 	void Renderer::Shutdown()
 	{
+		DestroyAllAssetResources();
+
 		cleanupSwapChain();
 
 		vkDestroySampler(logicalDevice, textureSampler, nullptr);
@@ -364,6 +376,28 @@ namespace TANG
 		glfwDestroyWindow(windowHandle);
 		glfwTerminate();
 
+	}
+
+	void Renderer::SetAssetDrawState(UUID uuid)
+	{
+		if (assetDrawStates.find(uuid) == assetDrawStates.end())
+		{
+			// Undefined behavior. Maybe the asset resources were deleted but we somehow forgot to remove it from the assetDrawStates map?
+			TNG_ASSERT_MSG(false, "Attempted to set asset draw state, but draw state doesn't exist in the map!");
+		}
+
+		assetDrawStates[uuid] = true;
+	}
+
+	bool Renderer::GetAssetDrawState(UUID uuid)
+	{
+		if (assetDrawStates.find(uuid) == assetDrawStates.end())
+		{
+			TNG_ASSERT_MSG(false, "Attempted to get asset draw state, but none could be found in the map!");
+			return false;
+		}
+
+		return assetDrawStates[uuid];
 	}
 
 	void Renderer::InitWindow()
@@ -431,8 +465,13 @@ namespace TANG
 
 		updateUniformBuffer(currentFrame);
 
+		///////////////////////////////////////
+		// 
+		// Record and submit primary command buffer
+		//
+		///////////////////////////////////////
 		vkResetCommandBuffer(commandBuffers[currentFrame], 0);
-		recordCommandBuffer(commandBuffers[currentFrame], imageIndex);
+		RecordCommandBuffer(commandBuffers[currentFrame], imageIndex);
 
 		VkSubmitInfo submitInfo{};
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -455,6 +494,11 @@ namespace TANG
 			return;
 		}
 
+		///////////////////////////////////////
+		// 
+		// Swap chain present
+		//
+		///////////////////////////////////////
 		VkPresentInfoKHR presentInfo{};
 		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 		presentInfo.waitSemaphoreCount = 1;
@@ -1679,7 +1723,7 @@ namespace TANG
 		colorImageView = createImageView(colorImage, colorFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
 	}
 
-	void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+	void Renderer::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 	{
 		VkCommandBufferBeginInfo beginInfo{};
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -1722,17 +1766,32 @@ namespace TANG
 		scissor.extent = swapChainExtent;
 		vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-		// Only draw the first asset for now, and only draw this asset using the first vertex and index buffer
-		AssetResources& asset = assetResources[0];
+		// Fill out the vertex and index buffers that we'll be showing this frame
+		// NOTE - We assume that every asset only has one vertex and index buffer
+		uint32_t numTotalAssets = assetResources.size();
+		uint32_t numDrawnAssets = 0;
+
+		std::vector<VkBuffer> vertexBuffers(numTotalAssets);
+		std::vector<VkBuffer> indexBuffer(numTotalAssets);
+		for (uint32_t i = 0; i < numTotalAssets; i++)
+		{
+			AssetResources& currResources = assetResources[i];
+
+			// Only add the vertex buffer if we must draw the asset this frame
+			if (!GetAssetDrawState(currResources.uuid)) continue;
+
+			vertexBuffers[i] = currResources.vertexBuffers[0].GetBuffer();
+			indexBuffers[i] = currResources.indexBuffers[0].GetBuffer();
+			numDrawnAssets++;
+		}
 
 		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
-		VkBuffer vBuffers[] = { asset.vertexBuffers[0].GetBuffer() };
 		VkDeviceSize offsets[] = { 0 };
-		vkCmdBindVertexBuffers(commandBuffer, 0, 1, vBuffers, offsets);
+		vkCmdBindVertexBuffers(commandBuffer, 0, numDrawnAssets, vertexBuffers.data(), offsets);
 
 		// Make sure that our index type is 4 bytes. If that changes make sure to change it on the line below too
 		TNG_ASSERT_COMPILE(sizeof(IndexType) == 4);
-		vkCmdBindIndexBuffer(commandBuffer, asset.indexBuffers[0].GetBuffer(), 0, VK_INDEX_TYPE_UINT32);
+		vkCmdBindIndexBuffer(commandBuffer, *indexBuffer.data(), 0, VK_INDEX_TYPE_UINT32);
 
 		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentFrame], 0, nullptr);
 

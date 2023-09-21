@@ -4,6 +4,7 @@
 #include <glm.hpp>
 
 #include "utils/logger.h"
+#include "utils/uuid.h"
 #include "vertex_type.h"
 
 typedef uint32_t IndexType;
@@ -44,6 +45,7 @@ namespace TANG
 		std::string name;
 		std::vector<Mesh> meshes;
 		std::vector<Texture> textures;
+		UUID uuid;
 	};
 }
 

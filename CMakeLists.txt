@@ -26,6 +26,7 @@ set(HEADERS
 	
 	src/utils/logger.h
 	src/utils/sanity_check.h
+	src/utils/uuid.h
 )
 
 # Source files
@@ -42,6 +43,8 @@ set(SOURCES
 	# Shaders
 	src/shaders/shader.vert
 	src/shaders/shader.frag
+	
+	src/utils/uuid.cpp
 )
 
 # Set the output directories

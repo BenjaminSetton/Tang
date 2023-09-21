@@ -21,7 +21,6 @@ namespace TANG
 
 	void Shutdown()
 	{
-		rendererHandle.DestroyAllAssetResources();
 		LoaderUtils::UnloadAll();
 		rendererHandle.Shutdown();
 	}
@@ -51,7 +50,8 @@ namespace TANG
 	// UPDATE CALLS
 	void DrawAsset(const char* name)
 	{
-		TNG_ASSERT_MSG(false, "TODO - Implement");
+		Asset* asset = AssetContainer::GetInstance()->GetAsset(name);
+		rendererHandle.SetAssetDrawState(asset->uuid);
 	}
 
 
