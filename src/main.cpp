@@ -7,7 +7,7 @@
 static constexpr uint32_t NUM_ASSETS = 1;
 static std::string assets[NUM_ASSETS] =
 {
-    "../src/data/assets/sample/suzanne_smooth.fbx"
+    "../src/data/assets/sample/sphere_smooth.fbx"
 };
 
 int main(uint32_t argc, const char** argv) 

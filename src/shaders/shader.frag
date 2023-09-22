@@ -19,7 +19,7 @@ void main() {
     vec3 ambientColor = vec3(0.01, 0.01, 0.01);
 
     // Calculate direct light contribution
-    float diffuseFactor = clamp(dot(inNormal, -lightDir), 0.0f, 1.0f);
+    float diffuseFactor = clamp(dot(normalize(inNormal), -lightDir), 0.0f, 1.0f);
     vec3 diffuseColor = surfaceColor * diffuseFactor;
 
     //vec4 sampleColor = texture(texSampler, inUV);
