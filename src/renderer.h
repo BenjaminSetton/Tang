@@ -188,7 +188,7 @@ namespace TANG
 
 		void createColorResources();
 
-		void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+		bool RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
 		void recreateSwapChain();
 

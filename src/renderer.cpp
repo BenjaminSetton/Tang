@@ -200,6 +200,15 @@ namespace TANG
 	{
 		glfwPollEvents();
 		DrawFrame();
+
+		// Clear the asset draw states after drawing the current frame
+		// TODO - This is pretty slow to do per-frame, so I need to find a better way to
+		//        clear the asset draw states. Maybe a sorted pool would work better but
+		//        I want to avoid premature optimization so this'll do for now
+		for (auto& iter : assetDrawStates)
+		{
+			iter.second = false;
+		}
 	}
 
 	// Loads an asset which implies grabbing the vertices and indices from the asset container
@@ -454,12 +463,9 @@ namespace TANG
 		}
 		else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
 		{
-			throw std::runtime_error("Failed to acquire swap chain image!");
+			TNG_ASSERT_MSG(false, "Failed to acquire swap chain image!");
 		}
 
-		// Only reset the fence if we're submitting work, otherwise we might deadlock
-		// if the swapchain is outdated^^
-		vkResetFences(logicalDevice, 1, &inFlightFences[currentFrame]);
 
 		updateUniformBuffer(currentFrame);
 
@@ -469,7 +475,13 @@ namespace TANG
 		//
 		///////////////////////////////////////
 		vkResetCommandBuffer(commandBuffers[currentFrame], 0);
-		RecordCommandBuffer(commandBuffers[currentFrame], imageIndex);
+		bool cmdBuffersRecorded = RecordCommandBuffer(commandBuffers[currentFrame], imageIndex);
+
+		// Bail on drawing this current frame if we fail to record command buffers for whatever reason, or if there is no geometry to draw
+		if (!cmdBuffersRecorded) return;
+
+		// Only reset the fence if we're submitting work, otherwise we might deadlock
+		vkResetFences(logicalDevice, 1, &inFlightFences[currentFrame]);
 
 		VkSubmitInfo submitInfo{};
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -488,7 +500,7 @@ namespace TANG
 
 		if (vkQueueSubmit(queues[GRAPHICS_QUEUE], 1, &submitInfo, inFlightFences[currentFrame]) != VK_SUCCESS)
 		{
-			LogError("Failed to submit draw command buffer!");
+			TNG_ASSERT_MSG(false, "Failed to submit draw command buffer!");
 			return;
 		}
 
@@ -566,7 +578,7 @@ namespace TANG
 
 		if (vkCreateInstance(&createInfo, nullptr, &vkInstance) != VK_SUCCESS)
 		{
-			throw std::runtime_error("Failed to create Vulkan instance!");
+			TNG_ASSERT_MSG(false, "Failed to create Vulkan instance!");
 		}
 	}
 
@@ -668,7 +680,7 @@ namespace TANG
 
 		if (deviceCount == 0)
 		{
-			throw std::runtime_error("Failed to find GPU with Vulkan support");
+			TNG_ASSERT_MSG(false, "Failed to find GPU with Vulkan support");
 		}
 
 		std::vector<VkPhysicalDevice> devices(deviceCount);
@@ -686,7 +698,7 @@ namespace TANG
 
 		if (physicalDevice == VK_NULL_HANDLE)
 		{
-			throw std::runtime_error("Failed to find suitable device (GPU)!");
+			TNG_ASSERT_MSG(false, "Failed to find suitable device (GPU)!");
 		}
 	}
 
@@ -881,7 +893,8 @@ namespace TANG
 			}
 		}
 
-		throw std::runtime_error("Failed to find suitable memory type!");
+		TNG_ASSERT_MSG(false, "Failed to find suitable memory type!");
+		return std::numeric_limits<uint32_t>::max();
 	}
 
 	////////////////////////////////////////
@@ -939,7 +952,7 @@ namespace TANG
 
 		if (vkCreateDevice(physicalDevice, &createInfo, nullptr, &logicalDevice) != VK_SUCCESS)
 		{
-			LogError("Failed to create the logical device!");
+			TNG_ASSERT_MSG(false, "Failed to create the logical device!");
 		}
 
 		// Get the queues from the logical device
@@ -958,7 +971,7 @@ namespace TANG
 	{
 		if (glfwCreateWindowSurface(vkInstance, windowHandle, nullptr, &surface) != VK_SUCCESS)
 		{
-			throw std::runtime_error("Failed to create window surface!");
+			TNG_ASSERT_MSG(false, "Failed to create window surface!");
 		}
 	}
 
@@ -1009,7 +1022,7 @@ namespace TANG
 
 		if (vkCreateSwapchainKHR(logicalDevice, &createInfo, nullptr, &swapChain) != VK_SUCCESS)
 		{
-			throw std::runtime_error("Failed to create swap chain!");
+			TNG_ASSERT_MSG(false, "Failed to create swap chain!");
 		}
 
 		vkGetSwapchainImagesKHR(logicalDevice, swapChain, &imageCount, nullptr);
@@ -1043,7 +1056,7 @@ namespace TANG
 		VkShaderModule shaderModule;
 		if (vkCreateShaderModule(logicalDevice, &createInfo, nullptr, &shaderModule) != VK_SUCCESS)
 		{
-			throw std::runtime_error("Failed to create shader module!");
+			TNG_ASSERT_MSG(false, "Failed to create shader module!");
 		}
 
 		return shaderModule;
@@ -1198,7 +1211,7 @@ namespace TANG
 
 		if (vkCreatePipelineLayout(logicalDevice, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS)
 		{
-			throw std::runtime_error("Failed to create pipeline layout!");
+			TNG_ASSERT_MSG(false, "Failed to create pipeline layout!");
 		}
 
 		VkGraphicsPipelineCreateInfo pipelineInfo{};
@@ -1221,7 +1234,7 @@ namespace TANG
 
 		if (vkCreateGraphicsPipelines(logicalDevice, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS)
 		{
-			throw std::runtime_error("Failed to create graphics pipeline!");
+			TNG_ASSERT_MSG(false, "Failed to create graphics pipeline!");
 		}
 
 		vkDestroyShaderModule(logicalDevice, fragShaderModule, nullptr);
@@ -1299,7 +1312,7 @@ namespace TANG
 
 		if (vkCreateRenderPass(logicalDevice, &renderPassInfo, nullptr, &renderPass) != VK_SUCCESS)
 		{
-			throw std::runtime_error("Failed to create render pass!");
+			TNG_ASSERT_MSG(false, "Failed to create render pass!");
 		}
 
 
@@ -1356,7 +1369,7 @@ namespace TANG
 		}
 		else
 		{
-			LogError("Failed to find a queue family supporting a graphics queue!");
+			TNG_ASSERT_MSG(false, "Failed to find a queue family supporting a graphics queue!");
 		}
 
 		// Allocate the transfer command pool
@@ -1372,12 +1385,12 @@ namespace TANG
 
 			if (vkCreateCommandPool(logicalDevice, &poolInfo, nullptr, &commandPools[TRANSFER_QUEUE]) != VK_SUCCESS)
 			{
-				LogError("Failed to create a transfer command pool!");
+				TNG_ASSERT_MSG(false, "Failed to create a transfer command pool!");
 			}
 		}
 		else
 		{
-			LogError("Failed to find a queue family supporting a transfer queue!");
+			TNG_ASSERT_MSG(false, "Failed to find a queue family supporting a transfer queue!");
 		}
 	}
 
@@ -1393,8 +1406,7 @@ namespace TANG
 
 		if (vkAllocateCommandBuffers(logicalDevice, &allocInfo, commandBuffers.data()) != VK_SUCCESS)
 		{
-			LogError("Failed to allocate command buffers!");
-			return;
+			TNG_ASSERT_MSG(false, "Failed to allocate command buffers!");
 		}
 	}
 
@@ -1419,7 +1431,7 @@ namespace TANG
 				|| vkCreateSemaphore(logicalDevice, &semaphoreInfo, nullptr, &renderFinishedSemaphores[i]) != VK_SUCCESS
 				|| vkCreateFence(logicalDevice, &fenceInfo, nullptr, &inFlightFences[i]) != VK_SUCCESS)
 			{
-				throw std::runtime_error("Failed to create semaphores or fences!");
+				TNG_ASSERT_MSG(false, "Failed to create semaphores or fences!");
 			}
 		}
 	}
@@ -1434,7 +1446,7 @@ namespace TANG
 
 		if (vkCreateBuffer(logicalDevice, &bufferInfo, nullptr, &buffer) != VK_SUCCESS)
 		{
-			throw std::runtime_error("Failed to create buffer!");
+			TNG_ASSERT_MSG(false, "Failed to create buffer!");
 		}
 
 		VkMemoryRequirements memRequirements;
@@ -1447,7 +1459,7 @@ namespace TANG
 
 		if (vkAllocateMemory(logicalDevice, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS)
 		{
-			throw std::runtime_error("Failed to allocate memory for the buffer!");
+			TNG_ASSERT_MSG(false, "Failed to allocate memory for the buffer!");
 		}
 
 		vkBindBufferMemory(logicalDevice, buffer, bufferMemory, 0);
@@ -1518,7 +1530,7 @@ namespace TANG
 
 		if (vkCreateImage(logicalDevice, &imageInfo, nullptr, &image) != VK_SUCCESS)
 		{
-			throw std::runtime_error("Failed to create image!");
+			TNG_ASSERT_MSG(false, "Failed to create image!");
 		}
 
 		VkMemoryRequirements memRequirements;
@@ -1531,7 +1543,7 @@ namespace TANG
 
 		if (vkAllocateMemory(logicalDevice, &allocInfo, nullptr, &imageMemory) != VK_SUCCESS)
 		{
-			throw std::runtime_error("Failed to allocate image memory!");
+			TNG_ASSERT_MSG(false, "Failed to allocate image memory!");
 		}
 
 		vkBindImageMemory(logicalDevice, image, imageMemory, 0);
@@ -1543,7 +1555,7 @@ namespace TANG
 		stbi_uc* pixels = stbi_load(TEXTURE_PATH.c_str(), &width, &height, &channels, STBI_rgb_alpha);
 		if (pixels == nullptr)
 		{
-			throw std::runtime_error("Failed to load texture!");
+			TNG_ASSERT_MSG(false, "Failed to load texture!");
 		}
 
 		mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1;
@@ -1588,7 +1600,7 @@ namespace TANG
 		poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 
 		if (vkCreateDescriptorPool(logicalDevice, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
-			throw std::runtime_error("Failed to create descriptor pool!");
+			TNG_ASSERT_MSG(false, "Failed to create descriptor pool!");
 		}
 	}
 
@@ -1605,7 +1617,7 @@ namespace TANG
 		descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
 		if (vkAllocateDescriptorSets(logicalDevice, &allocInfo, descriptorSets.data()) != VK_SUCCESS)
 		{
-			throw std::runtime_error("Failed to allocate descriptor sets!");
+			TNG_ASSERT_MSG(false, "Failed to allocate descriptor sets!");
 		}
 
 		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
@@ -1721,7 +1733,7 @@ namespace TANG
 		colorImageView = createImageView(colorImage, colorFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
 	}
 
-	void Renderer::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+	bool Renderer::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 	{
 		// Fill out the vertex and index buffers that we'll be showing this frame
 		// NOTE - We assume that every asset only has one vertex and index buffer
@@ -1743,7 +1755,7 @@ namespace TANG
 		}
 
 		// Bail if we have nothing to draw
-		if (numDrawnAssets == 0) return;
+		if (numDrawnAssets == 0) return false;
 
 		VkCommandBufferBeginInfo beginInfo{};
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -1752,7 +1764,7 @@ namespace TANG
 
 		if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS)
 		{
-			throw std::runtime_error("Failed to begin recording command buffer!");
+			TNG_ASSERT_MSG(false, "Failed to begin recording command buffer!");
 		}
 
 		std::array<VkClearValue, 2> clearValues{};
@@ -1802,8 +1814,10 @@ namespace TANG
 
 		if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS)
 		{
-			LogError("Failed to record command buffers!");
+			TNG_ASSERT_MSG(false, "Failed to record command buffers!");
 		}
+
+		return true;
 	}
 
 	void Renderer::recreateSwapChain()
@@ -1885,7 +1899,7 @@ namespace TANG
 		res = vkAllocateCommandBuffers(logicalDevice, &allocInfo, &commandBuffer);
 		if (res != VK_SUCCESS)
 		{
-			LogError("Failed to allocate single-time command buffer!");
+			TNG_ASSERT_MSG(false, "Failed to allocate single-time command buffer!");
 		}
 
 		VkCommandBufferBeginInfo beginInfo{};
@@ -1895,7 +1909,7 @@ namespace TANG
 		res = vkBeginCommandBuffer(commandBuffer, &beginInfo);
 		if (res != VK_SUCCESS)
 		{
-			LogError("Failed to begin command buffer!");
+			TNG_ASSERT_MSG(false, "Failed to begin command buffer!");
 		}
 
 		return commandBuffer;
@@ -1915,13 +1929,13 @@ namespace TANG
 		res = vkQueueSubmit(queues[commandPoolType], 1, &submitInfo, VK_NULL_HANDLE);
 		if (res != VK_SUCCESS)
 		{
-			LogError("Failed to submit single-time command buffer!");
+			TNG_ASSERT_MSG(false, "Failed to submit single-time command buffer!");
 		}
 
 		res = vkQueueWaitIdle(queues[commandPoolType]);
 		if (res != VK_SUCCESS)
 		{
-			LogError("Failed to wait until queue was idle when submitting single-time command buffer");
+			TNG_ASSERT_MSG(false, "Failed to wait until queue was idle when submitting single-time command buffer");
 		}
 
 		vkFreeCommandBuffers(logicalDevice, commandPools[commandPoolType], 1, &commandBuffer);
@@ -1987,8 +2001,7 @@ namespace TANG
 		}
 		else
 		{
-			LogError("Unsupported layout transition!");
-			return;
+			TNG_ASSERT_MSG(false, "Unsupported layout transition!");
 		}
 
 		vkCmdPipelineBarrier(
@@ -2066,7 +2079,7 @@ namespace TANG
 		vkGetPhysicalDeviceFormatProperties(physicalDevice, imageFormat, &formatProperties);
 		if (!(formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT))
 		{
-			throw std::runtime_error("Texture image does not support linear blitting!");
+			TNG_ASSERT_MSG(false, "Texture image does not support linear blitting!");
 		}
 
 		VkCommandBuffer commandBuffer = BeginSingleTimeCommands(commandPools[GRAPHICS_QUEUE]);

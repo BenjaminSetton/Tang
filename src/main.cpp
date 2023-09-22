@@ -1,4 +1,5 @@
 
+#include <iostream>
 #include <string>
 
 #include "tang.h"
@@ -19,10 +20,17 @@ int main(uint32_t argc, const char** argv)
 
     TANG::Initialize();
     bool success = TANG::LoadAsset(assetName);
+    uint64_t frameCount = 0;
     while (!TANG::WindowShouldClose())
     {
-        TANG::DrawAsset(assetName);
+        std::cout << frameCount << std::endl;
+        if (frameCount < 15000)
+        {
+            TANG::DrawAsset(assetName);
+        }
         TANG::Update(0);
+
+        frameCount++;
     }
 
     TANG::Shutdown();
