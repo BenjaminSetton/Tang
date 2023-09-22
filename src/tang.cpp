@@ -34,23 +34,28 @@ namespace TANG
 		return rendererHandle.WindowShouldClose();
 	}
 
-	void LoadAsset(const char* name)
+	bool LoadAsset(const char* name)
 	{
 		Asset* asset = LoaderUtils::Load(name);
 		// If Load() returns nullptr, we know it didn't allocate memory on the heap, so no need to de-allocate anything here
 		if (asset == nullptr)
 		{
 			LogError("Failed to load asset '%s'", name);
-			return;
+			return false;
 		}
 
 		rendererHandle.CreateAssetResources(asset);
+
+		return true;
 	}
 
 	// UPDATE CALLS
 	void DrawAsset(const char* name)
 	{
-		Asset* asset = AssetContainer::GetInstance()->GetAsset(name);
+		AssetContainer& container = AssetContainer::GetInstance();
+		Asset* asset = container.GetAsset(name);
+		if (asset == nullptr) return;
+
 		rendererHandle.SetAssetDrawState(asset->uuid);
 	}
 

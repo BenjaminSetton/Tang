@@ -15,10 +15,13 @@ int main(uint32_t argc, const char** argv)
     UNUSED(argc);
     UNUSED(argv);
 
+    const char* assetName = assets[0].c_str();
+
     TANG::Initialize();
-    TANG::LoadAsset(assets[0].c_str());
+    bool success = TANG::LoadAsset(assetName);
     while (!TANG::WindowShouldClose())
     {
+        TANG::DrawAsset(assetName);
         TANG::Update(0);
     }
 

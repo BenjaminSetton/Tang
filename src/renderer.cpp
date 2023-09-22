@@ -198,13 +198,8 @@ namespace TANG
 
 	void Renderer::Update()
 	{
-		while (!glfwWindowShouldClose(windowHandle))
-		{
-			glfwPollEvents();
-			DrawFrame();
-		}
-
-		vkDeviceWaitIdle(logicalDevice);
+		glfwPollEvents();
+		DrawFrame();
 	}
 
 	// Loads an asset which implies grabbing the vertices and indices from the asset container
@@ -326,6 +321,8 @@ namespace TANG
 
 	void Renderer::Shutdown()
 	{
+		vkDeviceWaitIdle(logicalDevice);
+
 		DestroyAllAssetResources();
 
 		cleanupSwapChain();
@@ -391,13 +388,14 @@ namespace TANG
 
 	bool Renderer::GetAssetDrawState(UUID uuid)
 	{
-		if (assetDrawStates.find(uuid) == assetDrawStates.end())
+		auto iter = assetDrawStates.find(uuid);
+		if (iter == assetDrawStates.end())
 		{
 			TNG_ASSERT_MSG(false, "Attempted to get asset draw state, but none could be found in the map!");
 			return false;
 		}
 
-		return assetDrawStates[uuid];
+		return iter->second;
 	}
 
 	void Renderer::InitWindow()
@@ -1725,6 +1723,28 @@ namespace TANG
 
 	void Renderer::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 	{
+		// Fill out the vertex and index buffers that we'll be showing this frame
+		// NOTE - We assume that every asset only has one vertex and index buffer
+		uint32_t numTotalAssets = static_cast<uint32_t>(assetResources.size());
+		uint32_t numDrawnAssets = 0;
+
+		std::vector<VkBuffer> vertexBuffers(numTotalAssets);
+		std::vector<VkBuffer> indexBuffer(numTotalAssets);
+		for (uint32_t i = 0; i < numTotalAssets; i++)
+		{
+			AssetResources& currResources = assetResources[i];
+
+			// Only add the vertex buffer if we must draw the asset this frame
+			if (!GetAssetDrawState(currResources.uuid)) continue;
+
+			vertexBuffers[i] = currResources.vertexBuffers[0].GetBuffer();
+			indexBuffer[i] = currResources.indexBuffers[0].GetBuffer();
+			numDrawnAssets++;
+		}
+
+		// Bail if we have nothing to draw
+		if (numDrawnAssets == 0) return;
+
 		VkCommandBufferBeginInfo beginInfo{};
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 		beginInfo.flags = 0; // Optional
@@ -1766,25 +1786,6 @@ namespace TANG
 		scissor.extent = swapChainExtent;
 		vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-		// Fill out the vertex and index buffers that we'll be showing this frame
-		// NOTE - We assume that every asset only has one vertex and index buffer
-		uint32_t numTotalAssets = assetResources.size();
-		uint32_t numDrawnAssets = 0;
-
-		std::vector<VkBuffer> vertexBuffers(numTotalAssets);
-		std::vector<VkBuffer> indexBuffer(numTotalAssets);
-		for (uint32_t i = 0; i < numTotalAssets; i++)
-		{
-			AssetResources& currResources = assetResources[i];
-
-			// Only add the vertex buffer if we must draw the asset this frame
-			if (!GetAssetDrawState(currResources.uuid)) continue;
-
-			vertexBuffers[i] = currResources.vertexBuffers[0].GetBuffer();
-			indexBuffers[i] = currResources.indexBuffers[0].GetBuffer();
-			numDrawnAssets++;
-		}
-
 		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 		VkDeviceSize offsets[] = { 0 };
 		vkCmdBindVertexBuffers(commandBuffer, 0, numDrawnAssets, vertexBuffers.data(), offsets);
@@ -1795,7 +1796,7 @@ namespace TANG
 
 		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentFrame], 0, nullptr);
 
-		vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(asset.numIndices), 1, 0, 0, 0);
+		vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(assetResources[0].numIndices), 1, 0, 0, 0);
 
 		vkCmdEndRenderPass(commandBuffer);
 

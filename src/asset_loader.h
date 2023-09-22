@@ -13,6 +13,7 @@
 
 #include "asset_types.h"
 #include "utils/logger.h"
+#include "utils/uuid.h"
 
 namespace TANG
 {
@@ -22,33 +23,47 @@ namespace TANG
 	// LoaderUtils::Load() and unloaded through LoaderUtils::Unload()
 	class AssetContainer
 	{
-		friend class LoaderUtils;
+	private:
 
-	public:
+		friend class LoaderUtils;
 
 		AssetContainer();
 		~AssetContainer();
+
+	public:
 
 		// Singletons should not be assignable nor copyable
 		AssetContainer(const AssetContainer& other) = delete;
 		void operator=(const AssetContainer& other) = delete;
 
-		static AssetContainer* GetInstance()
+		static AssetContainer& GetInstance()
 		{
-			if (instance == nullptr)
-			{
-				instance = new AssetContainer();
-			}
-
+			static AssetContainer instance;
 			return instance;
 		}
 
-		Asset* GetAsset(std::string_view name) const;
+		// Retrieves a pointer to the asset inside the internal container by UUID or by name
+		Asset* GetAsset(UUID uuid) const;
+		Asset* GetAsset(const char* name) const;
+
+		// Inserts an asset into the internal container. Optionally, the forceOverride flag
+		// may be set to overwrite any existing instance of the asset
+		void InsertAsset(Asset* asset, bool forceOverride = false);
+
+		// Removes an asset by UUID from the internal container. Returns the pointer to the removed asset,
+		// so basically the ownership is transferred to the caller. Make sure to delete the asset after calling this
+		// or you will most likely leak memory!
+		Asset* RemoveAsset(UUID uuid);
+
+		// Returns whether an asset exists or not through UUID
+		bool AssetExists(UUID uuid) const;
+
+		// Returns a pointer to the first asset in the container. This is used when cleaning up
+		Asset* GetFirst() const;
 
 	private:
 
-		static AssetContainer* instance;
-		std::unordered_map<std::string_view, Asset*> container;
+		std::unordered_map<UUID, Asset*> container;
 
 	};
 
@@ -143,39 +158,48 @@ namespace TANG
 				texture.data = data;
 			}
 
-			auto assetContainer = AssetContainer::GetInstance()->container;
+			AssetContainer& container = AssetContainer::GetInstance();
 
-			std::string baseName = std::filesystem::path(filePath).stem().u8string();
-			assetContainer[baseName] = asset;
+			// Calculate UUID, and keep generating UUIDs in case of collision
+			UUID uuid = GetUUID();
+			while (container.AssetExists(uuid))
+			{
+				uuid = GetUUID();
+			}
 
-			// Calculate UUID
-			asset->uuid = GetUUID();
+			asset->uuid = uuid;
+			
+			/*std::string baseName = std::filesystem::path(filePath).stem().u8string();
+			asset->name = baseName;*/
+			asset->name = filePath;
+
+			container.InsertAsset(asset);
 
 			// We're good to go!
 			return asset;
 		}
 
-		static bool Unload(std::string_view filePath)
+		static bool Unload(UUID uuid)
 		{
-			auto assetContainer = AssetContainer::GetInstance()->container;
-			auto assetIter = assetContainer.find(filePath);
-			if (assetIter == assetContainer.end())
+			AssetContainer& container = AssetContainer::GetInstance();
+			if (!container.AssetExists(uuid))
 			{
 				LogWarning("Failed to find and unload model! Invalid name");
 				return false;
 			}
 
 			// Delete the Asset*
-			delete assetIter->second;
+			delete container.RemoveAsset(uuid);
 		}
 
 		static void UnloadAll()
 		{
-			auto assetContainer = AssetContainer::GetInstance()->container;
-			for (const auto& iter : assetContainer)
+			AssetContainer& container = AssetContainer::GetInstance();
+			Asset* asset = container.GetFirst();
+			while (asset != nullptr)
 			{
-				// Delete the Asset*
-				delete iter.second;
+				delete container.RemoveAsset(asset->uuid);
+				asset = container.GetFirst();
 			}
 		}
 

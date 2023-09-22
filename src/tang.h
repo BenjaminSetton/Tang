@@ -35,7 +35,7 @@ namespace TANG
 	// STATE CALLS
 	bool WindowShouldClose();
 
-	void LoadAsset(const char* name);
+	bool LoadAsset(const char* name);
 
 	// UPDATE CALLS
 	void DrawAsset(const char* name);
