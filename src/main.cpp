@@ -23,8 +23,7 @@ int main(uint32_t argc, const char** argv)
     uint64_t frameCount = 0;
     while (!TANG::WindowShouldClose())
     {
-        std::cout << frameCount << std::endl;
-        if (frameCount < 15000)
+        if (frameCount < 10000)
         {
             TANG::DrawAsset(assetName);
         }

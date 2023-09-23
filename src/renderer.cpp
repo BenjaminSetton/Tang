@@ -209,6 +209,8 @@ namespace TANG
 		{
 			iter.second = false;
 		}
+
+		currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 	}
 
 	// Loads an asset which implies grabbing the vertices and indices from the asset container
@@ -466,6 +468,8 @@ namespace TANG
 			TNG_ASSERT_MSG(false, "Failed to acquire swap chain image!");
 		}
 
+		// Only reset the fence if we're submitting work, otherwise we might deadlock
+		vkResetFences(logicalDevice, 1, &inFlightFences[currentFrame]);
 
 		updateUniformBuffer(currentFrame);
 
@@ -475,13 +479,7 @@ namespace TANG
 		//
 		///////////////////////////////////////
 		vkResetCommandBuffer(commandBuffers[currentFrame], 0);
-		bool cmdBuffersRecorded = RecordCommandBuffer(commandBuffers[currentFrame], imageIndex);
-
-		// Bail on drawing this current frame if we fail to record command buffers for whatever reason, or if there is no geometry to draw
-		if (!cmdBuffersRecorded) return;
-
-		// Only reset the fence if we're submitting work, otherwise we might deadlock
-		vkResetFences(logicalDevice, 1, &inFlightFences[currentFrame]);
+		RecordCommandBuffer(commandBuffers[currentFrame], imageIndex);
 
 		VkSubmitInfo submitInfo{};
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -493,6 +491,7 @@ namespace TANG
 		submitInfo.pWaitDstStageMask = waitStages;
 		submitInfo.commandBufferCount = 1;
 		submitInfo.pCommandBuffers = &commandBuffers[currentFrame];
+
 
 		VkSemaphore signalSemaphores[] = { renderFinishedSemaphores[currentFrame] };
 		submitInfo.signalSemaphoreCount = 1;
@@ -531,8 +530,6 @@ namespace TANG
 		{
 			throw std::runtime_error("Failed to present swap chain image!");
 		}
-
-		currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 	}
 
 	void Renderer::createInstance()
@@ -1733,7 +1730,7 @@ namespace TANG
 		colorImageView = createImageView(colorImage, colorFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
 	}
 
-	bool Renderer::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+	void Renderer::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 	{
 		// Fill out the vertex and index buffers that we'll be showing this frame
 		// NOTE - We assume that every asset only has one vertex and index buffer
@@ -1753,9 +1750,6 @@ namespace TANG
 			indexBuffer[i] = currResources.indexBuffers[0].GetBuffer();
 			numDrawnAssets++;
 		}
-
-		// Bail if we have nothing to draw
-		if (numDrawnAssets == 0) return false;
 
 		VkCommandBufferBeginInfo beginInfo{};
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -1800,15 +1794,20 @@ namespace TANG
 
 		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 		VkDeviceSize offsets[] = { 0 };
-		vkCmdBindVertexBuffers(commandBuffer, 0, numDrawnAssets, vertexBuffers.data(), offsets);
 
 		// Make sure that our index type is 4 bytes. If that changes make sure to change it on the line below too
 		TNG_ASSERT_COMPILE(sizeof(IndexType) == 4);
-		vkCmdBindIndexBuffer(commandBuffer, *indexBuffer.data(), 0, VK_INDEX_TYPE_UINT32);
 
-		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentFrame], 0, nullptr);
-
-		vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(assetResources[0].numIndices), 1, 0, 0, 0);
+		if (numDrawnAssets >= 1)
+		{
+			// TODO - This has to be reworked because we can't bind the vertex buffer of multiple assets to one vertex buffer
+			//        What we do instead is create a secondary buffer per asset, and bind the asset's vertex and index buffers
+			//        to the secondary buffer, which is attached to a general-purpose primary buffer, which we submit to the queue
+			vkCmdBindVertexBuffers(commandBuffer, 0, numDrawnAssets, vertexBuffers.data(), offsets);
+			vkCmdBindIndexBuffer(commandBuffer, *indexBuffer.data(), 0, VK_INDEX_TYPE_UINT32);
+			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentFrame], 0, nullptr);
+			vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(assetResources[0].numIndices), 1, 0, 0, 0);
+		}
 
 		vkCmdEndRenderPass(commandBuffer);
 
@@ -1816,8 +1815,6 @@ namespace TANG
 		{
 			TNG_ASSERT_MSG(false, "Failed to record command buffers!");
 		}
-
-		return true;
 	}
 
 	void Renderer::recreateSwapChain()
