@@ -9,7 +9,7 @@
 	va_list va; \
 	va_start(va, format); \
 	vsprintf_s(buffer, format, va); \
-	Log_Internal(LogType::ERR, buffer); \
+	Log_Internal(logType, buffer); \
 	va_end(va);
 
 static constexpr uint32_t MAX_BUFFER_SIZE_BYTES = 250;

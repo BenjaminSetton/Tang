@@ -17,10 +17,9 @@
 #include <vector>
 
 #include "asset_types.h"
-#include "buffer/vertex_buffer.h"
-#include "buffer/index_buffer.h"
+#include "cmd_buffer/primary_command_buffer.h"
+#include "cmd_buffer/secondary_command_buffer.h"
 #include "utils/sanity_check.h"
-#include "utils/uuid.h"
 
 namespace TANG
 {
@@ -34,14 +33,6 @@ namespace TANG
 		PRESENT_QUEUE,
 		TRANSFER_QUEUE,
 		QUEUE_COUNT			// NOTE! This value must come last at all times!! This is used to count the number of values inside this enum
-	};
-
-	struct AssetResources
-	{
-		std::vector<TANG::VertexBuffer> vertexBuffers;
-		std::vector<TANG::IndexBuffer> indexBuffers;
-		uint64_t numIndices = 0;							// Used when calling vkCmdDrawIndexed
-		UUID uuid;
 	};
 
 	class Renderer {
@@ -67,9 +58,14 @@ namespace TANG
 		// Before calling this function, make sure you've called LoaderUtils::LoadAsset() and have
 		// successfully loaded an asset from file! This functions assumes this, and if it can't retrieve
 		// the loaded asset data it will return prematurely
-		void CreateAssetResources(Asset* asset);
+		AssetResources* CreateAssetResources(AssetCore* asset);
 
-		void DestroyAssetResources(Asset* asset);
+		// Creates a secondary command buffer, given the asset resources. After an asset is loaded and it's asset resources
+		// are loaded, this function must be called to create the secondary command buffer that holds the commands to render
+		// the asset.
+		void CreateAssetCommandBuffer(AssetResources* resources);
+
+		void DestroyAssetResources(AssetCore* asset);
 		void DestroyAllAssetResources();
 
 		// TODO - Abstract this out into a window class, this really shouldn't be part of the renderer
@@ -88,9 +84,13 @@ namespace TANG
 			app->framebufferResized = true;
 		}
 
-		// Separates the creation of GLFW window objects and Vulkan graphics objects
+		// NOTE - The window creation and management using GLFW will be abstracted away from this class in the future.
+		//        The renderer should only be in charge of initializing, maintaining and destroying Vulkan-related objects.
 		void InitWindow();
 		void InitVulkan();
+
+		void ShutdownWindow();
+		void ShutdownVulkan();
 
 		void DrawFrame();
 
@@ -141,24 +141,24 @@ namespace TANG
 		////////////////////////////////////////
 		void createSurface();
 
-		void createSwapChain();
+		void CreateSwapChain();
 
 		// Create image views for all images on the swap chain
-		void createImageViews();
+		void CreateImageViews();
 
 		// This is a helper function for creating the "VkShaderModule" wrappers around
 		// the shader code, read from createGraphicsPipeline() below
 		VkShaderModule createShaderModule(std::vector<char>& code);
 
-		void createGraphicsPipeline();
+		void CreateGraphicsPipeline();
 
-		void createRenderPass();
+		void CreateRenderPass();
 
-		void createFramebuffers();
+		void CreateFramebuffers();
 
 		void CreateCommandPools();
 
-		void CreateCommandBuffers(QueueType poolType);
+		void CreatePrimaryCommandBuffers(QueueType poolType);
 
 		void createSyncObjects();
 
@@ -184,15 +184,18 @@ namespace TANG
 
 		void createTextureSampler();
 
-		void createDepthResources();
+		void CreateDepthResources();
 
-		void createColorResources();
+		void CreateColorResources();
 
-		void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+		void RecordPrimaryCommandBuffer(uint32_t frameBufferIndex);
+		void RecordSecondaryCommandBuffer(SecondaryCommandBuffer& commandBuffer, AssetResources* resources, uint32_t frameBufferIndex);
 
-		void recreateSwapChain();
+		void RecreateSwapChain();
 
-		void cleanupSwapChain();
+		void RecreateAllSecondaryCommandBuffers();
+
+		void CleanupSwapChain();
 
 		void updateUniformBuffer(uint32_t currentFrame);
 
@@ -201,7 +204,7 @@ namespace TANG
 		// The commandPoolType parameter must match the pool type that was used to allocate the command buffer in the corresponding BeginSingleTimeCommands() function call!
 		void EndSingleTimeCommands(VkCommandBuffer commandBuffer, QueueType commandPoolType);
 
-		void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels);
+		void TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels);
 
 		void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
 
@@ -216,6 +219,11 @@ namespace TANG
 		VkSampleCountFlagBits getMaxUsableSampleCount();
 
 		void DestroyAssetBuffersHelper(AssetResources& resources);
+
+		PrimaryCommandBuffer* GetCurrentPrimaryBuffer();
+		SecondaryCommandBuffer* GetCurrentSecondaryCommandBuffer(uint32_t frameBufferIndex, UUID uuid);
+		VkFramebuffer GetCurrentFramebuffer(uint32_t frameBufferIndex) const;
+		VkDescriptorSet GetCurrentDescriptorSet() const;
 
 	private:
 
@@ -244,9 +252,20 @@ namespace TANG
 		VkPipeline graphicsPipeline;
 
 		std::vector<VkFramebuffer> swapChainFramebuffers;
+		uint32_t swapChainImageCount = 0; // NOTE - This does not necessarily equal the number of frames in flight!
 
 		std::unordered_map<QueueType, VkCommandPool> commandPools;
-		std::vector<VkCommandBuffer> commandBuffers;
+
+		// We need one primary command buffer per frame in flight, since we can be rendering multiple frames at the same time and
+		// we want to still be able to reset and record a primary buffer
+		std::vector<PrimaryCommandBuffer> primaryCommandBuffers;
+
+		// The two following maps represent the drawable state of an asset, given it's UUID. AssetDrawStates tells us whether the asset must
+		// be drawn this frame, and secondaryCommandBuffers holds a correspondence between an asset's UUID and it's generated secondary command buffer
+		std::unordered_map<UUID, bool> assetDrawStates;
+		// This is a vector of unordered maps because we must bind the current frame's framebuffer in the secondary command buffers, so instead of recording
+		// them every frame when nothing changes but the framebuffer, we'll create the same number of maps as there are frames in flight
+		std::vector<std::unordered_map<UUID, SecondaryCommandBuffer>> secondaryCommandBuffers;
 
 		std::vector<VkSemaphore> imageAvailableSemaphores;
 		std::vector<VkSemaphore> renderFinishedSemaphores;
@@ -279,7 +298,6 @@ namespace TANG
 		VkDeviceMemory colorImageMemory;
 		VkImageView colorImageView;
 
-		std::unordered_map<UUID, bool> assetDrawStates;
 	};
 
 }

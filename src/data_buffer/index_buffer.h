@@ -3,6 +3,8 @@
 
 #include "buffer.h"
 
+enum VkIndexType;
+
 namespace TANG
 {
 	class IndexBuffer : public Buffer
@@ -20,6 +22,8 @@ namespace TANG
 		void DestroyIntermediateBuffers(VkDevice logicalDevice);
 
 		void MapData(VkDevice& logicalDevice, VkCommandBuffer& commandBuffer, void* data, VkDeviceSize bufferSize) override;
+
+		VkIndexType GetIndexType() const;
 
 	private:
 

@@ -1,5 +1,9 @@
 
+#include "../asset_types.h"
 #include "index_buffer.h"
+#include "../utils/sanity_check.h"
+
+#include "vulkan/vulkan.h"
 
 namespace TANG
 {
@@ -47,6 +51,18 @@ namespace TANG
 
 		// Copy the data from the staging buffer into the vertex buffer
 		CopyFromBuffer(commandBuffer, stagingBuffer, buffer, bufferSize);
+	}
+
+	VkIndexType IndexBuffer::GetIndexType() const
+	{
+		switch (sizeof(IndexType))
+		{
+		case 2: return VK_INDEX_TYPE_UINT16;
+		case 4: return VK_INDEX_TYPE_UINT32;
+		}
+
+		TNG_ASSERT_MSG(false, "Unsupported index type!");
+		return VK_INDEX_TYPE_MAX_ENUM;
 	}
 }
 

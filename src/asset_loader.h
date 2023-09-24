@@ -43,27 +43,27 @@ namespace TANG
 		}
 
 		// Retrieves a pointer to the asset inside the internal container by UUID or by name
-		Asset* GetAsset(UUID uuid) const;
-		Asset* GetAsset(const char* name) const;
+		AssetCore* GetAsset(UUID uuid) const;
+		AssetCore* GetAsset(const char* name) const;
 
 		// Inserts an asset into the internal container. Optionally, the forceOverride flag
 		// may be set to overwrite any existing instance of the asset
-		void InsertAsset(Asset* asset, bool forceOverride = false);
+		void InsertAsset(AssetCore* asset, bool forceOverride = false);
 
 		// Removes an asset by UUID from the internal container. Returns the pointer to the removed asset,
 		// so basically the ownership is transferred to the caller. Make sure to delete the asset after calling this
 		// or you will most likely leak memory!
-		Asset* RemoveAsset(UUID uuid);
+		AssetCore* RemoveAsset(UUID uuid);
 
 		// Returns whether an asset exists or not through UUID
 		bool AssetExists(UUID uuid) const;
 
 		// Returns a pointer to the first asset in the container. This is used when cleaning up
-		Asset* GetFirst() const;
+		AssetCore* GetFirst() const;
 
 	private:
 
-		std::unordered_map<UUID, Asset*> container;
+		std::unordered_map<UUID, AssetCore*> container;
 
 	};
 
@@ -77,7 +77,7 @@ namespace TANG
 		// Takes in the filePath to an FBX file, and upon success returns a pointer
 		// to the loaded Asset object. Note that this object is also stored in the
 		// AssetContainer, so it may also be retrieved again later through it's filePath
-		static Asset* Load(std::string_view filePath)
+		static AssetCore* Load(std::string_view filePath)
 		{
 			Assimp::Importer importer;
 			const aiScene* scene = importer.ReadFile(filePath.data(), aiProcess_Triangulate | aiProcess_FlipUVs);
@@ -99,7 +99,7 @@ namespace TANG
 			}
 
 			// Now we can create the Asset instance
-			Asset* asset = new Asset();
+			AssetCore* asset = new AssetCore();
 			asset->meshes.resize(numMeshes);
 			asset->textures.resize(numTextures);
 
@@ -195,7 +195,7 @@ namespace TANG
 		static void UnloadAll()
 		{
 			AssetContainer& container = AssetContainer::GetInstance();
-			Asset* asset = container.GetFirst();
+			AssetCore* asset = container.GetFirst();
 			while (asset != nullptr)
 			{
 				delete container.RemoveAsset(asset->uuid);

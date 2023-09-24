@@ -1,3 +1,4 @@
+
 #include "renderer.h"
 
 #define GLM_FORCE_RADIANS
@@ -26,13 +27,12 @@
 #include <vector>
 
 #include "asset_loader.h"
+#include "data_buffer/vertex_buffer.h"
+#include "data_buffer/index_buffer.h"
 
 static constexpr uint32_t WINDOW_WIDTH = 1920;
 static constexpr uint32_t WINDOW_HEIGHT = 1080;
 static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
-
-static const std::string MODEL_PATH = "../src/data/models/viking_room.obj";
-static const std::string TEXTURE_PATH = "../src/data/textures/viking_room.png";
 
 static std::vector<const char*> validationLayers = {
 	"VK_LAYER_KHRONOS_validation"
@@ -176,9 +176,9 @@ namespace TANG
 
 		bool IsComplete()
 		{
-			return IsValid(queueFamilies[GRAPHICS_QUEUE]) &&
-				IsValid(queueFamilies[PRESENT_QUEUE]) &&
-				IsValid(queueFamilies[TRANSFER_QUEUE]);
+			return	IsValid(queueFamilies[GRAPHICS_QUEUE]) &&
+					IsValid(queueFamilies[PRESENT_QUEUE]) &&
+					IsValid(queueFamilies[TRANSFER_QUEUE]);
 		}
 	};
 
@@ -217,18 +217,21 @@ namespace TANG
 	// and creating vertex/index buffers to contain them. It also includes creating all other
 	// API objects necessary for rendering. Receives a pointer to a loaded asset. This function
 	// assumes the caller handled a null asset correctly
-	void Renderer::CreateAssetResources(Asset* asset)
+	AssetResources* Renderer::CreateAssetResources(AssetCore* asset)
 	{
 		assetResources.emplace_back(AssetResources());
 		AssetResources& resources = assetResources.back();
 
 		uint32_t meshCount = static_cast<uint32_t>(asset->meshes.size());
 
-		// Resize the vertex and index buffers to the number of meshes the asset has
+		TNG_ASSERT_MSG(meshCount == 1, "Multiple meshes per asset is not currently supported!");
+
+		// Resize the vertex buffer and offset vector to the number of meshes
 		resources.vertexBuffers.resize(meshCount);
-		resources.indexBuffers.resize(meshCount);
+		resources.offsets.resize(meshCount);
 
 		uint64_t totalIndexCount = 0;
+		uint32_t vBufferOffset = 0;
 
 		for (uint32_t i = 0; i < meshCount; i++)
 		{
@@ -247,7 +250,7 @@ namespace TANG
 			// Create the index buffer
 			numBytes = currMesh.indices.size() * sizeof(IndexType);
 
-			IndexBuffer& ib = resources.indexBuffers[i];
+			IndexBuffer& ib = resources.indexBuffer;
 			ib.Create(physicalDevice, logicalDevice, numBytes);
 
 			commandBuffer = BeginSingleTimeCommands(commandPools[TRANSFER_QUEUE]);
@@ -260,14 +263,41 @@ namespace TANG
 
 			// Accumulate the index count of this mesh;
 			totalIndexCount += currMesh.indices.size();
+
+			// Set the current offset and then increment
+			resources.offsets[i] = vBufferOffset++;
 		}
 
 		// Insert the asset's uuid into the assetDrawState map. We do not render it
 		// upon insertion by default
 		assetDrawStates.insert({ asset->uuid, false });
 
-		resources.numIndices = totalIndexCount;
+		resources.indexCount = totalIndexCount;
 		resources.uuid = asset->uuid;
+
+		return &resources;
+	}
+
+	void Renderer::CreateAssetCommandBuffer(AssetResources* resources)
+	{
+		UUID assetID = resources->uuid;
+
+		// For every frame in flight, insert object into map and then grab a reference to it
+		for (uint32_t i = 0; i < swapChainImageCount; i++)
+		{
+			// Ensure that there's not already an entry in the secondaryCommandBuffers map. We bail in case of a collision
+			if (secondaryCommandBuffers[i].find(assetID) != secondaryCommandBuffers[i].end())
+			{
+				LogError("Attempted to create a secondary command buffer for an asset, but a secondary command buffer was already found for asset uuid %ull", assetID);
+				return;
+			}
+
+			secondaryCommandBuffers[i].emplace(assetID, SecondaryCommandBuffer());
+			SecondaryCommandBuffer& commandBuffer = secondaryCommandBuffers[i][assetID];
+			commandBuffer.Create(logicalDevice, commandPools[GRAPHICS_QUEUE]);
+
+			RecordSecondaryCommandBuffer(commandBuffer, resources, i);
+		}
 	}
 
 	void Renderer::DestroyAssetBuffersHelper(AssetResources& resources)
@@ -278,14 +308,31 @@ namespace TANG
 			vb.Destroy(logicalDevice);
 		}
 
-		// Destroy all index buffers
-		for (auto& ib : resources.indexBuffers)
-		{
-			ib.Destroy(logicalDevice);
-		}
+		// Destroy the index buffer
+		resources.indexBuffer.Destroy(logicalDevice);
 	}
 
-	void Renderer::DestroyAssetResources(Asset* asset)
+	PrimaryCommandBuffer* Renderer::GetCurrentPrimaryBuffer()
+	{
+		return &primaryCommandBuffers[currentFrame];
+	}
+
+	SecondaryCommandBuffer* Renderer::GetCurrentSecondaryCommandBuffer(uint32_t frameBufferIndex, UUID uuid)
+	{
+		return &secondaryCommandBuffers[frameBufferIndex].at(uuid);
+	}
+
+	VkFramebuffer Renderer::GetCurrentFramebuffer(uint32_t frameBufferIndex) const
+	{
+		return swapChainFramebuffers[frameBufferIndex];
+	}
+
+	VkDescriptorSet Renderer::GetCurrentDescriptorSet() const
+	{
+		return descriptorSets[currentFrame];
+	}
+
+	void Renderer::DestroyAssetResources(AssetCore* asset)
 	{
 		for (auto iter = assetResources.begin(); iter != assetResources.end(); iter++)
 		{
@@ -332,57 +379,8 @@ namespace TANG
 
 	void Renderer::Shutdown()
 	{
-		vkDeviceWaitIdle(logicalDevice);
-
-		DestroyAllAssetResources();
-
-		cleanupSwapChain();
-
-		vkDestroySampler(logicalDevice, textureSampler, nullptr);
-		vkDestroyImageView(logicalDevice, textureImageView, nullptr);
-
-		vkDestroyImage(logicalDevice, textureImage, nullptr);
-		vkFreeMemory(logicalDevice, textureImageMemory, nullptr);
-
-		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
-		{
-			vkDestroyBuffer(logicalDevice, uniformBuffers[i], nullptr);
-			vkFreeMemory(logicalDevice, uniformBufferMemory[i], nullptr);
-		}
-
-		vkDestroyDescriptorPool(logicalDevice, descriptorPool, nullptr);
-		vkDestroyDescriptorSetLayout(logicalDevice, descriptorSetLayout, nullptr);
-
-		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
-		{
-			vkDestroySemaphore(logicalDevice, imageAvailableSemaphores[i], nullptr);
-			vkDestroySemaphore(logicalDevice, renderFinishedSemaphores[i], nullptr);
-			vkDestroyFence(logicalDevice, inFlightFences[i], nullptr);
-		}
-
-		// Destroy all command pools
-		for (const auto& iter : commandPools)
-		{
-			vkDestroyCommandPool(logicalDevice, iter.second, nullptr);
-		}
-		commandPools.clear();
-
-		vkDestroyPipeline(logicalDevice, graphicsPipeline, nullptr);
-		vkDestroyPipelineLayout(logicalDevice, pipelineLayout, nullptr);
-		vkDestroyRenderPass(logicalDevice, renderPass, nullptr);
-
-		vkDestroyDevice(logicalDevice, nullptr);
-		vkDestroySurfaceKHR(vkInstance, surface, nullptr);
-
-		if (enableValidationLayers)
-		{
-			DestroyDebugUtilsMessengerEXT(vkInstance, debugMessenger, nullptr);
-		}
-
-		vkDestroyInstance(vkInstance, nullptr);
-
-		glfwDestroyWindow(windowHandle);
-		glfwTerminate();
+		ShutdownVulkan();
+		ShutdownWindow();
 
 	}
 
@@ -429,23 +427,84 @@ namespace TANG
 		createSurface();
 		pickPhysicalDevice();
 		CreateLogicalDevice();
-		createSwapChain();
-		createImageViews();
-		createRenderPass();
+		CreateSwapChain();
+		CreateImageViews();
+		CreateRenderPass();
 		createDescriptorSetLayout();
-		createGraphicsPipeline();
+		CreateGraphicsPipeline();
 		CreateCommandPools();
-		createColorResources();
-		createDepthResources();
-		createFramebuffers();
-		CreateTextureImage();
-		createTextureImageView();
-		createTextureSampler();
+		CreateColorResources();
+		CreateDepthResources();
+		CreateFramebuffers();
+		//CreateTextureImage();
+		//createTextureImageView();
+		//createTextureSampler();
 		createUniformBuffers();
 		createDescriptorPool();
 		createDescriptorSets();
-		CreateCommandBuffers(GRAPHICS_QUEUE);
+		CreatePrimaryCommandBuffers(GRAPHICS_QUEUE);
 		createSyncObjects();
+
+		// Resize the vector of secondary command buffers to number of framebuffer images we have
+		secondaryCommandBuffers.resize(swapChainImageCount);
+	}
+
+	void Renderer::ShutdownWindow()
+	{
+		glfwDestroyWindow(windowHandle);
+		glfwTerminate();
+	}
+
+	void Renderer::ShutdownVulkan()
+	{
+		vkDeviceWaitIdle(logicalDevice);
+
+		DestroyAllAssetResources();
+
+		CleanupSwapChain();
+
+		vkDestroySampler(logicalDevice, textureSampler, nullptr);
+		vkDestroyImageView(logicalDevice, textureImageView, nullptr);
+
+		vkDestroyImage(logicalDevice, textureImage, nullptr);
+		vkFreeMemory(logicalDevice, textureImageMemory, nullptr);
+
+		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+		{
+			vkDestroyBuffer(logicalDevice, uniformBuffers[i], nullptr);
+			vkFreeMemory(logicalDevice, uniformBufferMemory[i], nullptr);
+		}
+
+		vkDestroyDescriptorPool(logicalDevice, descriptorPool, nullptr);
+		vkDestroyDescriptorSetLayout(logicalDevice, descriptorSetLayout, nullptr);
+
+		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+		{
+			vkDestroySemaphore(logicalDevice, imageAvailableSemaphores[i], nullptr);
+			vkDestroySemaphore(logicalDevice, renderFinishedSemaphores[i], nullptr);
+			vkDestroyFence(logicalDevice, inFlightFences[i], nullptr);
+		}
+
+		// Destroy all command pools
+		for (const auto& iter : commandPools)
+		{
+			vkDestroyCommandPool(logicalDevice, iter.second, nullptr);
+		}
+		commandPools.clear();
+
+		vkDestroyPipeline(logicalDevice, graphicsPipeline, nullptr);
+		vkDestroyPipelineLayout(logicalDevice, pipelineLayout, nullptr);
+		vkDestroyRenderPass(logicalDevice, renderPass, nullptr);
+
+		vkDestroyDevice(logicalDevice, nullptr);
+		vkDestroySurfaceKHR(vkInstance, surface, nullptr);
+
+		if (enableValidationLayers)
+		{
+			DestroyDebugUtilsMessengerEXT(vkInstance, debugMessenger, nullptr);
+		}
+
+		vkDestroyInstance(vkInstance, nullptr);
 	}
 
 	void Renderer::DrawFrame()
@@ -460,13 +519,15 @@ namespace TANG
 
 		if (result == VK_ERROR_OUT_OF_DATE_KHR)
 		{
-			recreateSwapChain();
+			RecreateSwapChain();
 			return;
 		}
 		else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
 		{
 			TNG_ASSERT_MSG(false, "Failed to acquire swap chain image!");
 		}
+
+		//TNG_ASSERT_MSG(imageIndex < MAX_FRAMES_IN_FLIGHT, "vkAcquireNextImageKHR returned VK_SUCCESS but somehow gave us an invalid image index?");
 
 		// Only reset the fence if we're submitting work, otherwise we might deadlock
 		vkResetFences(logicalDevice, 1, &inFlightFences[currentFrame]);
@@ -478,20 +539,19 @@ namespace TANG
 		// Record and submit primary command buffer
 		//
 		///////////////////////////////////////
-		vkResetCommandBuffer(commandBuffers[currentFrame], 0);
-		RecordCommandBuffer(commandBuffers[currentFrame], imageIndex);
+		RecordPrimaryCommandBuffer(imageIndex);
+
+		VkCommandBuffer commandBuffers[] = { GetCurrentPrimaryBuffer()->GetBuffer() };
+		VkSemaphore waitSemaphores[] = { imageAvailableSemaphores[currentFrame] };
 
 		VkSubmitInfo submitInfo{};
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-
-		VkSemaphore waitSemaphores[] = { imageAvailableSemaphores[currentFrame] };
 		VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
 		submitInfo.waitSemaphoreCount = 1;
 		submitInfo.pWaitSemaphores = waitSemaphores;
 		submitInfo.pWaitDstStageMask = waitStages;
 		submitInfo.commandBufferCount = 1;
-		submitInfo.pCommandBuffers = &commandBuffers[currentFrame];
-
+		submitInfo.pCommandBuffers = commandBuffers;
 
 		VkSemaphore signalSemaphores[] = { renderFinishedSemaphores[currentFrame] };
 		submitInfo.signalSemaphoreCount = 1;
@@ -524,11 +584,11 @@ namespace TANG
 		if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebufferResized)
 		{
 			framebufferResized = false;
-			recreateSwapChain();
+			RecreateSwapChain();
 		}
 		else if (result != VK_SUCCESS)
 		{
-			throw std::runtime_error("Failed to present swap chain image!");
+			LogError("Failed to present swap chain image!");
 		}
 	}
 
@@ -972,7 +1032,7 @@ namespace TANG
 		}
 	}
 
-	void Renderer::createSwapChain()
+	void Renderer::CreateSwapChain()
 	{
 		SwapChainSupportDetails details = querySwapChainSupport(physicalDevice);
 		VkSurfaceFormatKHR surfaceFormat = chooseSwapSurfaceFormat(details.formats);
@@ -1028,10 +1088,11 @@ namespace TANG
 
 		swapChainImageFormat = surfaceFormat.format;
 		swapChainExtent = extent;
+		swapChainImageCount = imageCount;
 	}
 
 	// Create image views for all images on the swap chain
-	void Renderer::createImageViews()
+	void Renderer::CreateImageViews()
 	{
 		swapChainImageViews.resize(swapChainImages.size());
 
@@ -1042,7 +1103,7 @@ namespace TANG
 	}
 
 	// This is a helper function for creating the "VkShaderModule" wrappers around
-	// the shader code, read from createGraphicsPipeline() below
+	// the shader code, read from CreateGraphicsPipeline() below
 	VkShaderModule Renderer::createShaderModule(std::vector<char>& code)
 	{
 		VkShaderModuleCreateInfo createInfo{};
@@ -1059,7 +1120,7 @@ namespace TANG
 		return shaderModule;
 	}
 
-	void Renderer::createGraphicsPipeline()
+	void Renderer::CreateGraphicsPipeline()
 	{
 		// Read the compiled shaders
 		auto vertShaderCode = readFile("../out/shaders/vert.spv");
@@ -1239,7 +1300,7 @@ namespace TANG
 
 	}
 
-	void Renderer::createRenderPass()
+	void Renderer::CreateRenderPass()
 	{
 		VkAttachmentDescription colorAttachment{};
 		colorAttachment.format = swapChainImageFormat;
@@ -1315,7 +1376,7 @@ namespace TANG
 
 	}
 
-	void Renderer::createFramebuffers()
+	void Renderer::CreateFramebuffers()
 	{
 		swapChainFramebuffers.resize(swapChainImageViews.size());
 
@@ -1339,7 +1400,7 @@ namespace TANG
 
 			if (vkCreateFramebuffer(logicalDevice, &framebufferInfo, nullptr, &swapChainFramebuffers[i]) != VK_SUCCESS)
 			{
-				throw std::runtime_error("Failed to create framebuffer!");
+				TNG_ASSERT_MSG(false, "Failed to create framebuffer!");
 			}
 		}
 	}
@@ -1391,19 +1452,13 @@ namespace TANG
 		}
 	}
 
-	void Renderer::CreateCommandBuffers(QueueType poolType)
+	void Renderer::CreatePrimaryCommandBuffers(QueueType poolType)
 	{
-		commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+		primaryCommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
 
-		VkCommandBufferAllocateInfo allocInfo{};
-		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-		allocInfo.commandPool = commandPools[poolType];
-		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-		allocInfo.commandBufferCount = static_cast<uint32_t>(commandBuffers.size());
-
-		if (vkAllocateCommandBuffers(logicalDevice, &allocInfo, commandBuffers.data()) != VK_SUCCESS)
+		for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
 		{
-			TNG_ASSERT_MSG(false, "Failed to allocate command buffers!");
+			primaryCommandBuffers[i].Create(logicalDevice, commandPools[poolType]);
 		}
 	}
 
@@ -1549,7 +1604,7 @@ namespace TANG
 	void Renderer::CreateTextureImage()
 	{
 		int width, height, channels;
-		stbi_uc* pixels = stbi_load(TEXTURE_PATH.c_str(), &width, &height, &channels, STBI_rgb_alpha);
+		stbi_uc* pixels = stbi_load("", &width, &height, &channels, STBI_rgb_alpha);
 		if (pixels == nullptr)
 		{
 			TNG_ASSERT_MSG(false, "Failed to load texture!");
@@ -1574,7 +1629,7 @@ namespace TANG
 			VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 			textureImage, textureImageMemory);
 
-		transitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, mipLevels);
+		TransitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, mipLevels);
 		copyBufferToImage(stagingBuffer, textureImage, static_cast<uint32_t>(width), static_cast<uint32_t>(height));
 		GenerateMipmaps(textureImage, VK_FORMAT_R8G8B8A8_SRGB, width, height, mipLevels);
 
@@ -1624,12 +1679,12 @@ namespace TANG
 			bufferInfo.offset = 0;
 			bufferInfo.range = sizeof(UniformBufferObject);
 
-			VkDescriptorImageInfo imageInfo{};
-			imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-			imageInfo.imageView = textureImageView;
-			imageInfo.sampler = textureSampler;
+			//VkDescriptorImageInfo imageInfo{};
+			//imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			//imageInfo.imageView = textureImageView;
+			//imageInfo.sampler = textureSampler;
 
-			std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
+			std::array<VkWriteDescriptorSet, 1> descriptorWrites{};
 			descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			descriptorWrites[0].dstSet = descriptorSets[i];
 			descriptorWrites[0].dstBinding = 0;
@@ -1637,18 +1692,15 @@ namespace TANG
 			descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 			descriptorWrites[0].descriptorCount = 1;
 			descriptorWrites[0].pBufferInfo = &bufferInfo;
-			//descriptorWrites[0].pImageInfo = nullptr; // Optional
-			//descriptorWrites[0].pTexelBufferView = nullptr; // Optional
 
-			descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			descriptorWrites[1].dstSet = descriptorSets[i];
-			descriptorWrites[1].dstBinding = 1;
-			descriptorWrites[1].dstArrayElement = 0;
-			descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			descriptorWrites[1].descriptorCount = 1;
-			descriptorWrites[1].pImageInfo = &imageInfo;
-			//descriptorWrites[1].pImageInfo = nullptr; // Optional
-			//descriptorWrites[1].pTexelBufferView = nullptr; // Optional
+			//descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			//descriptorWrites[1].dstSet = descriptorSets[i];
+			//descriptorWrites[1].dstBinding = 1;
+			//descriptorWrites[1].dstArrayElement = 0;
+			//descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			//descriptorWrites[1].descriptorCount = 1;
+			//descriptorWrites[1].pImageInfo = &imageInfo;
+			LogWarning("descriptorWrites[1] was temporarily removed");
 
 			vkUpdateDescriptorSets(logicalDevice, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 		}
@@ -1710,7 +1762,7 @@ namespace TANG
 		}
 	}
 
-	void Renderer::createDepthResources()
+	void Renderer::CreateDepthResources()
 	{
 		VkFormat depthFormat = findDepthFormat();
 		createImage(swapChainExtent.width, swapChainExtent.height, 1, msaaSamples, depthFormat, VK_IMAGE_TILING_OPTIMAL,
@@ -1720,7 +1772,7 @@ namespace TANG
 		//transitionImageLayout(depthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, mipLevels);
 	}
 
-	void Renderer::createColorResources()
+	void Renderer::CreateColorResources()
 	{
 		VkFormat colorFormat = swapChainImageFormat;
 
@@ -1730,94 +1782,61 @@ namespace TANG
 		colorImageView = createImageView(colorImage, colorFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
 	}
 
-	void Renderer::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+	void Renderer::RecordPrimaryCommandBuffer(uint32_t frameBufferIndex)
 	{
-		// Fill out the vertex and index buffers that we'll be showing this frame
-		// NOTE - We assume that every asset only has one vertex and index buffer
-		uint32_t numTotalAssets = static_cast<uint32_t>(assetResources.size());
-		uint32_t numDrawnAssets = 0;
+		PrimaryCommandBuffer* commandBuffer = GetCurrentPrimaryBuffer();
 
-		std::vector<VkBuffer> vertexBuffers(numTotalAssets);
-		std::vector<VkBuffer> indexBuffer(numTotalAssets);
-		for (uint32_t i = 0; i < numTotalAssets; i++)
+		// Reset the primary buffer since we've marked it as one-time submit
+		commandBuffer->Reset();
+
+		// Primary command buffers don't need to define inheritance info
+		commandBuffer->BeginRecording(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, nullptr);
+
+		commandBuffer->CMD_BeginRenderPass(renderPass, GetCurrentFramebuffer(frameBufferIndex), swapChainExtent, true);
+
+		// Execute the secondary commands here
+		std::vector<VkCommandBuffer> secondaryCmdBuffers;
+		secondaryCmdBuffers.resize(assetResources.size()); // At most we can have the same number of cmd buffers as there are asset resources
+		uint32_t secondaryCmdBufferCount = 0;
+		for (auto& iter : assetResources)
 		{
-			AssetResources& currResources = assetResources[i];
-
-			// Only add the vertex buffer if we must draw the asset this frame
-			if (!GetAssetDrawState(currResources.uuid)) continue;
-
-			vertexBuffers[i] = currResources.vertexBuffers[0].GetBuffer();
-			indexBuffer[i] = currResources.indexBuffers[0].GetBuffer();
-			numDrawnAssets++;
+			bool shouldDraw = assetDrawStates[iter.uuid];
+			if (shouldDraw)
+			{
+				secondaryCmdBuffers[secondaryCmdBufferCount++] = GetCurrentSecondaryCommandBuffer(frameBufferIndex, iter.uuid)->GetBuffer();
+			}
 		}
+		commandBuffer->CMD_ExecuteSecondaryCommands(secondaryCmdBuffers.data(), secondaryCmdBufferCount);
 
-		VkCommandBufferBeginInfo beginInfo{};
-		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-		beginInfo.flags = 0; // Optional
-		beginInfo.pInheritanceInfo = nullptr; // Optional
+		commandBuffer->CMD_EndRenderPass();
 
-		if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS)
-		{
-			TNG_ASSERT_MSG(false, "Failed to begin recording command buffer!");
-		}
-
-		std::array<VkClearValue, 2> clearValues{};
-		clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
-		clearValues[1].depthStencil = { 1.0f, 0 };
-
-		VkRenderPassBeginInfo renderPassInfo{};
-		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-		renderPassInfo.renderPass = renderPass;
-		renderPassInfo.framebuffer = swapChainFramebuffers[imageIndex];
-		renderPassInfo.renderArea.offset = { 0, 0 };
-		renderPassInfo.renderArea.extent = swapChainExtent;
-		renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
-		renderPassInfo.pClearValues = clearValues.data();
-
-		vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
-
-		VkViewport viewport{};
-		viewport.x = 0.0f;
-		viewport.y = 0.0f;
-		viewport.width = static_cast<float>(swapChainExtent.width);
-		viewport.height = static_cast<float>(swapChainExtent.height);
-		viewport.minDepth = 0.0f;
-		viewport.maxDepth = 1.0f;
-		vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
-
-		VkRect2D scissor{};
-		scissor.offset = { 0, 0 };
-		scissor.extent = swapChainExtent;
-		vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-
-		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
-		VkDeviceSize offsets[] = { 0 };
-
-		// Make sure that our index type is 4 bytes. If that changes make sure to change it on the line below too
-		TNG_ASSERT_COMPILE(sizeof(IndexType) == 4);
-
-		if (numDrawnAssets >= 1)
-		{
-			// TODO - This has to be reworked because we can't bind the vertex buffer of multiple assets to one vertex buffer
-			//        What we do instead is create a secondary buffer per asset, and bind the asset's vertex and index buffers
-			//        to the secondary buffer, which is attached to a general-purpose primary buffer, which we submit to the queue
-			vkCmdBindVertexBuffers(commandBuffer, 0, numDrawnAssets, vertexBuffers.data(), offsets);
-			vkCmdBindIndexBuffer(commandBuffer, *indexBuffer.data(), 0, VK_INDEX_TYPE_UINT32);
-			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentFrame], 0, nullptr);
-			vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(assetResources[0].numIndices), 1, 0, 0, 0);
-		}
-
-		vkCmdEndRenderPass(commandBuffer);
-
-		if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS)
-		{
-			TNG_ASSERT_MSG(false, "Failed to record command buffers!");
-		}
+		commandBuffer->EndRecording();
 	}
 
-	void Renderer::recreateSwapChain()
+	void Renderer::RecordSecondaryCommandBuffer(SecondaryCommandBuffer& commandBuffer, AssetResources* resources, uint32_t frameBufferIndex)
+	{
+		VkDescriptorSet currDescriptorSets[] = { GetCurrentDescriptorSet() };
+
+		VkCommandBufferInheritanceInfo inheritanceInfo{};
+		inheritanceInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
+		inheritanceInfo.pNext = nullptr;
+		inheritanceInfo.renderPass = renderPass; // NOTE - We only have one render pass for now, if that changes we must change it here too
+		inheritanceInfo.subpass = 0;
+		inheritanceInfo.framebuffer = swapChainFramebuffers[frameBufferIndex];
+
+		commandBuffer.BeginRecording(VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT | VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT, &inheritanceInfo);
+
+		commandBuffer.CMD_BindMesh(resources);
+		commandBuffer.CMD_BindDescriptorSets(pipelineLayout, 1, currDescriptorSets);
+		commandBuffer.CMD_BindGraphicsPipeline(graphicsPipeline);
+		commandBuffer.CMD_SetScissor({ 0, 0 }, swapChainExtent);
+		commandBuffer.CMD_SetViewport(static_cast<float>(swapChainExtent.width), static_cast<float>(swapChainExtent.height));
+		commandBuffer.CMD_DrawIndexed(static_cast<uint32_t>(resources->indexCount));
+
+		commandBuffer.EndRecording();
+	}
+
+	void Renderer::RecreateSwapChain()
 	{
 		int width = 0;
 		int height = 0;
@@ -1830,16 +1849,30 @@ namespace TANG
 
 		vkDeviceWaitIdle(logicalDevice);
 
-		cleanupSwapChain();
+		CleanupSwapChain();
 
-		createSwapChain();
-		createImageViews();
-		createColorResources();
-		createDepthResources();
-		createFramebuffers();
+		CreateSwapChain();
+		CreateImageViews();
+		CreateColorResources();
+		CreateDepthResources();
+		CreateFramebuffers();
+		RecreateAllSecondaryCommandBuffers();
 	}
 
-	void Renderer::cleanupSwapChain()
+	void Renderer::RecreateAllSecondaryCommandBuffers()
+	{
+		for (uint32_t i = 0; i < swapChainImageCount; i++)
+		{
+			for (auto& resources : assetResources)
+			{
+				SecondaryCommandBuffer& commandBuffer = secondaryCommandBuffers[i].at(resources.uuid);
+				commandBuffer.Create(logicalDevice, commandPools[GRAPHICS_QUEUE]);
+				RecordSecondaryCommandBuffer(commandBuffer, &resources, i);
+			}
+		}
+	}
+
+	void Renderer::CleanupSwapChain()
 	{
 		vkDestroyImageView(logicalDevice, colorImageView, nullptr);
 		vkDestroyImage(logicalDevice, colorImage, nullptr);
@@ -1857,6 +1890,15 @@ namespace TANG
 		for (auto imageView : swapChainImageViews)
 		{
 			vkDestroyImageView(logicalDevice, imageView, nullptr);
+		}
+
+		// Clean up the secondary commands buffers that reference the swap chain framebuffers
+		for (uint32_t i = 0; i < swapChainImageCount; i++)
+		{
+			for (auto secondaryCmdBuffer : secondaryCommandBuffers[i])
+			{
+				secondaryCmdBuffer.second.Destroy(logicalDevice, commandPools[GRAPHICS_QUEUE]);
+			}
 		}
 
 		vkDestroySwapchainKHR(logicalDevice, swapChain, nullptr);
@@ -1938,7 +1980,7 @@ namespace TANG
 		vkFreeCommandBuffers(logicalDevice, commandPools[commandPoolType], 1, &commandBuffer);
 	}
 
-	void Renderer::transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels)
+	void Renderer::TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels)
 	{
 		VkCommandBuffer commandBuffer = BeginSingleTimeCommands(commandPools[TRANSFER_QUEUE]);
 

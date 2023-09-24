@@ -29,7 +29,7 @@ int main(uint32_t argc, const char** argv)
         }
         TANG::Update(0);
 
-        frameCount++;
+        //frameCount++;
     }
 
     TANG::Shutdown();
