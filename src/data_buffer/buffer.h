@@ -6,14 +6,22 @@
 
 namespace TANG
 {
+	enum class BUFFER_STATE
+	{
+		DEFAULT,	// The default state of the buffer. This state changes after the buffer is created, and it can never go back to DEFAULT
+		CREATED,	// The buffer has been created
+		MAPPED,		// Memory has been mapped into the internal buffer
+		DESTROYED	// The internal buffer has been destroyed (staging buffer doesn't count here)
+	};
+
 	class Buffer
 	{
 	public:
 		Buffer();
 		~Buffer();
 		Buffer(const Buffer& other);
-
-		void operator=(const Buffer& other);
+		Buffer(Buffer&& other) noexcept;
+		Buffer& operator=(const Buffer& other);
 
 		// Pure virtual function. Derived classes are meant to override this function and call up to Buffer::CreateBase() to specify
 		// the type of buffer they are.
@@ -50,6 +58,7 @@ namespace TANG
 
 		VkBuffer buffer;
 		VkDeviceMemory bufferMemory;
+		BUFFER_STATE bufferState;
 	};
 }
 

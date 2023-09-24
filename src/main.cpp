@@ -1,14 +1,17 @@
 
 #include <iostream>
 #include <string>
+#include <vector>
 
 #include "tang.h"
 #include "utils/sanity_check.h"
+#include "utils/logger.h"
 
-static constexpr uint32_t NUM_ASSETS = 1;
-static std::string assets[NUM_ASSETS] =
+static std::vector<std::string> assets =
 {
-    "../src/data/assets/sample/sphere_smooth.fbx"
+    "../src/data/assets/sample/sphere_smooth.fbx",
+    "../src/data/assets/sample/suzanne_smooth.fbx",
+    "../src/data/assets/sample/torus.fbx"
 };
 
 int main(uint32_t argc, const char** argv) 
@@ -16,20 +19,27 @@ int main(uint32_t argc, const char** argv)
     UNUSED(argc);
     UNUSED(argv);
 
-    const char* assetName = assets[0].c_str();
-
     TANG::Initialize();
-    bool success = TANG::LoadAsset(assetName);
+
+    for (auto& assetName : assets)
+    {
+        bool success = TANG::LoadAsset(assetName.c_str());
+        if (!success)
+        {
+            TANG::LogWarning("Failed to load asset: '%s'", assetName.c_str());
+        }
+    }
+
+
     uint64_t frameCount = 0;
     while (!TANG::WindowShouldClose())
     {
-        if (frameCount < 10000)
-        {
-            TANG::DrawAsset(assetName);
-        }
+		for (auto& assetName : assets)
+		{
+            TANG::DrawAsset(assetName.c_str());
+		}
+        
         TANG::Update(0);
-
-        //frameCount++;
     }
 
     TANG::Shutdown();

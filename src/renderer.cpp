@@ -357,7 +357,7 @@ namespace TANG
 
 		for (uint32_t i = 0; i < numAssetResources; i++)
 		{
-			DestroyAssetBuffersHelper(assetResources[0]);
+			DestroyAssetBuffersHelper(assetResources[i]);
 		}
 
 		assetResources.clear();

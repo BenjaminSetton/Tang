@@ -7,9 +7,45 @@
 
 namespace TANG
 {
-	IndexBuffer::IndexBuffer() { }
-	IndexBuffer::~IndexBuffer() { }
-	IndexBuffer::IndexBuffer(const IndexBuffer& other) { }
+	IndexBuffer::IndexBuffer() : stagingBuffer(VK_NULL_HANDLE), stagingBufferMemory(VK_NULL_HANDLE)
+	{
+		// Nothing to do here
+	}
+
+	IndexBuffer::~IndexBuffer()
+	{
+		// Nothing to do here
+	}
+
+	IndexBuffer::IndexBuffer(const IndexBuffer& other) : Buffer(other)
+	{
+		stagingBuffer = other.stagingBuffer;
+		stagingBufferMemory = other.stagingBufferMemory;
+	}
+
+	IndexBuffer::IndexBuffer(IndexBuffer&& other) noexcept : Buffer(std::move(other))
+	{
+		stagingBuffer = other.stagingBuffer;
+		stagingBufferMemory = other.stagingBufferMemory;
+
+		other.stagingBuffer = VK_NULL_HANDLE;
+		other.stagingBufferMemory = VK_NULL_HANDLE;
+	}
+
+	IndexBuffer& IndexBuffer::operator=(const IndexBuffer& other)
+	{
+		// Protect against self-assignment
+		if (this == &other)
+		{
+			return *this;
+		}
+
+		Buffer::operator=(other);
+		stagingBuffer = other.stagingBuffer;
+		stagingBufferMemory = other.stagingBufferMemory;
+
+		return *this;
+	}
 
 	void IndexBuffer::Create(VkPhysicalDevice& physicalDevice, VkDevice& logicalDevice, VkDeviceSize size)
 	{
@@ -26,9 +62,22 @@ namespace TANG
 		vkDestroyBuffer(logicalDevice, buffer, nullptr);
 		vkFreeMemory(logicalDevice, bufferMemory, nullptr);
 
+		buffer = VK_NULL_HANDLE;
+		bufferMemory = VK_NULL_HANDLE;
+
 		// Destroy staging buffer
-		if(stagingBuffer) vkDestroyBuffer(logicalDevice, stagingBuffer, nullptr);
-		if(stagingBufferMemory) vkFreeMemory(logicalDevice, stagingBufferMemory, nullptr);
+		if (stagingBuffer) 
+		{
+			vkDestroyBuffer(logicalDevice, stagingBuffer, nullptr);
+			stagingBuffer = VK_NULL_HANDLE;
+		}
+		if (stagingBufferMemory)
+		{
+			vkFreeMemory(logicalDevice, stagingBufferMemory, nullptr);
+			stagingBufferMemory = VK_NULL_HANDLE;
+		}
+
+		bufferState = BUFFER_STATE::DESTROYED;
 	}
 
 	void IndexBuffer::DestroyIntermediateBuffers(VkDevice logicalDevice)
@@ -51,6 +100,8 @@ namespace TANG
 
 		// Copy the data from the staging buffer into the vertex buffer
 		CopyFromBuffer(commandBuffer, stagingBuffer, buffer, bufferSize);
+
+		bufferState = BUFFER_STATE::MAPPED;
 	}
 
 	VkIndexType IndexBuffer::GetIndexType() const

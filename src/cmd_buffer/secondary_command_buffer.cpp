@@ -8,7 +8,12 @@
 namespace TANG
 {
 
-	SecondaryCommandBuffer::SecondaryCommandBuffer() : CommandBuffer()
+	SecondaryCommandBuffer::SecondaryCommandBuffer()
+	{
+		// Nothing to do here
+	}
+
+	SecondaryCommandBuffer::~SecondaryCommandBuffer()
 	{
 		// Nothing to do here
 	}
@@ -33,11 +38,6 @@ namespace TANG
 		// All we need to do here is call the assignment operator of the parent
 		CommandBuffer::operator=(other);
 		return *this;
-	}
-
-	SecondaryCommandBuffer::~SecondaryCommandBuffer()
-	{
-		// Nothing to do here
 	}
 
 	void SecondaryCommandBuffer::Create(VkDevice logicalDevice, VkCommandPool commandPool)

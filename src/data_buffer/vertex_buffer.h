@@ -12,6 +12,8 @@ namespace TANG
 		VertexBuffer();
 		~VertexBuffer();
 		VertexBuffer(const VertexBuffer& other);
+		VertexBuffer(VertexBuffer&& other);
+		VertexBuffer& operator=(const VertexBuffer& other);
 
 		void Create(VkPhysicalDevice& physicalDevice, VkDevice& logicalDevice, VkDeviceSize size) override;
 

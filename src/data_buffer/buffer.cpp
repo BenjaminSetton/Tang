@@ -4,16 +4,77 @@
 
 namespace TANG
 {
-	Buffer::Buffer() { }
-	Buffer::~Buffer() { }
-	Buffer::Buffer(const Buffer& other)
+	Buffer::Buffer() : buffer(VK_NULL_HANDLE), bufferMemory(VK_NULL_HANDLE), bufferState(BUFFER_STATE::DEFAULT)
 	{
-		LogWarning("Buffer was copied from copy constructor!");
 	}
 
-	void Buffer::operator=(const Buffer& other)
+	Buffer::~Buffer()
 	{
-		LogWarning("Buffer was copied from assignment operator!");
+		if (bufferState != BUFFER_STATE::MAPPED)
+		{
+			buffer = VK_NULL_HANDLE;
+			bufferMemory = VK_NULL_HANDLE;
+		}
+		else
+		{
+			// TODO - We shouldn't warn if the object was copied to another place
+			LogWarning("Buffer destructor was called but memory has not been cleaned up!");
+		}
+	}
+
+	Buffer::Buffer(const Buffer& other)
+	{
+		if (bufferState == BUFFER_STATE::DESTROYED)
+		{
+			LogWarning("Why are we attempting to copy a destroyed buffer? Bailing...");
+			return;
+		}
+
+		// Note that after this copy, there are two (or more) handles to the same buffer and it's associated memory
+		// Careful when trying to access the internal buffer, as other handles could delete this memory!
+		buffer = other.buffer;
+		bufferMemory = other.bufferMemory;
+		bufferState = other.bufferState;
+	}
+
+	Buffer::Buffer(Buffer&& other) noexcept
+	{
+		if (bufferState == BUFFER_STATE::DESTROYED)
+		{
+			LogWarning("Why are we attempting to move a destroyed buffer? Bailing...");
+			return;
+		}
+
+		buffer = other.buffer;
+		bufferMemory = other.bufferMemory;
+		bufferState = other.bufferState;
+
+		// Remove references in other buffer
+		other.buffer = VK_NULL_HANDLE;
+		other.bufferMemory = VK_NULL_HANDLE;
+	}
+
+	Buffer& Buffer::operator=(const Buffer& other)
+	{
+		if (bufferState == BUFFER_STATE::DESTROYED)
+		{
+			LogWarning("Why are we attempting to copy a destroyed buffer? Bailing...");
+			return *this;
+		}
+
+		// Protect against self-assignment
+		if (this == &other)
+		{
+			return *this;
+		}
+
+		// Note that after this copy, there are two (or more) handles to the same buffer and it's associated memory
+		// Careful when trying to access the internal buffer, as other handles could delete this memory!
+		buffer = other.buffer;
+		bufferMemory = other.bufferMemory;
+		bufferState = other.bufferState;
+
+		return *this;
 	}
 
 	// Returns the member variable "buffer"
@@ -68,6 +129,8 @@ namespace TANG
 		}
 
 		vkBindBufferMemory(logicalDevice, *endBuffer, *endBufferMemory, 0);
+
+		bufferState = BUFFER_STATE::CREATED;
 	}
 
 	uint32_t Buffer::FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags memFlags, VkPhysicalDevice& physicalDevice)

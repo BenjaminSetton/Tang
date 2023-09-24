@@ -14,6 +14,8 @@ namespace TANG
 		IndexBuffer();
 		~IndexBuffer();
 		IndexBuffer(const IndexBuffer& other);
+		IndexBuffer(IndexBuffer&& other) noexcept;
+		IndexBuffer& operator=(const IndexBuffer& other);
 
 		void Create(VkPhysicalDevice& physicalDevice, VkDevice& logicalDevice, VkDeviceSize size) override;
 
@@ -28,8 +30,8 @@ namespace TANG
 	private:
 
 		// Store the staging buffer so that we can delete it properly after ending and submitting the command buffer
-		VkBuffer stagingBuffer{};
-		VkDeviceMemory stagingBufferMemory{};
+		VkBuffer stagingBuffer;
+		VkDeviceMemory stagingBufferMemory;
 	};
 }
 

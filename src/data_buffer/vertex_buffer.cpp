@@ -4,9 +4,45 @@
 
 namespace TANG
 {
-	VertexBuffer::VertexBuffer() { }
-	VertexBuffer::~VertexBuffer() { }
-	VertexBuffer::VertexBuffer(const VertexBuffer& other) { }
+	VertexBuffer::VertexBuffer() : stagingBuffer(VK_NULL_HANDLE), stagingBufferMemory(VK_NULL_HANDLE)
+	{
+		// Nothing to do here
+	}
+
+	VertexBuffer::~VertexBuffer()
+	{
+		// Nothing to do here
+	}
+
+	VertexBuffer::VertexBuffer(const VertexBuffer& other) : Buffer(other)
+	{
+		stagingBuffer = VK_NULL_HANDLE;
+		stagingBufferMemory = VK_NULL_HANDLE;
+	}
+
+	VertexBuffer::VertexBuffer(VertexBuffer&& other) : Buffer(std::move(other))
+	{
+		stagingBuffer = other.stagingBuffer;
+		stagingBufferMemory = other.stagingBufferMemory;
+
+		other.stagingBuffer = VK_NULL_HANDLE;
+		other.stagingBufferMemory = VK_NULL_HANDLE;
+	}
+
+	VertexBuffer& VertexBuffer::operator=(const VertexBuffer& other)
+	{
+		// Protect against self-assignment
+		if (this == &other)
+		{
+			return *this;
+		}
+
+		Buffer::operator=(other);
+		stagingBuffer = VK_NULL_HANDLE;
+		stagingBufferMemory = VK_NULL_HANDLE;
+
+		return *this;
+	}
 
 	void VertexBuffer::Create(VkPhysicalDevice& physicalDevice, VkDevice& logicalDevice, VkDeviceSize size)
 	{
@@ -23,9 +59,17 @@ namespace TANG
 		vkDestroyBuffer(logicalDevice, buffer, nullptr);
 		vkFreeMemory(logicalDevice, bufferMemory, nullptr);
 
+		buffer = VK_NULL_HANDLE;
+		bufferMemory = VK_NULL_HANDLE;
+
 		// Destroy staging buffer
 		if(stagingBuffer) vkDestroyBuffer(logicalDevice, stagingBuffer, nullptr);
 		if(stagingBufferMemory) vkFreeMemory(logicalDevice, stagingBufferMemory, nullptr);
+
+		stagingBuffer = VK_NULL_HANDLE;
+		stagingBufferMemory = VK_NULL_HANDLE;
+
+		bufferState = BUFFER_STATE::DESTROYED;
 	}
 
 	void VertexBuffer::DestroyIntermediateBuffers(VkDevice logicalDevice)
@@ -52,6 +96,8 @@ namespace TANG
 
 		// Copy the data from the staging buffer into the vertex buffer
 		CopyFromBuffer(commandBuffer, stagingBuffer, buffer, bufferSize);
+
+		bufferState = BUFFER_STATE::MAPPED;
 	}
 }
 

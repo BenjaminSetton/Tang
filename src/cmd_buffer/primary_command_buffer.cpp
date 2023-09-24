@@ -8,8 +8,13 @@
 namespace TANG
 {
 
-	PrimaryCommandBuffer::PrimaryCommandBuffer() : CommandBuffer(), renderPassState(PRIMARY_COMMAND_RENDER_PASS_STATE::ENDED)
+	PrimaryCommandBuffer::PrimaryCommandBuffer() : renderPassState(PRIMARY_COMMAND_RENDER_PASS_STATE::ENDED)
 	{
+	}
+
+	PrimaryCommandBuffer::~PrimaryCommandBuffer()
+	{
+		// Nothing to do here
 	}
 
 	PrimaryCommandBuffer::PrimaryCommandBuffer(const PrimaryCommandBuffer& other) : CommandBuffer(other)
@@ -48,11 +53,6 @@ namespace TANG
 		CommandBuffer::operator=(other);
 		renderPassState = other.renderPassState;
 		return *this;
-	}
-
-	PrimaryCommandBuffer::~PrimaryCommandBuffer()
-	{
-		// Nothing to do here
 	}
 
 	void PrimaryCommandBuffer::Create(VkDevice logicalDevice, VkCommandPool commandPool)
