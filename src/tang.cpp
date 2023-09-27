@@ -13,10 +13,9 @@ namespace TANG
 		rendererHandle.Initialize();
 	}
 
-	void Update(float deltaTime)
+	void Update(float* deltaTime)
 	{
-		UNUSED(deltaTime);
-		rendererHandle.Update();
+		rendererHandle.Update(deltaTime);
 	}
 
 	void Shutdown()
@@ -36,7 +35,7 @@ namespace TANG
 
 	bool LoadAsset(const char* name)
 	{
-		AssetCore* asset = LoaderUtils::Load(name);
+		AssetDisk* asset = LoaderUtils::Load(name);
 		// If Load() returns nullptr, we know it didn't allocate memory on the heap, so no need to de-allocate anything here
 		if (asset == nullptr)
 		{
@@ -60,7 +59,7 @@ namespace TANG
 	void DrawAsset(const char* name)
 	{
 		AssetContainer& container = AssetContainer::GetInstance();
-		AssetCore* asset = container.GetAsset(name);
+		AssetDisk* asset = container.GetAsset(name);
 		if (asset == nullptr) return;
 
 		rendererHandle.SetAssetDrawState(asset->uuid);

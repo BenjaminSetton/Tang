@@ -23,7 +23,7 @@ namespace TANG
 
 		void DestroyIntermediateBuffers(VkDevice logicalDevice);
 
-		void MapData(VkDevice& logicalDevice, VkCommandBuffer& commandBuffer, void* data, VkDeviceSize bufferSize) override;
+		void CopyData(VkDevice& logicalDevice, VkCommandBuffer& commandBuffer, void* data, VkDeviceSize bufferSize);
 
 		VkIndexType GetIndexType() const;
 

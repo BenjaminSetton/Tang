@@ -12,29 +12,29 @@ namespace TANG
 		container.clear();
 	}
 
-	AssetCore* AssetContainer::GetAsset(UUID uuid) const
+	AssetDisk* AssetContainer::GetAsset(UUID uuid) const
 	{
 		for (const auto& iter : container)
 		{
-			AssetCore* asset = iter.second;
+			AssetDisk* asset = iter.second;
 			if (asset->uuid == uuid) return asset;
 		}
 
 		return nullptr;
 	}
 
-	AssetCore* AssetContainer::GetAsset(const char* name) const
+	AssetDisk* AssetContainer::GetAsset(const char* name) const
 	{
 		for (const auto& iter : container)
 		{
-			AssetCore* asset = iter.second;
+			AssetDisk* asset = iter.second;
 			if (asset->name == name) return asset;
 		}
 
 		return nullptr;
 	}
 
-	void AssetContainer::InsertAsset(AssetCore* asset, bool forceOverride)
+	void AssetContainer::InsertAsset(AssetDisk* asset, bool forceOverride)
 	{
 		auto iter = container.find(asset->uuid);
 		if (iter != container.end())
@@ -49,7 +49,7 @@ namespace TANG
 		container.insert({ asset->uuid, asset });
 	}
 
-	AssetCore* AssetContainer::RemoveAsset(UUID uuid)
+	AssetDisk* AssetContainer::RemoveAsset(UUID uuid)
 	{
 		auto iter = container.find(uuid);
 		if (iter == container.end())
@@ -57,7 +57,7 @@ namespace TANG
 			return nullptr;
 		}
 
-		AssetCore* asset = iter->second;
+		AssetDisk* asset = iter->second;
 		container.erase(iter);
 		return asset;
 	}
@@ -67,7 +67,7 @@ namespace TANG
 		return container.find(uuid) != container.end();
 	}
 
-	AssetCore* AssetContainer::GetFirst() const
+	AssetDisk* AssetContainer::GetFirst() const
 	{
 		// Edge case for empty container
 		if (container.begin() == container.end()) return nullptr;

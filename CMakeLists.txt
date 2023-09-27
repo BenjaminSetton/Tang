@@ -23,10 +23,14 @@ set(HEADERS
 	src/data_buffer/buffer.h
 	src/data_buffer/vertex_buffer.h
 	src/data_buffer/index_buffer.h
+	src/data_buffer/uniform_buffer.h
 	
 	src/cmd_buffer/command_buffer.h
 	src/cmd_buffer/primary_command_buffer.h
 	src/cmd_buffer/secondary_command_buffer.h
+	
+	src/descriptors/descriptor_pool.h
+	src/descriptors/descriptors.h
 	
 	src/utils/logger.h
 	src/utils/sanity_check.h
@@ -43,10 +47,14 @@ set(SOURCES
 	src/data_buffer/buffer.cpp
 	src/data_buffer/vertex_buffer.cpp
 	src/data_buffer/index_buffer.cpp
+	src/data_buffer/uniform_buffer.cpp
 	
 	src/cmd_buffer/command_buffer.cpp
 	src/cmd_buffer/primary_command_buffer.cpp
 	src/cmd_buffer/secondary_command_buffer.cpp
+	
+	src/descriptors/descriptor_pool.cpp
+	src/descriptors/descriptors.cpp
 	
 	# Shaders
 	src/shaders/shader.vert

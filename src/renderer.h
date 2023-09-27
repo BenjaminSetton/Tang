@@ -19,13 +19,15 @@
 #include "asset_types.h"
 #include "cmd_buffer/primary_command_buffer.h"
 #include "cmd_buffer/secondary_command_buffer.h"
+#include "data_buffer/uniform_buffer.h"
+#include "descriptors/descriptor_pool.h"
+#include "descriptors/descriptors.h"
 #include "utils/sanity_check.h"
 
 namespace TANG
 {
 	struct QueueFamilyIndices;
 	struct SwapChainSupportDetails;
-	struct UniformBufferObject;
 
 	enum QueueType
 	{
@@ -40,7 +42,9 @@ namespace TANG
 
 		void Initialize();
 
-		void Update();
+		// Receives an OPTIONAL parameter of deltaTime. Since this renderer is meant to work with the API, we'll give the user the option
+		// of passing in a deltaTime to the renderer. If nullptr is passed in, we'll calculate it instead
+		void Update(float* deltaTime);
 
 		void Shutdown();
 
@@ -58,14 +62,14 @@ namespace TANG
 		// Before calling this function, make sure you've called LoaderUtils::LoadAsset() and have
 		// successfully loaded an asset from file! This functions assumes this, and if it can't retrieve
 		// the loaded asset data it will return prematurely
-		AssetResources* CreateAssetResources(AssetCore* asset);
+		AssetResources* CreateAssetResources(AssetDisk* asset);
 
 		// Creates a secondary command buffer, given the asset resources. After an asset is loaded and it's asset resources
 		// are loaded, this function must be called to create the secondary command buffer that holds the commands to render
 		// the asset.
 		void CreateAssetCommandBuffer(AssetResources* resources);
 
-		void DestroyAssetResources(AssetCore* asset);
+		void DestroyAssetResources(AssetDisk* asset);
 		void DestroyAllAssetResources();
 
 		// TODO - Abstract this out into a window class, this really shouldn't be part of the renderer
@@ -164,9 +168,9 @@ namespace TANG
 
 		void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
 
-		void createDescriptorSetLayout();
+		void CreateDescriptorSetLayout();
 
-		void createUniformBuffers();
+		void CreateUniformBuffers();
 
 		void createImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format,
 			VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties,
@@ -174,9 +178,9 @@ namespace TANG
 
 		void CreateTextureImage();
 
-		void createDescriptorPool();
+		void CreateDescriptorPool();
 
-		void createDescriptorSets();
+		void CreateDescriptorSets();
 
 		VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels);
 
@@ -197,7 +201,7 @@ namespace TANG
 
 		void CleanupSwapChain();
 
-		void updateUniformBuffer(uint32_t currentFrame);
+		void UpdateUniformBuffer(float deltaTime, const Transform& transform);
 
 		VkCommandBuffer BeginSingleTimeCommands(VkCommandPool pool);
 
@@ -246,7 +250,7 @@ namespace TANG
 		std::vector<VkImageView> swapChainImageViews;
 
 		VkRenderPass renderPass;
-		VkDescriptorSetLayout descriptorSetLayout;
+		DescriptorSetLayout descriptorSetLayout;
 		VkPipelineLayout pipelineLayout;
 
 		VkPipeline graphicsPipeline;
@@ -275,12 +279,14 @@ namespace TANG
 
 		std::vector<AssetResources> assetResources;
 
-		std::vector<VkBuffer> uniformBuffers;
-		std::vector<VkDeviceMemory> uniformBufferMemory;
-		std::vector<void*> uniformBuffersMapped;
+		// These two sets of UniformBuffer vector objects are sent to the shaders separately so that we can update them at different intervals
+		// For instance, the transform for an asset can be updated every frame, while the view/projection most likely won't change every frame
+		// and are usually updated when the window is resized.
+		std::vector<UniformBuffer> transformUBOs;
+		std::vector<UniformBuffer> viewProjUBOs;
 
-		VkDescriptorPool descriptorPool;
-		std::vector<VkDescriptorSet> descriptorSets;
+		DescriptorPool descriptorPool;
+		DescriptorSets descriptorSets;
 
 		uint32_t mipLevels;
 		VkImage textureImage;

@@ -9,9 +9,7 @@
 
 static std::vector<std::string> assets =
 {
-    "../src/data/assets/sample/sphere_smooth.fbx",
     "../src/data/assets/sample/suzanne_smooth.fbx",
-    "../src/data/assets/sample/torus.fbx"
 };
 
 int main(uint32_t argc, const char** argv) 
@@ -23,13 +21,8 @@ int main(uint32_t argc, const char** argv)
 
     for (auto& assetName : assets)
     {
-        bool success = TANG::LoadAsset(assetName.c_str());
-        if (!success)
-        {
-            TANG::LogWarning("Failed to load asset: '%s'", assetName.c_str());
-        }
+        TANG::LoadAsset(assetName.c_str());
     }
-
 
     uint64_t frameCount = 0;
     while (!TANG::WindowShouldClose())

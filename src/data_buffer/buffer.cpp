@@ -4,7 +4,7 @@
 
 namespace TANG
 {
-	Buffer::Buffer() : buffer(VK_NULL_HANDLE), bufferMemory(VK_NULL_HANDLE), bufferState(BUFFER_STATE::DEFAULT)
+	Buffer::Buffer() : buffer(VK_NULL_HANDLE), bufferMemory(VK_NULL_HANDLE), bufferSize(0), bufferState(BUFFER_STATE::DEFAULT)
 	{
 	}
 
@@ -14,6 +14,7 @@ namespace TANG
 		{
 			buffer = VK_NULL_HANDLE;
 			bufferMemory = VK_NULL_HANDLE;
+			bufferSize = 0;
 		}
 		else
 		{
@@ -34,6 +35,7 @@ namespace TANG
 		// Careful when trying to access the internal buffer, as other handles could delete this memory!
 		buffer = other.buffer;
 		bufferMemory = other.bufferMemory;
+		bufferSize = other.bufferSize;
 		bufferState = other.bufferState;
 	}
 
@@ -47,11 +49,13 @@ namespace TANG
 
 		buffer = other.buffer;
 		bufferMemory = other.bufferMemory;
+		bufferSize = other.bufferSize;
 		bufferState = other.bufferState;
 
 		// Remove references in other buffer
 		other.buffer = VK_NULL_HANDLE;
 		other.bufferMemory = VK_NULL_HANDLE;
+		other.bufferSize = 0;
 	}
 
 	Buffer& Buffer::operator=(const Buffer& other)
@@ -72,6 +76,7 @@ namespace TANG
 		// Careful when trying to access the internal buffer, as other handles could delete this memory!
 		buffer = other.buffer;
 		bufferMemory = other.bufferMemory;
+		bufferSize = other.bufferSize;
 		bufferState = other.bufferState;
 
 		return *this;
@@ -87,6 +92,11 @@ namespace TANG
 	VkDeviceMemory Buffer::GetBufferMemory()
 	{
 		return bufferMemory;
+	}
+
+	VkDeviceSize Buffer::GetBufferSize() const
+	{
+		return bufferSize;
 	}
 
 	void Buffer::CopyFromBuffer(VkCommandBuffer commandBuffer, VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size)
@@ -129,6 +139,8 @@ namespace TANG
 		}
 
 		vkBindBufferMemory(logicalDevice, *endBuffer, *endBufferMemory, 0);
+
+		bufferSize = size;
 
 		bufferState = BUFFER_STATE::CREATED;
 	}

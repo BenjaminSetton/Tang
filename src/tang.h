@@ -29,7 +29,7 @@
 namespace TANG
 {
 	void Initialize();
-	void Update(float deltaTime);
+	void Update(float* deltaTime);
 	void Shutdown();
 
 	// STATE CALLS

@@ -82,7 +82,7 @@ namespace TANG
 		stagingBufferMemory = VK_NULL_HANDLE;
 	}
 
-	void VertexBuffer::MapData(VkDevice& logicalDevice, VkCommandBuffer& commandBuffer, void* data, VkDeviceSize bufferSize)
+	void VertexBuffer::CopyData(VkDevice& logicalDevice, VkCommandBuffer& commandBuffer, void* data, VkDeviceSize bufferSize)
 	{
 		// Map the memory
 		void* bufferPtr;

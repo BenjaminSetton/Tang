@@ -1,7 +1,6 @@
 #ifndef BUFFER_H
 #define BUFFER_H
 
-#include <vector>
 #include <vulkan/vulkan.h>
 
 namespace TANG
@@ -31,14 +30,14 @@ namespace TANG
 		// the VertexBuffer derived class must delete it's internal staging buffer as well.
 		virtual void Destroy(VkDevice& logicalDevice) = 0;
 
-		// Pure virtual function to map generic data onto the internal buffer
-		virtual void MapData(VkDevice& logicalDevice, VkCommandBuffer& commandBuffer, void* data, VkDeviceSize bufferSize) = 0;
-
 		// Returns the member variable "buffer"
 		VkBuffer GetBuffer();
 
 		// Returns the member variable "bufferMemory"
 		VkDeviceMemory GetBufferMemory();
+
+		// Returns the size of the created buffer
+		VkDeviceSize GetBufferSize() const;
 
 	protected:
 
@@ -58,6 +57,7 @@ namespace TANG
 
 		VkBuffer buffer;
 		VkDeviceMemory bufferMemory;
+		VkDeviceSize bufferSize;
 		BUFFER_STATE bufferState;
 	};
 }
