@@ -30,6 +30,7 @@ namespace TANG
 {
 	void Initialize();
 	void Update(float* deltaTime);
+	void Draw();
 	void Shutdown();
 
 	// STATE CALLS
@@ -38,6 +39,6 @@ namespace TANG
 	bool LoadAsset(const char* name);
 
 	// UPDATE CALLS
-	void DrawAsset(const char* name);
+	void ShowAsset(const char* name);
 
 }

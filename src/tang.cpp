@@ -18,6 +18,11 @@ namespace TANG
 		rendererHandle.Update(deltaTime);
 	}
 
+	void Draw()
+	{
+		rendererHandle.Draw();
+	}
+
 	void Shutdown()
 	{
 		LoaderUtils::UnloadAll();
@@ -56,7 +61,7 @@ namespace TANG
 	}
 
 	// UPDATE CALLS
-	void DrawAsset(const char* name)
+	void ShowAsset(const char* name)
 	{
 		AssetContainer& container = AssetContainer::GetInstance();
 		AssetDisk* asset = container.GetAsset(name);

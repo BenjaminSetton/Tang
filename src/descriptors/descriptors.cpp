@@ -293,9 +293,13 @@ namespace TANG
 		return descriptorSets[index];
 	}
 
-	const std::vector<VkDescriptorSet>& DescriptorSets::GetDescriptorSets() const
+	uint32_t DescriptorSets::GetDescriptorSetCount() const
+	{
+		return static_cast<uint32_t>(descriptorSets.size());
+	}
+
+	std::vector<VkDescriptorSet>& DescriptorSets::GetDescriptorSets()
 	{
 		return descriptorSets;
 	}
-
 }

@@ -29,10 +29,12 @@ int main(uint32_t argc, const char** argv)
     {
 		for (auto& assetName : assets)
 		{
-            TANG::DrawAsset(assetName.c_str());
+            TANG::ShowAsset(assetName.c_str());
 		}
         
         TANG::Update(0);
+
+        TANG::Draw();
     }
 
     TANG::Shutdown();

@@ -89,11 +89,16 @@ namespace TANG
 		void Destroy(VkDevice logicalDevice, DescriptorSetLayout setLayout);
 
 		VkDescriptorSet GetDescriptorSet(uint32_t index) const;
-		const std::vector<VkDescriptorSet>& GetDescriptorSets() const;
+		uint32_t GetDescriptorSetCount() const;
+
+		std::vector<VkDescriptorSet>& GetDescriptorSets();
 
 	private:
 
 		std::vector<VkDescriptorSet> descriptorSets;
+
+		// TODO - IMPLEMENT THIS
+		std::vector<VkDescriptorSetLayout> setLayouts;
 
 	};
 }

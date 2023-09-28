@@ -212,6 +212,10 @@ namespace TANG
 
 		glfwPollEvents();
 
+	}
+
+	void Renderer::Draw()
+	{
 		DrawFrame();
 
 		// Clear the asset draw states after drawing the current frame
@@ -296,17 +300,18 @@ namespace TANG
 		UUID assetID = resources->uuid;
 
 		// For every frame in flight, insert object into map and then grab a reference to it
-		for (uint32_t i = 0; i < swapChainImageCount; i++)
+		for (uint32_t i = 0; i < GetSWIDDSize(); i++)
 		{
+			auto& secondaryCmdBufferMap = GetSWIDDAtIndex(i)->secondaryCommandBuffer;
 			// Ensure that there's not already an entry in the secondaryCommandBuffers map. We bail in case of a collision
-			if (secondaryCommandBuffers[i].find(assetID) != secondaryCommandBuffers[i].end())
+			if (secondaryCmdBufferMap.find(assetID) != secondaryCmdBufferMap.end())
 			{
 				LogError("Attempted to create a secondary command buffer for an asset, but a secondary command buffer was already found for asset uuid %ull", assetID);
 				return;
 			}
 
-			secondaryCommandBuffers[i].emplace(assetID, SecondaryCommandBuffer());
-			SecondaryCommandBuffer& commandBuffer = secondaryCommandBuffers[i][assetID];
+			secondaryCmdBufferMap.emplace(assetID, SecondaryCommandBuffer());
+			SecondaryCommandBuffer& commandBuffer = secondaryCmdBufferMap[assetID];
 			commandBuffer.Create(logicalDevice, commandPools[GRAPHICS_QUEUE]);
 
 			RecordSecondaryCommandBuffer(commandBuffer, resources, i);
@@ -327,22 +332,22 @@ namespace TANG
 
 	PrimaryCommandBuffer* Renderer::GetCurrentPrimaryBuffer()
 	{
-		return &primaryCommandBuffers[currentFrame];
+		return &GetCurrentFDD()->primaryCommandBuffer;
 	}
 
-	SecondaryCommandBuffer* Renderer::GetCurrentSecondaryCommandBuffer(uint32_t frameBufferIndex, UUID uuid)
+	SecondaryCommandBuffer* Renderer::GetSecondaryCommandBufferAtIndex(uint32_t frameBufferIndex, UUID uuid)
 	{
-		return &secondaryCommandBuffers[frameBufferIndex].at(uuid);
+		return &GetSWIDDAtIndex(frameBufferIndex)->secondaryCommandBuffer.at(uuid);
 	}
 
-	VkFramebuffer Renderer::GetCurrentFramebuffer(uint32_t frameBufferIndex) const
+	VkFramebuffer Renderer::GetFramebufferAtIndex(uint32_t frameBufferIndex)
 	{
-		return swapChainFramebuffers[frameBufferIndex];
+		return GetSWIDDAtIndex(frameBufferIndex)->swapChainFramebuffer;
 	}
 
-	VkDescriptorSet Renderer::GetCurrentDescriptorSet() const
+	DescriptorSets Renderer::GetCurrentDescriptorSets()
 	{
-		return descriptorSets.GetDescriptorSet(currentFrame);
+		return  GetCurrentFDD()->descriptorSets;
 	}
 
 	void Renderer::DestroyAssetResources(AssetDisk* asset)
@@ -434,11 +439,13 @@ namespace TANG
 
 	void Renderer::InitVulkan()
 	{
+		frameDependentData.resize(MAX_FRAMES_IN_FLIGHT);
+
 		// Initialize Vulkan-related objects
-		createInstance();
-		setupDebugMessenger();
-		createSurface();
-		pickPhysicalDevice();
+		CreateInstance();
+		SetupDebugMessenger();
+		CreateSurface();
+		PickPhysicalDevice();
 		CreateLogicalDevice();
 		CreateSwapChain();
 		CreateImageViews();
@@ -456,10 +463,7 @@ namespace TANG
 		CreateDescriptorPool();
 		CreateDescriptorSets();
 		CreatePrimaryCommandBuffers(GRAPHICS_QUEUE);
-		createSyncObjects();
-
-		// Resize the vector of secondary command buffers to number of framebuffer images we have
-		secondaryCommandBuffers.resize(swapChainImageCount);
+		CreateSyncObjects();
 	}
 
 	void Renderer::ShutdownWindow()
@@ -482,20 +486,22 @@ namespace TANG
 		vkDestroyImage(logicalDevice, textureImage, nullptr);
 		vkFreeMemory(logicalDevice, textureImageMemory, nullptr);
 
-		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+		for (uint32_t i = 0; i < GetFDDSize(); i++)
 		{
-			transformUBOs[i].Destroy(logicalDevice);
-			viewProjUBOs[i].Destroy(logicalDevice);
+			auto frameData = GetFDDAtIndex(i);
+			frameData->transformUBO.Destroy(logicalDevice);
+			frameData->viewProjUBO.Destroy(logicalDevice);
 		}
 
 		descriptorPool.Destroy(logicalDevice);
 		descriptorSetLayout.Destroy(logicalDevice);
 
-		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+		for (uint32_t i = 0; i < GetFDDSize(); i++)
 		{
-			vkDestroySemaphore(logicalDevice, imageAvailableSemaphores[i], nullptr);
-			vkDestroySemaphore(logicalDevice, renderFinishedSemaphores[i], nullptr);
-			vkDestroyFence(logicalDevice, inFlightFences[i], nullptr);
+			auto frameData = GetFDDAtIndex(i);
+			vkDestroySemaphore(logicalDevice, frameData->imageAvailableSemaphore, nullptr);
+			vkDestroySemaphore(logicalDevice, frameData->renderFinishedSemaphore, nullptr);
+			vkDestroyFence(logicalDevice, frameData->inFlightFence, nullptr);
 		}
 
 		// Destroy all command pools
@@ -524,11 +530,13 @@ namespace TANG
 	{
 		VkResult result = VK_SUCCESS;
 
-		vkWaitForFences(logicalDevice, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
+		FrameDependentData* currentFDD = GetCurrentFDD();
+
+		vkWaitForFences(logicalDevice, 1, &GetCurrentFDD()->inFlightFence, VK_TRUE, UINT64_MAX);
 
 		uint32_t imageIndex;
 		result = vkAcquireNextImageKHR(logicalDevice, swapChain, UINT64_MAX,
-			imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
+			GetCurrentFDD()->imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
 
 		if (result == VK_ERROR_OUT_OF_DATE_KHR)
 		{
@@ -540,10 +548,8 @@ namespace TANG
 			TNG_ASSERT_MSG(false, "Failed to acquire swap chain image!");
 		}
 
-		//TNG_ASSERT_MSG(imageIndex < MAX_FRAMES_IN_FLIGHT, "vkAcquireNextImageKHR returned VK_SUCCESS but somehow gave us an invalid image index?");
-
 		// Only reset the fence if we're submitting work, otherwise we might deadlock
-		vkResetFences(logicalDevice, 1, &inFlightFences[currentFrame]);
+		vkResetFences(logicalDevice, 1, &GetCurrentFDD()->inFlightFence);
 
 		///////////////////////////////////////
 		// 
@@ -553,7 +559,7 @@ namespace TANG
 		RecordPrimaryCommandBuffer(imageIndex);
 
 		VkCommandBuffer commandBuffers[] = { GetCurrentPrimaryBuffer()->GetBuffer() };
-		VkSemaphore waitSemaphores[] = { imageAvailableSemaphores[currentFrame] };
+		VkSemaphore waitSemaphores[] = { GetCurrentFDD()->imageAvailableSemaphore };
 
 		VkSubmitInfo submitInfo{};
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -564,11 +570,11 @@ namespace TANG
 		submitInfo.commandBufferCount = 1;
 		submitInfo.pCommandBuffers = commandBuffers;
 
-		VkSemaphore signalSemaphores[] = { renderFinishedSemaphores[currentFrame] };
+		VkSemaphore signalSemaphores[] = { GetCurrentFDD()->renderFinishedSemaphore };
 		submitInfo.signalSemaphoreCount = 1;
 		submitInfo.pSignalSemaphores = signalSemaphores;
 
-		if (vkQueueSubmit(queues[GRAPHICS_QUEUE], 1, &submitInfo, inFlightFences[currentFrame]) != VK_SUCCESS)
+		if (vkQueueSubmit(queues[GRAPHICS_QUEUE], 1, &submitInfo, GetCurrentFDD()->inFlightFence) != VK_SUCCESS)
 		{
 			TNG_ASSERT_MSG(false, "Failed to submit draw command buffer!");
 			return;
@@ -603,10 +609,10 @@ namespace TANG
 		}
 	}
 
-	void Renderer::createInstance()
+	void Renderer::CreateInstance()
 	{
 		// Check that we support all requested validation layers
-		if (enableValidationLayers && !checkValidationLayerSupport())
+		if (enableValidationLayers && !CheckValidationLayerSupport())
 		{
 			throw std::runtime_error("Validation layers were requested, but one or more is not supported!");
 		}
@@ -629,7 +635,7 @@ namespace TANG
 			createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
 			createInfo.ppEnabledLayerNames = validationLayers.data();
 
-			populateDebugMessengerCreateInfo(debugCreateInfo);
+			PopulateDebugMessengerCreateInfo(debugCreateInfo);
 			createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&debugCreateInfo;
 		}
 		else
@@ -638,7 +644,7 @@ namespace TANG
 			createInfo.pNext = nullptr;
 		}
 
-		auto extensions = getRequiredExtensions();
+		auto extensions = GetRequiredExtensions();
 
 		createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
 		createInfo.ppEnabledExtensionNames = extensions.data();
@@ -650,7 +656,7 @@ namespace TANG
 		}
 	}
 
-	void Renderer::populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo)
+	void Renderer::PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo)
 	{
 		createInfo = {};
 		createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
@@ -660,12 +666,12 @@ namespace TANG
 		createInfo.pUserData = nullptr; // Optional
 	}
 
-	void Renderer::setupDebugMessenger()
+	void Renderer::SetupDebugMessenger()
 	{
 		if (!enableValidationLayers) return;
 
 		VkDebugUtilsMessengerCreateInfoEXT createInfo{};
-		populateDebugMessengerCreateInfo(createInfo);
+		PopulateDebugMessengerCreateInfo(createInfo);
 
 		if (CreateDebugUtilsMessengerEXT(vkInstance, &createInfo, nullptr, &debugMessenger) != VK_SUCCESS)
 		{
@@ -673,7 +679,7 @@ namespace TANG
 		}
 	}
 
-	std::vector<const char*> Renderer::getRequiredExtensions()
+	std::vector<const char*> Renderer::GetRequiredExtensions()
 	{
 		uint32_t glfwExtensionCount = 0;
 		const char** glfwExtensions;
@@ -689,7 +695,7 @@ namespace TANG
 		return extensions;
 	}
 
-	bool Renderer::checkValidationLayerSupport()
+	bool Renderer::CheckValidationLayerSupport()
 	{
 		uint32_t layerCount;
 		vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
@@ -719,7 +725,7 @@ namespace TANG
 		return true;
 	}
 
-	bool Renderer::checkDeviceExtensionSupport(VkPhysicalDevice device)
+	bool Renderer::CheckDeviceExtensionSupport(VkPhysicalDevice device)
 	{
 		uint32_t extensionCount;
 		vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
@@ -741,7 +747,7 @@ namespace TANG
 	//  PHYSICAL DEVICE
 	//
 	////////////////////////////////////////
-	void Renderer::pickPhysicalDevice()
+	void Renderer::PickPhysicalDevice()
 	{
 		uint32_t deviceCount = 0;
 		vkEnumeratePhysicalDevices(vkInstance, &deviceCount, nullptr);
@@ -759,7 +765,7 @@ namespace TANG
 			if (IsDeviceSuitable(device))
 			{
 				physicalDevice = device;
-				msaaSamples = getMaxUsableSampleCount();
+				msaaSamples = GetMaxUsableSampleCount();
 				break;
 			}
 		}
@@ -773,11 +779,11 @@ namespace TANG
 	bool Renderer::IsDeviceSuitable(VkPhysicalDevice device)
 	{
 		QueueFamilyIndices indices = FindQueueFamilies(device);
-		bool extensionsSupported = checkDeviceExtensionSupport(device);
+		bool extensionsSupported = CheckDeviceExtensionSupport(device);
 		bool swapChainAdequate = false;
 		if (extensionsSupported)
 		{
-			SwapChainSupportDetails details = querySwapChainSupport(device);
+			SwapChainSupportDetails details = QuerySwapChainSupport(device);
 			swapChainAdequate = !details.formats.empty() && !details.presentModes.empty();
 		}
 
@@ -868,7 +874,7 @@ namespace TANG
 		return indices;
 	}
 
-	SwapChainSupportDetails Renderer::querySwapChainSupport(VkPhysicalDevice device)
+	SwapChainSupportDetails Renderer::QuerySwapChainSupport(VkPhysicalDevice device)
 	{
 		SwapChainSupportDetails details;
 		vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.capabilities);
@@ -894,7 +900,7 @@ namespace TANG
 		return details;
 	}
 
-	VkSurfaceFormatKHR Renderer::chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats)
+	VkSurfaceFormatKHR Renderer::ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats)
 	{
 		for (const auto& availableFormat : availableFormats)
 		{
@@ -908,7 +914,7 @@ namespace TANG
 		return availableFormats[0];
 	}
 
-	VkPresentModeKHR Renderer::chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes)
+	VkPresentModeKHR Renderer::ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes)
 	{
 		for (const auto& presentMode : availablePresentModes)
 		{
@@ -921,7 +927,7 @@ namespace TANG
 		return VK_PRESENT_MODE_FIFO_KHR;
 	}
 
-	VkExtent2D Renderer::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities)
+	VkExtent2D Renderer::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities)
 	{
 		if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max())
 		{
@@ -948,7 +954,7 @@ namespace TANG
 		}
 	}
 
-	uint32_t Renderer::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
+	uint32_t Renderer::FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
 	{
 		VkPhysicalDeviceMemoryProperties memProperties;
 		vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
@@ -1035,7 +1041,7 @@ namespace TANG
 	//  SURFACE
 	//
 	////////////////////////////////////////
-	void Renderer::createSurface()
+	void Renderer::CreateSurface()
 	{
 		if (glfwCreateWindowSurface(vkInstance, windowHandle, nullptr, &surface) != VK_SUCCESS)
 		{
@@ -1045,10 +1051,10 @@ namespace TANG
 
 	void Renderer::CreateSwapChain()
 	{
-		SwapChainSupportDetails details = querySwapChainSupport(physicalDevice);
-		VkSurfaceFormatKHR surfaceFormat = chooseSwapSurfaceFormat(details.formats);
-		VkPresentModeKHR presentMode = chooseSwapPresentMode(details.presentModes);
-		VkExtent2D extent = chooseSwapExtent(details.capabilities);
+		SwapChainSupportDetails details = QuerySwapChainSupport(physicalDevice);
+		VkSurfaceFormatKHR surfaceFormat = ChooseSwapSurfaceFormat(details.formats);
+		VkPresentModeKHR presentMode = ChooseSwapPresentMode(details.presentModes);
+		VkExtent2D extent = ChooseSwapExtent(details.capabilities);
 
 		uint32_t imageCount = details.capabilities.minImageCount + 1;
 		if (details.capabilities.maxImageCount > 0 && imageCount > details.capabilities.maxImageCount)
@@ -1094,28 +1100,35 @@ namespace TANG
 		}
 
 		vkGetSwapchainImagesKHR(logicalDevice, swapChain, &imageCount, nullptr);
-		swapChainImages.resize(imageCount);
+
+		swapChainImageDependentData.resize(imageCount);
+		std::vector<VkImage> swapChainImages(imageCount);
+
 		vkGetSwapchainImagesKHR(logicalDevice, swapChain, &imageCount, swapChainImages.data());
+
+		for (uint32_t i = 0; i < GetSWIDDSize(); i++)
+		{
+			swapChainImageDependentData[i].swapChainImage = swapChainImages[i];
+		}
+		swapChainImages.clear();
 
 		swapChainImageFormat = surfaceFormat.format;
 		swapChainExtent = extent;
-		swapChainImageCount = imageCount;
 	}
 
 	// Create image views for all images on the swap chain
 	void Renderer::CreateImageViews()
 	{
-		swapChainImageViews.resize(swapChainImages.size());
-
-		for (size_t i = 0; i < swapChainImages.size(); i++)
+		auto& swidd = swapChainImageDependentData;
+		for (size_t i = 0; i < GetSWIDDSize(); i++)
 		{
-			swapChainImageViews[i] = createImageView(swapChainImages[i], swapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+			swidd[i].swapChainImageView = CreateImageView(swidd[i].swapChainImage, swapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
 		}
 	}
 
 	// This is a helper function for creating the "VkShaderModule" wrappers around
 	// the shader code, read from CreateGraphicsPipeline() below
-	VkShaderModule Renderer::createShaderModule(std::vector<char>& code)
+	VkShaderModule Renderer::CreateShaderModule(std::vector<char>& code)
 	{
 		VkShaderModuleCreateInfo createInfo{};
 		createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -1137,8 +1150,8 @@ namespace TANG
 		auto vertShaderCode = readFile("../out/shaders/vert.spv");
 		auto fragShaderCode = readFile("../out/shaders/frag.spv");
 
-		VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
-		VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
+		VkShaderModule vertShaderModule = CreateShaderModule(vertShaderCode);
+		VkShaderModule fragShaderModule = CreateShaderModule(fragShaderCode);
 
 		VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
 		vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -1328,7 +1341,7 @@ namespace TANG
 		colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
 		VkAttachmentDescription depthAttachment{};
-		depthAttachment.format = findDepthFormat();
+		depthAttachment.format = FindDepthFormat();
 		depthAttachment.samples = msaaSamples;
 		depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 		depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -1389,15 +1402,15 @@ namespace TANG
 
 	void Renderer::CreateFramebuffers()
 	{
-		swapChainFramebuffers.resize(swapChainImageViews.size());
+		auto& swidd = swapChainImageDependentData;
 
-		for (size_t i = 0; i < swapChainImageViews.size(); i++)
+		for (size_t i = 0; i < GetSWIDDSize(); i++)
 		{
 			std::array<VkImageView, 3> attachments =
 			{
 				colorImageView,
 				depthImageView,
-				swapChainImageViews[i]
+				swidd[i].swapChainImageView
 			};
 
 			VkFramebufferCreateInfo framebufferInfo{};
@@ -1409,7 +1422,7 @@ namespace TANG
 			framebufferInfo.height = swapChainExtent.height;
 			framebufferInfo.layers = 1;
 
-			if (vkCreateFramebuffer(logicalDevice, &framebufferInfo, nullptr, &swapChainFramebuffers[i]) != VK_SUCCESS)
+			if (vkCreateFramebuffer(logicalDevice, &framebufferInfo, nullptr, &(swidd[i].swapChainFramebuffer)) != VK_SUCCESS)
 			{
 				TNG_ASSERT_MSG(false, "Failed to create framebuffer!");
 			}
@@ -1465,20 +1478,14 @@ namespace TANG
 
 	void Renderer::CreatePrimaryCommandBuffers(QueueType poolType)
 	{
-		primaryCommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-
-		for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+		for (uint32_t i = 0; i < GetFDDSize(); i++)
 		{
-			primaryCommandBuffers[i].Create(logicalDevice, commandPools[poolType]);
+			GetFDDAtIndex(i)->primaryCommandBuffer.Create(logicalDevice, commandPools[poolType]);
 		}
 	}
 
-	void Renderer::createSyncObjects()
+	void Renderer::CreateSyncObjects()
 	{
-		imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-		renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-		inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
-
 		VkSemaphoreCreateInfo semaphoreInfo{};
 		semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
@@ -1488,18 +1495,18 @@ namespace TANG
 		// the first frame (when we don't have any previous frames to wait on)
 		fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+		for (uint32_t i = 0; i < GetFDDSize(); i++)
 		{
-			if (vkCreateSemaphore(logicalDevice, &semaphoreInfo, nullptr, &imageAvailableSemaphores[i]) != VK_SUCCESS
-				|| vkCreateSemaphore(logicalDevice, &semaphoreInfo, nullptr, &renderFinishedSemaphores[i]) != VK_SUCCESS
-				|| vkCreateFence(logicalDevice, &fenceInfo, nullptr, &inFlightFences[i]) != VK_SUCCESS)
+			if (vkCreateSemaphore(logicalDevice, &semaphoreInfo, nullptr, &(GetFDDAtIndex(i)->imageAvailableSemaphore)) != VK_SUCCESS
+				|| vkCreateSemaphore(logicalDevice, &semaphoreInfo, nullptr, &(GetFDDAtIndex(i)->renderFinishedSemaphore)) != VK_SUCCESS
+				|| vkCreateFence(logicalDevice, &fenceInfo, nullptr, &(GetFDDAtIndex(i)->inFlightFence)) != VK_SUCCESS)
 			{
 				TNG_ASSERT_MSG(false, "Failed to create semaphores or fences!");
 			}
 		}
 	}
 
-	void Renderer::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory)
+	void Renderer::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory)
 	{
 		VkBufferCreateInfo bufferInfo{};
 		bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -1518,7 +1525,7 @@ namespace TANG
 		VkMemoryAllocateInfo allocInfo{};
 		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 		allocInfo.allocationSize = memRequirements.size;
-		allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties);
+		allocInfo.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, properties);
 
 		if (vkAllocateMemory(logicalDevice, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS)
 		{
@@ -1530,32 +1537,11 @@ namespace TANG
 
 	void Renderer::CreateDescriptorSetLayout()
 	{
-		//VkDescriptorSetLayoutBinding uboLayoutBinding{};
-		//uboLayoutBinding.binding = 0;
-		//uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		//uboLayoutBinding.descriptorCount = 1;
-		//uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-		//uboLayoutBinding.pImmutableSamplers = nullptr; // Optional
-
-		//VkDescriptorSetLayoutBinding samplerLayoutBinding{};
-		//samplerLayoutBinding.binding = 1;
-		//samplerLayoutBinding.descriptorCount = 1;
-		//samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		//samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-		//samplerLayoutBinding.pImmutableSamplers = nullptr;
-
-		//std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, samplerLayoutBinding };
-		//VkDescriptorSetLayoutCreateInfo createInfo{};
-		//createInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-		//createInfo.bindingCount = static_cast<uint32_t>(bindings.size());
-		//createInfo.pBindings = bindings.data();
-
-		//if (vkCreateDescriptorSetLayout(logicalDevice, &createInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS)
-		//{
-		//	TNG_ASSERT_MSG(false, "Failed to create descriptor set layout!");
-		//}
-
+		// TODO - SPLIT THESE, WE NEED TWO DESCRIPTOR SET LAYOUTS NOW
 		descriptorSetLayout.AddBinding(logicalDevice, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
+
+		// TODO - SPLIT THESE, WE NEED TWO DESCRIPTOR SET LAYOUTS NOW
+		descriptorSetLayout.AddBinding(logicalDevice, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
 		descriptorSetLayout.AddBinding(logicalDevice, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
 		descriptorSetLayout.Create(logicalDevice);
 	}
@@ -1564,11 +1550,10 @@ namespace TANG
 	{
 		// Create the transform uniform buffer objects
 		VkDeviceSize transformUBOSize = sizeof(TransformUBO);
-		transformUBOs.resize(MAX_FRAMES_IN_FLIGHT);
 
-		for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+		for (uint32_t i = 0; i < GetFDDSize(); i++)
 		{
-			UniformBuffer& uniformBuffer = transformUBOs[i];
+			UniformBuffer& uniformBuffer = GetFDDAtIndex(i)->transformUBO;
 
 			uniformBuffer.Create(physicalDevice, logicalDevice, transformUBOSize);
 			uniformBuffer.MapMemory(logicalDevice, transformUBOSize);
@@ -1576,18 +1561,17 @@ namespace TANG
 
 		// Create the view-projection uniform buffer objects
 		VkDeviceSize viewProjUBOSize = sizeof(ViewProjUBO);
-		viewProjUBOs.resize(MAX_FRAMES_IN_FLIGHT);
 
-		for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+		for (uint32_t i = 0; i < GetFDDSize(); i++)
 		{
-			UniformBuffer& uniformBuffer = viewProjUBOs[i];
+			UniformBuffer& uniformBuffer = GetFDDAtIndex(i)->viewProjUBO;
 
 			uniformBuffer.Create(physicalDevice, logicalDevice, viewProjUBOSize);
 			uniformBuffer.MapMemory(logicalDevice, viewProjUBOSize);
 		}
 	}
 
-	void Renderer::createImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format,
+	void Renderer::CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format,
 		VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties,
 		VkImage& image, VkDeviceMemory& imageMemory)
 	{
@@ -1617,7 +1601,7 @@ namespace TANG
 		VkMemoryAllocateInfo allocInfo{};
 		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 		allocInfo.allocationSize = memRequirements.size;
-		allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties);
+		allocInfo.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, properties);
 
 		if (vkAllocateMemory(logicalDevice, &allocInfo, nullptr, &imageMemory) != VK_SUCCESS)
 		{
@@ -1641,7 +1625,7 @@ namespace TANG
 		VkDeviceSize imageSize = width * height * 4;
 		VkBuffer stagingBuffer;
 		VkDeviceMemory stagingBufferMemory;
-		createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+		CreateBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
 
 		void* data;
 		vkMapMemory(logicalDevice, stagingBufferMemory, 0, imageSize, 0, &data);
@@ -1651,12 +1635,12 @@ namespace TANG
 		// Now that we've copied over the texture data to the staging buffer, we don't need the original pixels array anymore
 		stbi_image_free(pixels);
 
-		createImage(width, height, mipLevels, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,
+		CreateImage(width, height, mipLevels, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,
 			VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 			textureImage, textureImageMemory);
 
 		TransitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, mipLevels);
-		copyBufferToImage(stagingBuffer, textureImage, static_cast<uint32_t>(width), static_cast<uint32_t>(height));
+		CopyBufferToImage(stagingBuffer, textureImage, static_cast<uint32_t>(width), static_cast<uint32_t>(height));
 		GenerateMipmaps(textureImage, VK_FORMAT_R8G8B8A8_SRGB, width, height, mipLevels);
 
 		vkDestroyBuffer(logicalDevice, stagingBuffer, nullptr);
@@ -1670,76 +1654,22 @@ namespace TANG
 
 		std::array<VkDescriptorPoolSize, 2> poolSizes{};
 		poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		poolSizes[0].descriptorCount = numUniformBuffers * static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+		poolSizes[0].descriptorCount = numUniformBuffers * GetFDDSize();
 		poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		poolSizes[1].descriptorCount = numImageSamplers * static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+		poolSizes[1].descriptorCount = numImageSamplers * GetFDDSize();
 
-		descriptorPool.Create(logicalDevice, poolSizes.data(), static_cast<uint32_t>(poolSizes.size()), static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT));
+		descriptorPool.Create(logicalDevice, poolSizes.data(), static_cast<uint32_t>(poolSizes.size()), static_cast<uint32_t>(poolSizes.size()) * GetFDDSize());
 	}
 
 	void Renderer::CreateDescriptorSets()
 	{
-		//std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, descriptorSetLayout.GetLayout());
-
-		//VkDescriptorSetAllocateInfo allocInfo{};
-		//allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-		//allocInfo.descriptorPool = descriptorPool.GetPool();
-		//allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
-		//allocInfo.pSetLayouts = layouts.data();
-
-		//descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
-		//if (vkAllocateDescriptorSets(logicalDevice, &allocInfo, descriptorSets.data()) != VK_SUCCESS)
-		//{
-		//	TNG_ASSERT_MSG(false, "Failed to allocate descriptor sets!");
-		//}
-
-		//for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
-		//{
-		//	VkDescriptorBufferInfo bufferInfo{};
-		//	bufferInfo.buffer = uniformBuffers[i].GetBuffer();
-		//	bufferInfo.offset = 0;
-		//	bufferInfo.range = sizeof(UniformBufferObject);
-
-		//	//VkDescriptorImageInfo imageInfo{};
-		//	//imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		//	//imageInfo.imageView = textureImageView;
-		//	//imageInfo.sampler = textureSampler;
-
-		//	std::array<VkWriteDescriptorSet, 1> descriptorWrites{};
-		//	descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		//	descriptorWrites[0].dstSet = descriptorSets[i];
-		//	descriptorWrites[0].dstBinding = 0;
-		//	descriptorWrites[0].dstArrayElement = 0;
-		//	descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		//	descriptorWrites[0].descriptorCount = 1;
-		//	descriptorWrites[0].pBufferInfo = &bufferInfo;
-
-		//	//descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		//	//descriptorWrites[1].dstSet = descriptorSets[i];
-		//	//descriptorWrites[1].dstBinding = 1;
-		//	//descriptorWrites[1].dstArrayElement = 0;
-		//	//descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		//	//descriptorWrites[1].descriptorCount = 1;
-		//	//descriptorWrites[1].pImageInfo = &imageInfo;
-		//	LogWarning("descriptorWrites[1] was temporarily removed");
-
-		//	vkUpdateDescriptorSets(logicalDevice, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
-		//}
-
-		descriptorSets.Create(logicalDevice, descriptorPool, descriptorSetLayout, MAX_FRAMES_IN_FLIGHT);
-
-		// Update the descriptor sets
-		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+		for (uint32_t i = 0; i < GetFDDSize(); i++)
 		{
-			WriteDescriptorSets writeDescSets{};
-			writeDescSets.AddUniformBuffer(descriptorSets.GetDescriptorSet(i), 0, viewProjUBOs[i].GetBuffer(), viewProjUBOs[i].GetBufferSize());
-			writeDescSets.AddUniformBuffer(descriptorSets.GetDescriptorSet(i), 1, transformUBOs[i].GetBuffer(), transformUBOs[i].GetBufferSize());
-			writeDescSets.AddColorImage(descriptorSets.GetDescriptorSet(i), 2, textureImageView, textureSampler);
-			descriptorSets.Update(logicalDevice, writeDescSets);
+			GetFDDAtIndex(i)->descriptorSets.Create(logicalDevice, descriptorPool, descriptorSetLayout, 2);
 		}
 	}
 
-	VkImageView Renderer::createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels)
+	VkImageView Renderer::CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels)
 	{
 		VkImageViewCreateInfo createInfo{};
 		createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -1761,12 +1691,12 @@ namespace TANG
 		return imageView;
 	}
 
-	void Renderer::createTextureImageView()
+	void Renderer::CreateTextureImageView()
 	{
-		textureImageView = createImageView(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, mipLevels);
+		textureImageView = CreateImageView(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, mipLevels);
 	}
 
-	void Renderer::createTextureSampler()
+	void Renderer::CreateTextureSampler()
 	{
 		VkPhysicalDeviceProperties properties{};
 		vkGetPhysicalDeviceProperties(physicalDevice, &properties);
@@ -1791,17 +1721,17 @@ namespace TANG
 
 		if (vkCreateSampler(logicalDevice, &samplerInfo, nullptr, &textureSampler) != VK_SUCCESS)
 		{
-			throw std::runtime_error("Failed to create texture sampler!");
+			TNG_ASSERT_MSG(false, "Failed to create texture sampler!");
 		}
 	}
 
 	void Renderer::CreateDepthResources()
 	{
-		VkFormat depthFormat = findDepthFormat();
-		createImage(swapChainExtent.width, swapChainExtent.height, 1, msaaSamples, depthFormat, VK_IMAGE_TILING_OPTIMAL,
+		VkFormat depthFormat = FindDepthFormat();
+		CreateImage(swapChainExtent.width, swapChainExtent.height, 1, msaaSamples, depthFormat, VK_IMAGE_TILING_OPTIMAL,
 			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 			depthImage, depthImageMemory);
-		depthImageView = createImageView(depthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
+		depthImageView = CreateImageView(depthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
 		//transitionImageLayout(depthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, mipLevels);
 	}
 
@@ -1809,10 +1739,10 @@ namespace TANG
 	{
 		VkFormat colorFormat = swapChainImageFormat;
 
-		createImage(swapChainExtent.width, swapChainExtent.height, 1, msaaSamples, colorFormat,
+		CreateImage(swapChainExtent.width, swapChainExtent.height, 1, msaaSamples, colorFormat,
 			VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, colorImage, colorImageMemory);
-		colorImageView = createImageView(colorImage, colorFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+		colorImageView = CreateImageView(colorImage, colorFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
 	}
 
 	void Renderer::RecordPrimaryCommandBuffer(uint32_t frameBufferIndex)
@@ -1825,7 +1755,7 @@ namespace TANG
 		// Primary command buffers don't need to define inheritance info
 		commandBuffer->BeginRecording(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, nullptr);
 
-		commandBuffer->CMD_BeginRenderPass(renderPass, GetCurrentFramebuffer(frameBufferIndex), swapChainExtent, true);
+		commandBuffer->CMD_BeginRenderPass(renderPass, GetFramebufferAtIndex(frameBufferIndex), swapChainExtent, true);
 
 		// Execute the secondary commands here
 		std::vector<VkCommandBuffer> secondaryCmdBuffers;
@@ -1837,7 +1767,7 @@ namespace TANG
 			if (shouldDraw)
 			{
 				UpdateUniformBuffer(0, iter.transform);
-				secondaryCmdBuffers[secondaryCmdBufferCount++] = GetCurrentSecondaryCommandBuffer(frameBufferIndex, iter.uuid)->GetBuffer();
+				secondaryCmdBuffers[secondaryCmdBufferCount++] = GetSecondaryCommandBufferAtIndex(frameBufferIndex, iter.uuid)->GetBuffer();
 			}
 		}
 
@@ -1854,19 +1784,19 @@ namespace TANG
 
 	void Renderer::RecordSecondaryCommandBuffer(SecondaryCommandBuffer& commandBuffer, AssetResources* resources, uint32_t frameBufferIndex)
 	{
-		VkDescriptorSet currDescriptorSets[] = { GetCurrentDescriptorSet() };
+		DescriptorSets& descSets = GetCurrentFDD()->descriptorSets;
 
 		VkCommandBufferInheritanceInfo inheritanceInfo{};
 		inheritanceInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
 		inheritanceInfo.pNext = nullptr;
 		inheritanceInfo.renderPass = renderPass; // NOTE - We only have one render pass for now, if that changes we must change it here too
 		inheritanceInfo.subpass = 0;
-		inheritanceInfo.framebuffer = swapChainFramebuffers[frameBufferIndex];
+		inheritanceInfo.framebuffer = GetSWIDDAtIndex(frameBufferIndex)->swapChainFramebuffer;
 
 		commandBuffer.BeginRecording(VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT | VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT, &inheritanceInfo);
 
 		commandBuffer.CMD_BindMesh(resources);
-		commandBuffer.CMD_BindDescriptorSets(pipelineLayout, 1, currDescriptorSets);
+		commandBuffer.CMD_BindDescriptorSets(pipelineLayout, descSets.GetDescriptorSetCount(), descSets.GetDescriptorSets().data());
 		commandBuffer.CMD_BindGraphicsPipeline(graphicsPipeline);
 		commandBuffer.CMD_SetScissor({ 0, 0 }, swapChainExtent);
 		commandBuffer.CMD_SetViewport(static_cast<float>(swapChainExtent.width), static_cast<float>(swapChainExtent.height));
@@ -1900,13 +1830,13 @@ namespace TANG
 
 	void Renderer::RecreateAllSecondaryCommandBuffers()
 	{
-		for (uint32_t i = 0; i < swapChainImageCount; i++)
+		for (uint32_t i = 0; i < GetSWIDDSize(); i++)
 		{
 			for (auto& resources : assetResources)
 			{
-				SecondaryCommandBuffer& commandBuffer = secondaryCommandBuffers[i].at(resources.uuid);
-				commandBuffer.Create(logicalDevice, commandPools[GRAPHICS_QUEUE]);
-				RecordSecondaryCommandBuffer(commandBuffer, &resources, i);
+				SecondaryCommandBuffer* commandBuffer = GetSecondaryCommandBufferAtIndex(i, resources.uuid);
+				commandBuffer->Create(logicalDevice, commandPools[GRAPHICS_QUEUE]);
+				RecordSecondaryCommandBuffer(*commandBuffer, &resources, i);
 			}
 		}
 	}
@@ -1921,22 +1851,23 @@ namespace TANG
 		vkDestroyImage(logicalDevice, depthImage, nullptr);
 		vkFreeMemory(logicalDevice, depthImageMemory, nullptr);
 
-		for (auto framebuffer : swapChainFramebuffers)
+		for (auto& swidd : swapChainImageDependentData)
 		{
-			vkDestroyFramebuffer(logicalDevice, framebuffer, nullptr);
+			vkDestroyFramebuffer(logicalDevice, swidd.swapChainFramebuffer, nullptr);
 		}
 
-		for (auto imageView : swapChainImageViews)
+		for (auto& swidd : swapChainImageDependentData)
 		{
-			vkDestroyImageView(logicalDevice, imageView, nullptr);
+			vkDestroyImageView(logicalDevice, swidd.swapChainImageView, nullptr);
 		}
 
 		// Clean up the secondary commands buffers that reference the swap chain framebuffers
-		for (uint32_t i = 0; i < swapChainImageCount; i++)
+		for (uint32_t i = 0; i < GetSWIDDSize(); i++)
 		{
-			for (auto secondaryCmdBuffer : secondaryCommandBuffers[i])
+			auto& secondaryCmdBuffer = swapChainImageDependentData[i].secondaryCommandBuffer;
+			for (auto iter : secondaryCmdBuffer)
 			{
-				secondaryCmdBuffer.second.Destroy(logicalDevice, commandPools[GRAPHICS_QUEUE]);
+				iter.second.Destroy(logicalDevice, commandPools[GRAPHICS_QUEUE]);
 			}
 		}
 
@@ -1959,7 +1890,7 @@ namespace TANG
 		transformMat = transformMat * rotationMat; // NOTE - Is this the correct order?
 		transformMat = scale(transformMat, transform.scale);
 
-		transformUBOs[currentFrame].UpdateData(&transformUBO, sizeof(TransformUBO));
+		GetCurrentFDD()->transformUBO.UpdateData(&transformUBO, sizeof(TransformUBO));
 
 		// Construct the ViewProj UBO
 		ViewProjUBO viewProjUBO;
@@ -1969,7 +1900,18 @@ namespace TANG
 		// NOTE - GLM was originally designed for OpenGL, where the Y coordinate of the clip coordinates is inverted
 		viewProjUBO.proj[1][1] *= -1;
 
-		viewProjUBOs[currentFrame].UpdateData(&viewProjUBO, sizeof(ViewProjUBO));
+		GetCurrentFDD()->viewProjUBO.UpdateData(&viewProjUBO, sizeof(ViewProjUBO));
+	}
+
+	void Renderer::UpdateDescriptorSets()
+	{
+		FrameDependentData* currentFDD = GetCurrentFDD();
+
+		WriteDescriptorSets writeDescSets{};
+		writeDescSets.AddUniformBuffer(currentFDD->descriptorSets.GetDescriptorSet(0), 0, currentFDD->viewProjUBO.GetBuffer(), currentFDD->viewProjUBO.GetBufferSize());
+		writeDescSets.AddUniformBuffer(currentFDD->descriptorSets.GetDescriptorSet(1), 0, currentFDD->transformUBO.GetBuffer(), currentFDD->transformUBO.GetBufferSize());
+		writeDescSets.AddColorImage(currentFDD->descriptorSets.GetDescriptorSet(1), 1, textureImageView, textureSampler);
+		currentFDD->descriptorSets.Update(logicalDevice, writeDescSets);
 	}
 
 	VkCommandBuffer Renderer::BeginSingleTimeCommands(VkCommandPool pool)
@@ -2054,7 +1996,7 @@ namespace TANG
 		{
 			barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
 
-			if (hasStencilComponent(format))
+			if (HasStencilComponent(format))
 			{
 				barrier.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
 			}
@@ -2103,7 +2045,7 @@ namespace TANG
 		EndSingleTimeCommands(commandBuffer, TRANSFER_QUEUE);
 	}
 
-	void Renderer::copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)
+	void Renderer::CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)
 	{
 		VkCommandBuffer commandBuffer = BeginSingleTimeCommands(commandPools[TRANSFER_QUEUE]);
 
@@ -2125,7 +2067,7 @@ namespace TANG
 		EndSingleTimeCommands(commandBuffer, TRANSFER_QUEUE);
 	}
 
-	VkFormat Renderer::findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features)
+	VkFormat Renderer::FindSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features)
 	{
 		for (VkFormat format : candidates)
 		{
@@ -2145,16 +2087,16 @@ namespace TANG
 		throw std::runtime_error("Failed to find supported format!");
 	}
 
-	VkFormat Renderer::findDepthFormat()
+	VkFormat Renderer::FindDepthFormat()
 	{
-		return findSupportedFormat(
+		return FindSupportedFormat(
 			{ VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT },
 			VK_IMAGE_TILING_OPTIMAL,
 			VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT
 		);
 	}
 
-	bool Renderer::hasStencilComponent(VkFormat format)
+	bool Renderer::HasStencilComponent(VkFormat format)
 	{
 		return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
 	}
@@ -2253,7 +2195,7 @@ namespace TANG
 		EndSingleTimeCommands(commandBuffer, GRAPHICS_QUEUE);
 	}
 
-	VkSampleCountFlagBits Renderer::getMaxUsableSampleCount()
+	VkSampleCountFlagBits Renderer::GetMaxUsableSampleCount()
 	{
 		VkPhysicalDeviceProperties physicalDeviceProperties;
 		vkGetPhysicalDeviceProperties(physicalDevice, &physicalDeviceProperties);
@@ -2267,6 +2209,45 @@ namespace TANG
 		if (counts & VK_SAMPLE_COUNT_2_BIT) { return VK_SAMPLE_COUNT_2_BIT; }
 
 		return VK_SAMPLE_COUNT_1_BIT;
+	}
+
+	/////////////////////////////////////////////////////
+	// 
+	// Frame dependent data
+	//
+	/////////////////////////////////////////////////////
+	Renderer::FrameDependentData* Renderer::GetCurrentFDD()
+	{
+		return &frameDependentData[currentFrame];
+	}
+
+	Renderer::FrameDependentData* Renderer::GetFDDAtIndex(uint32_t frameIndex)
+	{
+		TNG_ASSERT_MSG(frameIndex >= 0 && frameIndex < frameDependentData.size(), "Invalid index used to retrieve frame-dependent data");
+		return &frameDependentData[frameIndex];
+	}
+
+	uint32_t Renderer::GetFDDSize() const
+	{
+		return static_cast<uint32_t>(frameDependentData.size());
+	}
+
+	/////////////////////////////////////////////////////
+	// 
+	// Swap-chain image dependent data
+	//
+	/////////////////////////////////////////////////////
+
+	// Returns the swap-chain image dependent data at the provided index
+	Renderer::SwapChainImageDependentData* Renderer::GetSWIDDAtIndex(uint32_t frameIndex)
+	{
+		TNG_ASSERT_MSG(frameIndex >= 0 && frameIndex < swapChainImageDependentData.size(), "Invalid index used to retrieve swap-chain image dependent data");
+		return &swapChainImageDependentData[frameIndex];
+	}
+
+	uint32_t Renderer::GetSWIDDSize() const
+	{
+		return static_cast<uint32_t>(swapChainImageDependentData.size());
 	}
 
 }

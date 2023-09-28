@@ -38,6 +38,7 @@ namespace TANG
 	};
 
 	class Renderer {
+
 	public:
 
 		void Initialize();
@@ -46,6 +47,10 @@ namespace TANG
 		// of passing in a deltaTime to the renderer. If nullptr is passed in, we'll calculate it instead
 		void Update(float* deltaTime);
 
+		// The core draw call. Conventionally, the state of the renderer must be updated through a call to Update() before this call is made
+		void Draw();
+
+		// Releases all internal handles to Vulkan objects
 		void Shutdown();
 
 		// Helper functions for setting and retrieving the asset draw state of a particular asset.
@@ -98,38 +103,38 @@ namespace TANG
 
 		void DrawFrame();
 
-		void createInstance();
+		void CreateInstance();
 
-		void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo);
+		void PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo);
 
-		void setupDebugMessenger();
+		void SetupDebugMessenger();
 
-		std::vector<const char*> getRequiredExtensions();
+		std::vector<const char*> GetRequiredExtensions();
 
-		bool checkValidationLayerSupport();
+		bool CheckValidationLayerSupport();
 
-		bool checkDeviceExtensionSupport(VkPhysicalDevice device);
+		bool CheckDeviceExtensionSupport(VkPhysicalDevice device);
 
 		////////////////////////////////////////
 		//
 		//  PHYSICAL DEVICE
 		//
 		////////////////////////////////////////
-		void pickPhysicalDevice();
+		void PickPhysicalDevice();
 
 		bool IsDeviceSuitable(VkPhysicalDevice device);
 
 		QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
 
-		SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
+		SwapChainSupportDetails QuerySwapChainSupport(VkPhysicalDevice device);
 
-		VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
+		VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
 
-		VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
+		VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
 
-		VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
+		VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
 
-		uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+		uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 
 		////////////////////////////////////////
 		//
@@ -143,7 +148,7 @@ namespace TANG
 		//  SURFACE
 		//
 		////////////////////////////////////////
-		void createSurface();
+		void CreateSurface();
 
 		void CreateSwapChain();
 
@@ -152,7 +157,7 @@ namespace TANG
 
 		// This is a helper function for creating the "VkShaderModule" wrappers around
 		// the shader code, read from createGraphicsPipeline() below
-		VkShaderModule createShaderModule(std::vector<char>& code);
+		VkShaderModule CreateShaderModule(std::vector<char>& code);
 
 		void CreateGraphicsPipeline();
 
@@ -164,15 +169,15 @@ namespace TANG
 
 		void CreatePrimaryCommandBuffers(QueueType poolType);
 
-		void createSyncObjects();
+		void CreateSyncObjects();
 
-		void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
+		void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
 
 		void CreateDescriptorSetLayout();
 
 		void CreateUniformBuffers();
 
-		void createImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format,
+		void CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format,
 			VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties,
 			VkImage& image, VkDeviceMemory& imageMemory);
 
@@ -182,11 +187,11 @@ namespace TANG
 
 		void CreateDescriptorSets();
 
-		VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels);
+		VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels);
 
-		void createTextureImageView();
+		void CreateTextureImageView();
 
-		void createTextureSampler();
+		void CreateTextureSampler();
 
 		void CreateDepthResources();
 
@@ -203,6 +208,8 @@ namespace TANG
 
 		void UpdateUniformBuffer(float deltaTime, const Transform& transform);
 
+		void UpdateDescriptorSets();
+
 		VkCommandBuffer BeginSingleTimeCommands(VkCommandPool pool);
 
 		// The commandPoolType parameter must match the pool type that was used to allocate the command buffer in the corresponding BeginSingleTimeCommands() function call!
@@ -210,24 +217,24 @@ namespace TANG
 
 		void TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels);
 
-		void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
+		void CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
 
-		VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
+		VkFormat FindSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
 
-		VkFormat findDepthFormat();
+		VkFormat FindDepthFormat();
 
-		bool hasStencilComponent(VkFormat format);
+		bool HasStencilComponent(VkFormat format);
 
 		void GenerateMipmaps(VkImage image, VkFormat imageFormat, int32_t texWidth, int32_t texHeight, uint32_t mipLevels);
 
-		VkSampleCountFlagBits getMaxUsableSampleCount();
+		VkSampleCountFlagBits GetMaxUsableSampleCount();
 
 		void DestroyAssetBuffersHelper(AssetResources& resources);
 
 		PrimaryCommandBuffer* GetCurrentPrimaryBuffer();
-		SecondaryCommandBuffer* GetCurrentSecondaryCommandBuffer(uint32_t frameBufferIndex, UUID uuid);
-		VkFramebuffer GetCurrentFramebuffer(uint32_t frameBufferIndex) const;
-		VkDescriptorSet GetCurrentDescriptorSet() const;
+		SecondaryCommandBuffer* GetSecondaryCommandBufferAtIndex(uint32_t frameBufferIndex, UUID uuid);
+		VkFramebuffer GetFramebufferAtIndex(uint32_t frameBufferIndex);
+		DescriptorSets GetCurrentDescriptorSets();
 
 	private:
 
@@ -244,10 +251,66 @@ namespace TANG
 		std::unordered_map<QueueType, VkQueue> queues;
 
 		VkSwapchainKHR swapChain;
-		std::vector<VkImage> swapChainImages;
 		VkFormat swapChainImageFormat;
 		VkExtent2D swapChainExtent;
-		std::vector<VkImageView> swapChainImageViews;
+
+
+		////////////////////////////////////////////////////////////////////
+		// 
+		//	FRAME-DEPENDENT DATA
+		//
+		//	Organizes data that depends on the maximum number of frames in flight
+		// 
+		////////////////////////////////////////////////////////////////////
+		struct FrameDependentData
+		{
+			// Stores all the descriptor sets for a given frame
+			DescriptorSets descriptorSets;
+
+			// These two sets of UniformBuffer vector objects are sent to the shaders separately so that we can update them at different intervals
+			// For instance, the transform for an asset can be updated every frame, while the view/projection most likely won't change every frame
+			// and are usually updated when the window is resized.
+			UniformBuffer transformUBO;
+			UniformBuffer viewProjUBO;
+
+			VkSemaphore imageAvailableSemaphore;
+			VkSemaphore renderFinishedSemaphore;
+			VkFence inFlightFence;
+
+			// We need one primary command buffer per frame in flight, since we can be rendering multiple frames at the same time and
+			// we want to still be able to reset and record a primary buffer
+			PrimaryCommandBuffer primaryCommandBuffer;
+		};
+		std::vector<FrameDependentData> frameDependentData;
+		// We want to organize our descriptor sets as follows:
+		// 
+		// FOR EVERY FRAME IN FLIGHT:
+		//		Descriptor set 0:
+		//			- viewProj uniform buffer	(binding 0)
+		//			- image sampler				(binding 1)
+		//		Descriptor set 1:
+		//			- transform					(binding 0)
+		// 
+		// Total per frame in flight: 2 descriptor sets, 2 uniform buffers and 1 image sampler
+		// Total for 2 frames in flight: 4 descriptor sets, 4 uniform buffers and 2 image samplers
+
+
+		////////////////////////////////////////////////////////////////////
+		// 
+		//	SWAP-CHAIN IMAGE-DEPENDENT DATA
+		//
+		//	Organizes data that depends on the number of images in the swap chain, which may differ from the number of frames in flight
+		// 
+		////////////////////////////////////////////////////////////////////
+		struct SwapChainImageDependentData
+		{
+			VkImage swapChainImage;
+			VkImageView swapChainImageView;
+			VkFramebuffer swapChainFramebuffer;
+
+			std::unordered_map<UUID, SecondaryCommandBuffer> secondaryCommandBuffer;
+		};
+		std::vector<SwapChainImageDependentData> swapChainImageDependentData;
 
 		VkRenderPass renderPass;
 		DescriptorSetLayout descriptorSetLayout;
@@ -255,38 +318,17 @@ namespace TANG
 
 		VkPipeline graphicsPipeline;
 
-		std::vector<VkFramebuffer> swapChainFramebuffers;
-		uint32_t swapChainImageCount = 0; // NOTE - This does not necessarily equal the number of frames in flight!
-
 		std::unordered_map<QueueType, VkCommandPool> commandPools;
-
-		// We need one primary command buffer per frame in flight, since we can be rendering multiple frames at the same time and
-		// we want to still be able to reset and record a primary buffer
-		std::vector<PrimaryCommandBuffer> primaryCommandBuffers;
 
 		// The two following maps represent the drawable state of an asset, given it's UUID. AssetDrawStates tells us whether the asset must
 		// be drawn this frame, and secondaryCommandBuffers holds a correspondence between an asset's UUID and it's generated secondary command buffer
 		std::unordered_map<UUID, bool> assetDrawStates;
-		// This is a vector of unordered maps because we must bind the current frame's framebuffer in the secondary command buffers, so instead of recording
-		// them every frame when nothing changes but the framebuffer, we'll create the same number of maps as there are frames in flight
-		std::vector<std::unordered_map<UUID, SecondaryCommandBuffer>> secondaryCommandBuffers;
-
-		std::vector<VkSemaphore> imageAvailableSemaphores;
-		std::vector<VkSemaphore> renderFinishedSemaphores;
-		std::vector<VkFence> inFlightFences;
 
 		uint32_t currentFrame = 0;
 
 		std::vector<AssetResources> assetResources;
 
-		// These two sets of UniformBuffer vector objects are sent to the shaders separately so that we can update them at different intervals
-		// For instance, the transform for an asset can be updated every frame, while the view/projection most likely won't change every frame
-		// and are usually updated when the window is resized.
-		std::vector<UniformBuffer> transformUBOs;
-		std::vector<UniformBuffer> viewProjUBOs;
-
 		DescriptorPool descriptorPool;
-		DescriptorSets descriptorSets;
 
 		uint32_t mipLevels;
 		VkImage textureImage;
@@ -303,6 +345,23 @@ namespace TANG
 		VkImage colorImage;
 		VkDeviceMemory colorImageMemory;
 		VkImageView colorImageView;
+
+		private:
+
+		// Returns the current frame-dependent data
+		FrameDependentData* GetCurrentFDD();
+
+		// Returns the frame-dependent data at the provided index
+		FrameDependentData* GetFDDAtIndex(uint32_t frameIndex);
+
+		// Returns the size of the frame-dependent data vector. This is equivalent to MAX_FRAMES_IN_FLIGHT
+		uint32_t GetFDDSize() const;
+
+		// Returns the swap-chain image dependent data at the provided index
+		SwapChainImageDependentData* GetSWIDDAtIndex(uint32_t frameIndex);
+
+		// Returns the size of the swap-chain image-dependent data vector. This entirely depends on the number of images that are generated for the swap-chain
+		uint32_t GetSWIDDSize() const;
 
 	};
 
