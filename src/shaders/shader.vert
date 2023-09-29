@@ -1,10 +1,14 @@
 #version 450
 
-layout(binding = 0) uniform UniformBufferObject {
-    mat4 model;
+layout(set = 0, binding = 0) uniform ViewProjObject {
     mat4 view;
     mat4 proj;
-} ubo;
+} viewProjUBO;
+
+layout(set = 1, binding = 0) uniform TransformObject {
+    mat4 transform;
+} transformUBO;
+
 
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inNormal;
@@ -14,8 +18,8 @@ layout(location = 0) out vec3 outNormal;
 layout(location = 1) out vec2 outUV;
 
 void main() {
-    gl_Position = ubo.proj * ubo.view * ubo.model * vec4(inPosition, 1.0);
+    gl_Position = viewProjUBO.proj * viewProjUBO.view * transformUBO.transform * vec4(inPosition, 1.0);
 
-    outNormal = (ubo.model * vec4(inNormal, 1.0)).xyz;
+    outNormal = (transformUBO.transform * vec4(inNormal, 1.0)).xyz;
     outUV = inUV;
 }

@@ -67,6 +67,20 @@ namespace TANG
 	void UniformBuffer::MapMemory(VkDevice& logicalDevice, VkDeviceSize bufferSize)
 	{
 		vkMapMemory(logicalDevice, bufferMemory, 0, bufferSize, 0, &mappedData);
+		bufferState = BUFFER_STATE::MAPPED;
+	}
+
+	void UniformBuffer::UnMapMemory(VkDevice& logicalDevice)
+	{
+		if (bufferState != BUFFER_STATE::MAPPED)
+		{
+			LogError("Failed to unmap uniform buffer memory. Memory was not mapped to begin with!");
+			return;
+		}
+
+		vkUnmapMemory(logicalDevice, bufferMemory);
+		bufferState = BUFFER_STATE::CREATED;
+		mappedData = nullptr;
 	}
 
 	void UniformBuffer::UpdateData(void* data, uint32_t numBytes)
@@ -74,6 +88,7 @@ namespace TANG
 		if (bufferState != BUFFER_STATE::MAPPED)
 		{
 			LogError("Attempting to update data on uniform buffer when it's not mapped. Data will not be updated");
+			return;
 		}
 
 		memcpy(mappedData, data, numBytes);

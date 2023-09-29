@@ -345,11 +345,6 @@ namespace TANG
 		return GetSWIDDAtIndex(frameBufferIndex)->swapChainFramebuffer;
 	}
 
-	DescriptorSets Renderer::GetCurrentDescriptorSets()
-	{
-		return  GetCurrentFDD()->descriptorSets;
-	}
-
 	void Renderer::DestroyAssetResources(AssetDisk* asset)
 	{
 		for (auto iter = assetResources.begin(); iter != assetResources.end(); iter++)
@@ -449,21 +444,27 @@ namespace TANG
 		CreateLogicalDevice();
 		CreateSwapChain();
 		CreateImageViews();
+		CreateUniformBuffers();
+		CreateDescriptorPool();
+		CreateDescriptorBundles();
 		CreateRenderPass();
-		CreateDescriptorSetLayout();
 		CreateGraphicsPipeline();
 		CreateCommandPools();
+		CreateTextureImage();
+		CreateTextureImageView();
+		CreateTextureSampler();
 		CreateColorResources();
 		CreateDepthResources();
 		CreateFramebuffers();
-		//CreateTextureImage();
-		//createTextureImageView();
-		//createTextureSampler();
-		CreateUniformBuffers();
-		CreateDescriptorPool();
-		CreateDescriptorSets();
 		CreatePrimaryCommandBuffers(GRAPHICS_QUEUE);
 		CreateSyncObjects();
+
+		// Update the infrequent uniform buffers and descriptor sets
+		for (uint32_t i = 0; i < GetFDDSize(); i++)
+		{
+			UpdateInfrequentUniformBuffers(i);
+			UpdateInfrequentDescriptorSets(i);
+		}
 	}
 
 	void Renderer::ShutdownWindow()
@@ -488,13 +489,25 @@ namespace TANG
 
 		for (uint32_t i = 0; i < GetFDDSize(); i++)
 		{
+			FrameDependentData* currentFrame = GetFDDAtIndex(i);
+			for (uint32_t j = 0; j < currentFrame->descriptorBundles.size(); j++)
+			{
+				DescriptorBundle& currentDescriptorBundle = currentFrame->descriptorBundles[j];
+
+				// Destroy the descriptor sets and descriptor set layout
+				currentDescriptorBundle.GetDescriptorSet()->Destroy(logicalDevice, *currentDescriptorBundle.GetDescriptorSetLayout());
+				currentDescriptorBundle.GetDescriptorSetLayout()->Destroy(logicalDevice);
+			}
+		}
+
+		for (uint32_t i = 0; i < GetFDDSize(); i++)
+		{
 			auto frameData = GetFDDAtIndex(i);
 			frameData->transformUBO.Destroy(logicalDevice);
 			frameData->viewProjUBO.Destroy(logicalDevice);
 		}
 
 		descriptorPool.Destroy(logicalDevice);
-		descriptorSetLayout.Destroy(logicalDevice);
 
 		for (uint32_t i = 0; i < GetFDDSize(); i++)
 		{
@@ -1284,10 +1297,18 @@ namespace TANG
 		depthStencil.back = {}; // Optional
 
 		// Pipeline layout
+		FrameDependentData* frameZeroData = GetFDDAtIndex(0);
+		uint32_t numLayouts = static_cast<uint32_t>(frameZeroData->descriptorBundles.size());
+		std::vector<VkDescriptorSetLayout> layouts(numLayouts); // The number of layouts and bundles are equivalent...for now
+		for (uint32_t i = 0; i < numLayouts; i++)
+		{
+			layouts[i] = frameZeroData->descriptorBundles[i].GetDescriptorSetLayout()->GetLayout();
+		}
+
 		VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 		pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-		pipelineLayoutInfo.setLayoutCount = 1;
-		pipelineLayoutInfo.pSetLayouts = &(descriptorSetLayout.GetLayout());
+		pipelineLayoutInfo.setLayoutCount = numLayouts;
+		pipelineLayoutInfo.pSetLayouts = layouts.data();
 		pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
 		pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
 
@@ -1535,17 +1556,6 @@ namespace TANG
 		vkBindBufferMemory(logicalDevice, buffer, bufferMemory, 0);
 	}
 
-	void Renderer::CreateDescriptorSetLayout()
-	{
-		// TODO - SPLIT THESE, WE NEED TWO DESCRIPTOR SET LAYOUTS NOW
-		descriptorSetLayout.AddBinding(logicalDevice, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
-
-		// TODO - SPLIT THESE, WE NEED TWO DESCRIPTOR SET LAYOUTS NOW
-		descriptorSetLayout.AddBinding(logicalDevice, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
-		descriptorSetLayout.AddBinding(logicalDevice, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
-		descriptorSetLayout.Create(logicalDevice);
-	}
-
 	void Renderer::CreateUniformBuffers()
 	{
 		// Create the transform uniform buffer objects
@@ -1569,6 +1579,7 @@ namespace TANG
 			uniformBuffer.Create(physicalDevice, logicalDevice, viewProjUBOSize);
 			uniformBuffer.MapMemory(logicalDevice, viewProjUBOSize);
 		}
+
 	}
 
 	void Renderer::CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format,
@@ -1614,7 +1625,7 @@ namespace TANG
 	void Renderer::CreateTextureImage()
 	{
 		int width, height, channels;
-		stbi_uc* pixels = stbi_load("", &width, &height, &channels, STBI_rgb_alpha);
+		stbi_uc* pixels = stbi_load("../src/data/textures/texture.jpg", &width, &height, &channels, STBI_rgb_alpha);
 		if (pixels == nullptr)
 		{
 			TNG_ASSERT_MSG(false, "Failed to load texture!");
@@ -1661,12 +1672,35 @@ namespace TANG
 		descriptorPool.Create(logicalDevice, poolSizes.data(), static_cast<uint32_t>(poolSizes.size()), static_cast<uint32_t>(poolSizes.size()) * GetFDDSize());
 	}
 
-	void Renderer::CreateDescriptorSets()
+	void Renderer::CreateDescriptorBundles()
 	{
-		for (uint32_t i = 0; i < GetFDDSize(); i++)
+		const uint32_t numDescriptorBundles = 2;
+		uint32_t fddSize = GetFDDSize();
+
+		for (uint32_t i = 0; i < fddSize; i++)
 		{
-			GetFDDAtIndex(i)->descriptorSets.Create(logicalDevice, descriptorPool, descriptorSetLayout, 2);
+			FrameDependentData* frameData = GetFDDAtIndex(i);
+			frameData->descriptorBundles.resize(numDescriptorBundles);
+
+			// Set up and create the descriptor set layouts
+			auto& currentBundle = frameData->descriptorBundles;
+
+			// Holds ViewProjUBO + ImageSampler
+			currentBundle[0].GetDescriptorSetLayout()->AddBinding(logicalDevice, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
+			currentBundle[0].GetDescriptorSetLayout()->AddBinding(logicalDevice, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
+			currentBundle[0].GetDescriptorSetLayout()->Create(logicalDevice);
+
+			// Holds TransformUBO
+			currentBundle[1].GetDescriptorSetLayout()->AddBinding(logicalDevice, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
+			currentBundle[1].GetDescriptorSetLayout()->Create(logicalDevice);
+
+			// Create the descriptor sets
+			for (uint32_t j = 0; j < numDescriptorBundles; j++)
+			{
+				currentBundle[j].GetDescriptorSet()->Create(logicalDevice, descriptorPool, *currentBundle[j].GetDescriptorSetLayout());
+			}
 		}
+
 	}
 
 	VkImageView Renderer::CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels)
@@ -1766,8 +1800,15 @@ namespace TANG
 			bool shouldDraw = assetDrawStates[iter.uuid];
 			if (shouldDraw)
 			{
-				UpdateUniformBuffer(0, iter.transform);
-				secondaryCmdBuffers[secondaryCmdBufferCount++] = GetSecondaryCommandBufferAtIndex(frameBufferIndex, iter.uuid)->GetBuffer();
+				SecondaryCommandBuffer* secondaryCmdBuffer = GetSecondaryCommandBufferAtIndex(frameBufferIndex, iter.uuid);
+
+				UpdatePerFrameUniformBuffers(0, iter.transform);
+				UpdatePerFrameDescriptorSets();
+
+				secondaryCmdBuffer->Reset();
+				RecordSecondaryCommandBuffer(*secondaryCmdBuffer, &iter, frameBufferIndex);
+
+				secondaryCmdBuffers[secondaryCmdBufferCount++] = secondaryCmdBuffer->GetBuffer();
 			}
 		}
 
@@ -1784,7 +1825,13 @@ namespace TANG
 
 	void Renderer::RecordSecondaryCommandBuffer(SecondaryCommandBuffer& commandBuffer, AssetResources* resources, uint32_t frameBufferIndex)
 	{
-		DescriptorSets& descSets = GetCurrentFDD()->descriptorSets;
+		// Retrieve the vector of descriptor bundles for this current frame
+		auto& descBundles = GetCurrentFDD()->descriptorBundles;
+		std::vector<VkDescriptorSet> descSets(descBundles.size());
+		for (uint32_t i = 0; i < descBundles.size(); i++)
+		{
+			descSets[i] = descBundles[i].GetDescriptorSet()->GetDescriptorSet();
+		}
 
 		VkCommandBufferInheritanceInfo inheritanceInfo{};
 		inheritanceInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
@@ -1796,7 +1843,7 @@ namespace TANG
 		commandBuffer.BeginRecording(VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT | VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT, &inheritanceInfo);
 
 		commandBuffer.CMD_BindMesh(resources);
-		commandBuffer.CMD_BindDescriptorSets(pipelineLayout, descSets.GetDescriptorSetCount(), descSets.GetDescriptorSets().data());
+		commandBuffer.CMD_BindDescriptorSets(pipelineLayout, static_cast<uint32_t>(descSets.size()), descSets.data());
 		commandBuffer.CMD_BindGraphicsPipeline(graphicsPipeline);
 		commandBuffer.CMD_SetScissor({ 0, 0 }, swapChainExtent);
 		commandBuffer.CMD_SetViewport(static_cast<float>(swapChainExtent.width), static_cast<float>(swapChainExtent.height));
@@ -1874,11 +1921,38 @@ namespace TANG
 		vkDestroySwapchainKHR(logicalDevice, swapChain, nullptr);
 	}
 
-	void Renderer::UpdateUniformBuffer(float deltaTime, const Transform& transform)
+	void Renderer::UpdateInfrequentUniformBuffers(uint32_t frameIndex)
 	{
 		using namespace glm;
 
 		float aspectRatio = swapChainExtent.width / static_cast<float>(swapChainExtent.height);
+
+		// Construct the ViewProj UBO
+		ViewProjUBO viewProjUBO;
+		viewProjUBO.view = lookAt(vec3(0.0f, 2.0f, 5.0f), vec3(0.0f, 0.0f, 0.0f), vec3(0.0f, 1.0f, 0.0f));
+		viewProjUBO.proj = perspective(radians(45.0f), aspectRatio, 0.1f, 10.0f);
+
+		// NOTE - GLM was originally designed for OpenGL, where the Y coordinate of the clip coordinates is inverted
+		viewProjUBO.proj[1][1] *= -1;
+
+		GetFDDAtIndex(frameIndex)->viewProjUBO.UpdateData(&viewProjUBO, sizeof(ViewProjUBO));
+	}
+
+	void Renderer::UpdateInfrequentDescriptorSets(uint32_t frameIndex)
+	{
+		FrameDependentData* currentFDD = GetFDDAtIndex(frameIndex);
+		auto& currentBundle = currentFDD->descriptorBundles; // vector<DescriptorBundle>
+
+		// Update ViewProj / image sampler descriptor sets
+		WriteDescriptorSets writeDescSets{};
+		writeDescSets.AddUniformBuffer(currentBundle[0].GetDescriptorSet()->GetDescriptorSet(), 0, currentFDD->viewProjUBO.GetBuffer(), currentFDD->viewProjUBO.GetBufferSize());
+		writeDescSets.AddImageSampler(currentBundle[0].GetDescriptorSet()->GetDescriptorSet(), 1, textureImageView, textureSampler);
+		currentBundle[0].GetDescriptorSet()->Update(logicalDevice, writeDescSets);
+	}
+
+	void Renderer::UpdatePerFrameUniformBuffers(float deltaTime, const Transform& transform)
+	{
+		using namespace glm;
 
 		// Construct the transform UBO
 		TransformUBO transformUBO{};
@@ -1891,27 +1965,19 @@ namespace TANG
 		transformMat = scale(transformMat, transform.scale);
 
 		GetCurrentFDD()->transformUBO.UpdateData(&transformUBO, sizeof(TransformUBO));
-
-		// Construct the ViewProj UBO
-		ViewProjUBO viewProjUBO;
-		viewProjUBO.view = lookAt(vec3(0.0f, 2.0f, 5.0f), vec3(0.0f, 0.0f, 0.0f), vec3(0.0f, 1.0f, 0.0f));
-		viewProjUBO.proj = perspective(radians(45.0f), aspectRatio, 0.1f, 10.0f);
-
-		// NOTE - GLM was originally designed for OpenGL, where the Y coordinate of the clip coordinates is inverted
-		viewProjUBO.proj[1][1] *= -1;
-
-		GetCurrentFDD()->viewProjUBO.UpdateData(&viewProjUBO, sizeof(ViewProjUBO));
 	}
 
-	void Renderer::UpdateDescriptorSets()
+	void Renderer::UpdatePerFrameDescriptorSets()
 	{
 		FrameDependentData* currentFDD = GetCurrentFDD();
+		auto& currentBundle = currentFDD->descriptorBundles; // vector<DescriptorBundle>
 
-		WriteDescriptorSets writeDescSets{};
-		writeDescSets.AddUniformBuffer(currentFDD->descriptorSets.GetDescriptorSet(0), 0, currentFDD->viewProjUBO.GetBuffer(), currentFDD->viewProjUBO.GetBufferSize());
-		writeDescSets.AddUniformBuffer(currentFDD->descriptorSets.GetDescriptorSet(1), 0, currentFDD->transformUBO.GetBuffer(), currentFDD->transformUBO.GetBufferSize());
-		writeDescSets.AddColorImage(currentFDD->descriptorSets.GetDescriptorSet(1), 1, textureImageView, textureSampler);
-		currentFDD->descriptorSets.Update(logicalDevice, writeDescSets);
+		// Update transform descriptor sets
+		{
+			WriteDescriptorSets writeDescSets{};
+			writeDescSets.AddUniformBuffer(currentBundle[1].GetDescriptorSet()->GetDescriptorSet(), 0, currentFDD->transformUBO.GetBuffer(), currentFDD->transformUBO.GetBufferSize());
+			currentBundle[1].GetDescriptorSet()->Update(logicalDevice, writeDescSets);
+		}
 	}
 
 	VkCommandBuffer Renderer::BeginSingleTimeCommands(VkCommandPool pool)

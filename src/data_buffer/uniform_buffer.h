@@ -20,6 +20,7 @@ namespace TANG
 		void Destroy(VkDevice& logicalDevice) override;
 
 		void MapMemory(VkDevice& logicalDevice, VkDeviceSize bufferSize);
+		void UnMapMemory(VkDevice& logicalDevice);
 
 		void UpdateData(void* data, uint32_t numBytes);
 

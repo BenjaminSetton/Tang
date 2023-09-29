@@ -10,6 +10,7 @@ namespace TANG
 {
 	// Forward declaration
 	class DescriptorPool;
+	class DescriptorBundle;
 
 
 	// Encapsulates a descriptor set layout, as well as the functionality for adding bindings and creating the descriptor set layout itself
@@ -41,6 +42,8 @@ namespace TANG
 
 	private:
 
+		friend class DescriptorBundle;
+
 		VkDescriptorSetLayout setLayout;
 		std::unordered_map<uint32_t, VkDescriptorSetLayoutBinding> bindings;
 		SET_LAYOUT_STATE state;
@@ -60,7 +63,7 @@ namespace TANG
 		WriteDescriptorSets& operator=(const WriteDescriptorSets& other) = delete;
 
 		void AddUniformBuffer(VkDescriptorSet descriptorSet, uint32_t binding, VkBuffer buffer, VkDeviceSize bufferSize);
-		void AddColorImage(VkDescriptorSet descriptorSet, uint32_t binding, VkImageView imageView, VkSampler sampler);
+		void AddImageSampler(VkDescriptorSet descriptorSet, uint32_t binding, VkImageView imageView, VkSampler sampler);
 
 		uint32_t GetWriteDescriptorSetCount() const;
 		const VkWriteDescriptorSet* GetWriteDescriptorSets() const;
@@ -69,37 +72,65 @@ namespace TANG
 
 		std::vector<VkWriteDescriptorSet> writeDescriptorSets;
 
+		// Temporary memory, since a VkWriteDescriptorSet object requires a pointer to these structs
+		std::vector<VkDescriptorImageInfo> descriptorImageInfo;
+		std::vector<VkDescriptorBufferInfo> descriptorBufferInfo;
+
 	};
 
 	// All the components above must be used in one way or another to create and update the descriptor sets
-	class DescriptorSets
+	class DescriptorSet
 	{
 	public:
 
-		DescriptorSets();
-		~DescriptorSets();
-		DescriptorSets(const DescriptorSets& other);
-		DescriptorSets(DescriptorSets&& other) noexcept;
-		DescriptorSets& operator=(const DescriptorSets& other);
+		enum class DESCRIPTOR_SET_STATE
+		{
+			DEFAULT,
+			CREATED,
+			DESTROYED
+		};
 
-		void Create(VkDevice logicalDevice, DescriptorPool descriptorPool, DescriptorSetLayout setLayouts, uint32_t descriptorSetCount);
+		DescriptorSet();
+		~DescriptorSet();
+		DescriptorSet(const DescriptorSet& other);
+		DescriptorSet(DescriptorSet&& other) noexcept;
+		DescriptorSet& operator=(const DescriptorSet& other);
+
+		void Create(VkDevice logicalDevice, DescriptorPool& descriptorPool, DescriptorSetLayout& setLayouts);
 
 		void Update(VkDevice logicalDevice, WriteDescriptorSets& writeDescriptorSets);
 
-		void Destroy(VkDevice logicalDevice, DescriptorSetLayout setLayout);
+		void Destroy(VkDevice logicalDevice, DescriptorSetLayout& setLayout);
 
-		VkDescriptorSet GetDescriptorSet(uint32_t index) const;
-		uint32_t GetDescriptorSetCount() const;
-
-		std::vector<VkDescriptorSet>& GetDescriptorSets();
+		VkDescriptorSet GetDescriptorSet() const;
 
 	private:
 
-		std::vector<VkDescriptorSet> descriptorSets;
+		friend class DescriptorBundle;
 
-		// TODO - IMPLEMENT THIS
-		std::vector<VkDescriptorSetLayout> setLayouts;
+		VkDescriptorSet descriptorSet;
+		DESCRIPTOR_SET_STATE setState;
 
+	};
+
+	// Bundles up a descriptor set and the set layout that describes it
+	class DescriptorBundle
+	{
+	public:
+
+		DescriptorBundle();
+		~DescriptorBundle();
+		DescriptorBundle(const DescriptorBundle& other);
+		DescriptorBundle(DescriptorBundle&& other);
+		DescriptorBundle& operator=(const DescriptorBundle& other);
+
+		DescriptorSet* GetDescriptorSet();
+		DescriptorSetLayout* GetDescriptorSetLayout();
+
+	private:
+
+		DescriptorSet descSet;
+		DescriptorSetLayout setLayout;
 	};
 }
 

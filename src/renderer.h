@@ -173,8 +173,6 @@ namespace TANG
 
 		void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
 
-		void CreateDescriptorSetLayout();
-
 		void CreateUniformBuffers();
 
 		void CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format,
@@ -185,7 +183,7 @@ namespace TANG
 
 		void CreateDescriptorPool();
 
-		void CreateDescriptorSets();
+		void CreateDescriptorBundles();
 
 		VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels);
 
@@ -206,9 +204,14 @@ namespace TANG
 
 		void CleanupSwapChain();
 
-		void UpdateUniformBuffer(float deltaTime, const Transform& transform);
+		// Updates the uniform buffers and descriptor sets that need to be update very infrequently. In this case, the view/proj uniform buffers and descriptor sets.
+		// Note that this should also be called when the swap chain resizes!
+		void UpdateInfrequentUniformBuffers(uint32_t frameIndex);
+		void UpdateInfrequentDescriptorSets(uint32_t frameIndex);
 
-		void UpdateDescriptorSets();
+		// Updates the uniform buffers and descriptor sets that are updated at least once per frame
+		void UpdatePerFrameUniformBuffers(float deltaTime, const Transform& transform);
+		void UpdatePerFrameDescriptorSets();
 
 		VkCommandBuffer BeginSingleTimeCommands(VkCommandPool pool);
 
@@ -234,7 +237,7 @@ namespace TANG
 		PrimaryCommandBuffer* GetCurrentPrimaryBuffer();
 		SecondaryCommandBuffer* GetSecondaryCommandBufferAtIndex(uint32_t frameBufferIndex, UUID uuid);
 		VkFramebuffer GetFramebufferAtIndex(uint32_t frameBufferIndex);
-		DescriptorSets GetCurrentDescriptorSets();
+		DescriptorSet GetCurrentDescriptorSet();
 
 	private:
 
@@ -264,8 +267,8 @@ namespace TANG
 		////////////////////////////////////////////////////////////////////
 		struct FrameDependentData
 		{
-			// Stores all the descriptor sets for a given frame
-			DescriptorSets descriptorSets;
+			// Stores all the descriptor bundles (set and its layout) for a given frame
+			std::vector<DescriptorBundle> descriptorBundles;
 
 			// These two sets of UniformBuffer vector objects are sent to the shaders separately so that we can update them at different intervals
 			// For instance, the transform for an asset can be updated every frame, while the view/projection most likely won't change every frame
@@ -313,7 +316,6 @@ namespace TANG
 		std::vector<SwapChainImageDependentData> swapChainImageDependentData;
 
 		VkRenderPass renderPass;
-		DescriptorSetLayout descriptorSetLayout;
 		VkPipelineLayout pipelineLayout;
 
 		VkPipeline graphicsPipeline;

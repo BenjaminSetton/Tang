@@ -22,7 +22,7 @@ namespace TANG
 	{
 		if (state != SET_LAYOUT_STATE::DESTROYED)
 		{
-			LogError("Descriptor set layout destructor called but memory was not freed! Memory will be leaked");
+			LogError("Descriptor set layout destructor called but memory was not freed! Memory could be leaked");
 		}
 
 		setLayout = VK_NULL_HANDLE;
@@ -124,8 +124,6 @@ namespace TANG
 		return setLayout;
 	}
 
-
-
 	/////////////////////////////////////////////////////////////////////////////////////////
 	//
 	//		WRITE DESCRIPTOR SETS
@@ -139,29 +137,21 @@ namespace TANG
 
 	WriteDescriptorSets::~WriteDescriptorSets()
 	{
+		descriptorImageInfo.clear();
+		descriptorBufferInfo.clear();
 		writeDescriptorSets.clear();
 	}
 
-	//WriteDescriptorSets::WriteDescriptorSets(const WriteDescriptorSets& other)
-	//{
-	//	writeDescriptorSets = other.writeDescriptorSets;
-	//}
-
-	WriteDescriptorSets::WriteDescriptorSets(WriteDescriptorSets&& other)
+	WriteDescriptorSets::WriteDescriptorSets(WriteDescriptorSets&& other) : 
+		writeDescriptorSets(std::move(other.writeDescriptorSets)), descriptorBufferInfo(std::move(descriptorBufferInfo)), descriptorImageInfo(std::move(descriptorImageInfo))
 	{
-		writeDescriptorSets = std::move(other.writeDescriptorSets);
-
-		other.writeDescriptorSets.clear();
+		// Nothing to do here
 	}
-
-	//WriteDescriptorSets& WriteDescriptorSets::operator=(const WriteDescriptorSets& other)
-	//{
-	//	writeDescriptorSets = other.writeDescriptorSets;
-	//}
 
 	void WriteDescriptorSets::AddUniformBuffer(VkDescriptorSet descriptorSet, uint32_t binding, VkBuffer buffer, VkDeviceSize bufferSize)
 	{
-		VkDescriptorBufferInfo bufferInfo{};
+		descriptorBufferInfo.emplace_back(std::move(VkDescriptorBufferInfo()));
+		VkDescriptorBufferInfo& bufferInfo = descriptorBufferInfo.back();
 		bufferInfo.buffer = buffer;
 		bufferInfo.offset = 0;
 		bufferInfo.range = bufferSize;
@@ -178,9 +168,10 @@ namespace TANG
 		writeDescriptorSets.push_back(writeDescSet);
 	}
 
-	void WriteDescriptorSets::AddColorImage(VkDescriptorSet descriptorSet, uint32_t binding, VkImageView imageView, VkSampler sampler)
+	void WriteDescriptorSets::AddImageSampler(VkDescriptorSet descriptorSet, uint32_t binding, VkImageView imageView, VkSampler sampler)
 	{
-		VkDescriptorImageInfo imageInfo{};
+		descriptorImageInfo.emplace_back(std::move(VkDescriptorImageInfo()));
+		VkDescriptorImageInfo& imageInfo = descriptorImageInfo.back();
 		imageInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 		imageInfo.imageView = imageView;
 		imageInfo.sampler = sampler;
@@ -213,30 +204,41 @@ namespace TANG
 	//
 	/////////////////////////////////////////////////////////////////////////////////////////
 
-
-	DescriptorSets::DescriptorSets()
+	DescriptorSet::DescriptorSet() : descriptorSet(VK_NULL_HANDLE), setState(DESCRIPTOR_SET_STATE::DEFAULT)
 	{
 		// Nothing to do here
 	}
 
-	DescriptorSets::~DescriptorSets()
+	DescriptorSet::~DescriptorSet()
 	{
-		// Nothing to do here
+		if (setState != DESCRIPTOR_SET_STATE::DESTROYED)
+		{
+			LogWarning("Descriptor set object was destructed, but memory was not freed!");
+		}
+
+		LogInfo("Destructed descriptor set!");
 	}
 
-	DescriptorSets::DescriptorSets(const DescriptorSets& other)
+	DescriptorSet::DescriptorSet(const DescriptorSet& other)
 	{
-		descriptorSets = other.descriptorSets;
+		descriptorSet = other.descriptorSet;
+		setState = other.setState;
+
+		LogInfo("Copied descriptor set!");
 	}
 
-	DescriptorSets::DescriptorSets(DescriptorSets&& other) noexcept
+	DescriptorSet::DescriptorSet(DescriptorSet&& other) noexcept
 	{
-		descriptorSets = other.descriptorSets;
+		descriptorSet = other.descriptorSet;
+		setState = other.setState;
 
-		other.descriptorSets.clear();
+		other.descriptorSet = VK_NULL_HANDLE;
+		other.setState = DESCRIPTOR_SET_STATE::DEFAULT; // Maybe we should make a MOVED state?
+
+		LogInfo("Moved descriptor set!");
 	}
 
-	DescriptorSets& DescriptorSets::operator=(const DescriptorSets& other)
+	DescriptorSet& DescriptorSet::operator=(const DescriptorSet& other)
 	{
 		// Protect against self-assignment
 		if (this == &other)
@@ -244,62 +246,116 @@ namespace TANG
 			return *this;
 		}
 
-		descriptorSets = other.descriptorSets;
+		descriptorSet = other.descriptorSet;
+		setState = other.setState;
+
+		LogInfo("Copy-assigned descriptor set!");
 
 		return *this;
 	}
 
-	void DescriptorSets::Create(VkDevice logicalDevice, DescriptorPool descriptorPool, DescriptorSetLayout setLayout, uint32_t descriptorSetCount)
+	void DescriptorSet::Create(VkDevice logicalDevice, DescriptorPool& descriptorPool, DescriptorSetLayout& setLayout)
 	{
-		std::vector<VkDescriptorSetLayout> setLayouts(descriptorSetCount, setLayout.GetLayout());
+		if (setState == DESCRIPTOR_SET_STATE::CREATED)
+		{
+			LogWarning("Attempted to create the same descriptor set more than once!");
+			return;
+		}
 
 		VkDescriptorSetAllocateInfo allocInfo{};
 		allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 		allocInfo.descriptorPool = descriptorPool.GetPool();
-		allocInfo.descriptorSetCount = descriptorSetCount;
-		allocInfo.pSetLayouts = setLayouts.data();
+		allocInfo.descriptorSetCount = 1;
+		allocInfo.pSetLayouts = &setLayout.GetLayout();
 
-		descriptorSets.resize(descriptorSetCount);
-		if (vkAllocateDescriptorSets(logicalDevice, &allocInfo, descriptorSets.data()) != VK_SUCCESS)
+		if (vkAllocateDescriptorSets(logicalDevice, &allocInfo, &descriptorSet) != VK_SUCCESS)
 		{
 			TNG_ASSERT_MSG(false, "Failed to allocate descriptor sets!");
 		}
+
+		setState = DESCRIPTOR_SET_STATE::CREATED;
 	}
 
-	void DescriptorSets::Update(VkDevice logicalDevice, WriteDescriptorSets& writeDescriptorSets)
+	void DescriptorSet::Update(VkDevice logicalDevice, WriteDescriptorSets& writeDescriptorSets)
 	{
+		if (setState != DESCRIPTOR_SET_STATE::CREATED)
+		{
+			LogError("Cannot update a descriptor set that has not been created or has already been destroyed! Bailing...");
+			return;
+		}
+
 		uint32_t numWriteDescriptorSets = writeDescriptorSets.GetWriteDescriptorSetCount();
-		TNG_ASSERT_MSG(descriptorSets.size() == numWriteDescriptorSets, "Size mismatch between descriptor sets and write descriptor sets!");
 
-		for (uint32_t i = 0; i < descriptorSets.size(); i++)
-		{
-			vkUpdateDescriptorSets(logicalDevice, writeDescriptorSets.GetWriteDescriptorSetCount(), writeDescriptorSets.GetWriteDescriptorSets(), 0, nullptr);
-		}
+		vkUpdateDescriptorSets(logicalDevice, numWriteDescriptorSets, writeDescriptorSets.GetWriteDescriptorSets(), 0, nullptr);
 	}
 
-	void DescriptorSets::Destroy(VkDevice logicalDevice, DescriptorSetLayout setLayout)
+	void DescriptorSet::Destroy(VkDevice logicalDevice, DescriptorSetLayout& setLayout)
 	{
+		if (setState == DESCRIPTOR_SET_STATE::DESTROYED)
+		{
+			LogError("Attempted to destroy descriptor set object more than once! Bailing...");
+			return;
+		}
+
 		vkDestroyDescriptorSetLayout(logicalDevice, setLayout.GetLayout(), nullptr);
+
+		setState = DESCRIPTOR_SET_STATE::DESTROYED;
 	}
 
-	VkDescriptorSet DescriptorSets::GetDescriptorSet(uint32_t index) const
+	VkDescriptorSet DescriptorSet::GetDescriptorSet() const
 	{
-		if (index < 0 || index >= descriptorSets.size())
+		return descriptorSet;
+	}
+
+	/////////////////////////////////////////////////////////////////////////////////////////
+	//
+	//		DESCRIPTOR BUNDLE
+	//
+	/////////////////////////////////////////////////////////////////////////////////////////
+
+	DescriptorBundle::DescriptorBundle() : descSet(DescriptorSet()), setLayout(DescriptorSetLayout())
+	{
+		// Nothing to do here
+	}
+
+	DescriptorBundle::~DescriptorBundle()
+	{
+		// Nothing to do here
+	}
+
+	DescriptorBundle::DescriptorBundle(const DescriptorBundle& other) : descSet(other.descSet), setLayout(other.setLayout)
+	{
+		// Nothing to do here
+	}
+
+	DescriptorBundle::DescriptorBundle(DescriptorBundle&& other) : descSet(std::move(other.descSet)), setLayout(std::move(other.setLayout))
+	{
+		// Remove handles in other object. We need to mark this class as their friend so we can properly remove their handles
+		other.descSet.descriptorSet = VK_NULL_HANDLE;
+		other.setLayout.setLayout = VK_NULL_HANDLE;
+	}
+
+	DescriptorBundle& DescriptorBundle::operator=(const DescriptorBundle& other)
+	{
+		// Protect against self-assignment
+		if (this == &other)
 		{
-			LogError("Invalid descriptor set index");
-			return VK_NULL_HANDLE;
+			return *this;
 		}
 
-		return descriptorSets[index];
+		descSet = other.descSet;
+		setLayout = other.setLayout;
+
+		return *this;
 	}
 
-	uint32_t DescriptorSets::GetDescriptorSetCount() const
+	DescriptorSet* DescriptorBundle::GetDescriptorSet()
 	{
-		return static_cast<uint32_t>(descriptorSets.size());
+		return &descSet;
 	}
 
-	std::vector<VkDescriptorSet>& DescriptorSets::GetDescriptorSets()
+	DescriptorSetLayout* DescriptorBundle::GetDescriptorSetLayout()
 	{
-		return descriptorSets;
+		return &setLayout;
 	}
 }
