@@ -8,6 +8,11 @@ namespace TANG
 {
 	static Renderer rendererHandle;
 
+	///////////////////////////////////////////////////////////
+	//
+	//		CORE
+	// 
+	///////////////////////////////////////////////////////////
 	void Initialize()
 	{
 		rendererHandle.Initialize();
@@ -29,7 +34,11 @@ namespace TANG
 		rendererHandle.Shutdown();
 	}
 
-	// STATE CALLS
+	///////////////////////////////////////////////////////////
+	//
+	//		STATE
+	// 
+	///////////////////////////////////////////////////////////
 	bool WindowShouldClose()
 	{
 		// NOTE - This is definitely going to move to a separate Window class at some point...
@@ -38,37 +47,55 @@ namespace TANG
 		return rendererHandle.WindowShouldClose();
 	}
 
-	bool LoadAsset(const char* name)
+	UUID LoadAsset(const char* filepath)
 	{
-		AssetDisk* asset = LoaderUtils::Load(name);
+		AssetDisk* asset = LoaderUtils::Load(filepath);
 		// If Load() returns nullptr, we know it didn't allocate memory on the heap, so no need to de-allocate anything here
 		if (asset == nullptr)
 		{
-			LogError("Failed to load asset '%s'", name);
-			return false;
+			LogError("Failed to load asset '%s'", filepath);
+			return INVALID_UUID;
 		}
 
 		AssetResources* resources = rendererHandle.CreateAssetResources(asset);
 		if (resources == nullptr)
 		{
-			LogError("Failed to create asset resources for asset '%s'", name);
-			return false;
+			LogError("Failed to create asset resources for asset '%s'", filepath);
+			return INVALID_UUID;
 		}
 
 		rendererHandle.CreateAssetCommandBuffer(resources);
 
-		return true;
+		return asset->uuid;
 	}
 
-	// UPDATE CALLS
-	void ShowAsset(const char* name)
+	///////////////////////////////////////////////////////////
+	//
+	//		UPDATE
+	// 
+	///////////////////////////////////////////////////////////
+	void RenderAsset(UUID uuid)
 	{
-		AssetContainer& container = AssetContainer::GetInstance();
-		AssetDisk* asset = container.GetAsset(name);
-		if (asset == nullptr) return;
-
-		rendererHandle.SetAssetDrawState(asset->uuid);
+		rendererHandle.SetAssetDrawState(uuid);
 	}
 
+	void UpdateAssetTransform(UUID uuid, float* position, float* rotation, float* scale)
+	{
+		TNG_ASSERT_TODO()
+	}
 
+	void UpdateAssetPosition(UUID uuid, float* position)
+	{
+		TNG_ASSERT_TODO()
+	}
+
+	void UpdateAssetRotation(UUID uuid, float* rotation)
+	{
+		TNG_ASSERT_TODO()
+	}
+
+	void UpdateAssetScale(UUID uuid, float* scale)
+	{
+		TNG_ASSERT_TODO()
+	}
 }

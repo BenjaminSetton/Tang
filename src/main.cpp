@@ -19,17 +19,23 @@ int main(uint32_t argc, const char** argv)
 
     TANG::Initialize();
 
+    std::vector<TANG::UUID> assetIDs;
+
     for (auto& assetName : assets)
     {
-        TANG::LoadAsset(assetName.c_str());
+        TANG::UUID id = TANG::LoadAsset(assetName.c_str());
+        if (id != TANG::INVALID_UUID)
+        {
+            assetIDs.push_back(id);
+        }
     }
 
     uint64_t frameCount = 0;
     while (!TANG::WindowShouldClose())
     {
-		for (auto& assetName : assets)
+		for (auto& id : assetIDs)
 		{
-            TANG::ShowAsset(assetName.c_str());
+            TANG::RenderAsset(id);
 		}
         
         TANG::Update(0);
