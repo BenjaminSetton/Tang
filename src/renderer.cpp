@@ -194,6 +194,14 @@ namespace TANG
 	// up with the Transform struct inside asset_types.h
 	struct TransformUBO
 	{
+		TransformUBO() : transform(glm::identity<glm::mat4>())
+		{
+		}
+
+		TransformUBO(glm::mat4 trans) : transform(trans)
+		{
+		}
+
 		glm::mat4 transform;
 	};
 
@@ -314,7 +322,10 @@ namespace TANG
 			SecondaryCommandBuffer& commandBuffer = secondaryCmdBufferMap[assetID];
 			commandBuffer.Create(logicalDevice, commandPools[GRAPHICS_QUEUE]);
 
-			RecordSecondaryCommandBuffer(commandBuffer, resources, i);
+			//UpdatePerFrameUniformBuffers(0, resources->transform);
+			//UpdatePerFrameDescriptorSets();
+
+			//RecordSecondaryCommandBuffer(commandBuffer, resources, i);
 		}
 	}
 
@@ -1946,7 +1957,8 @@ namespace TANG
 		// Update ViewProj / image sampler descriptor sets
 		WriteDescriptorSets writeDescSets{};
 		writeDescSets.AddUniformBuffer(currentBundle[0].GetDescriptorSet()->GetDescriptorSet(), 0, currentFDD->viewProjUBO.GetBuffer(), currentFDD->viewProjUBO.GetBufferSize());
-		writeDescSets.AddImageSampler(currentBundle[0].GetDescriptorSet()->GetDescriptorSet(), 1, textureImageView, textureSampler);
+		//writeDescSets.AddImageSampler(currentBundle[0].GetDescriptorSet()->GetDescriptorSet(), 1, textureImageView, textureSampler);
+		//TransitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_UINT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 1);
 		currentBundle[0].GetDescriptorSet()->Update(logicalDevice, writeDescSets);
 	}
 
@@ -1955,16 +1967,14 @@ namespace TANG
 		using namespace glm;
 
 		// Construct the transform UBO
-		TransformUBO transformUBO{};
+		TransformUBO tempUBO{};
 
-		mat4 transformMat = identity<mat4>();
-
-		transformMat = translate(transformMat, transform.pos);
+		tempUBO.transform = translate(tempUBO.transform, transform.pos);
 		mat4 rotationMat = eulerAngleXYZ(transform.rotation.x, transform.rotation.y, transform.rotation.z);
-		transformMat = transformMat * rotationMat; // NOTE - Is this the correct order?
-		transformMat = scale(transformMat, transform.scale);
+		tempUBO.transform = tempUBO.transform * rotationMat; // NOTE - Is this the correct order?
+		tempUBO.transform = scale(tempUBO.transform, transform.scale);
 
-		GetCurrentFDD()->transformUBO.UpdateData(&transformUBO, sizeof(TransformUBO));
+		GetCurrentFDD()->transformUBO.UpdateData(&tempUBO, sizeof(TransformUBO));
 	}
 
 	void Renderer::UpdatePerFrameDescriptorSets()

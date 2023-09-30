@@ -16,6 +16,10 @@ namespace TANG
 {
 	struct Transform
 	{
+		Transform() : pos(0), rotation(0), scale(1)
+		{
+		}
+
 		glm::vec3 pos;
 		glm::vec3 rotation;
 		glm::vec3 scale;
