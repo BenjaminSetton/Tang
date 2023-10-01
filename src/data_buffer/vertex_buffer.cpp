@@ -1,4 +1,7 @@
 
+#include <string.h> // memcpy
+#include <utility> // numeric_limits
+
 #include "vertex_buffer.h"
 #include "../utils/logger.h"
 
@@ -82,20 +85,20 @@ namespace TANG
 		stagingBufferMemory = VK_NULL_HANDLE;
 	}
 
-	void VertexBuffer::CopyData(VkDevice& logicalDevice, VkCommandBuffer& commandBuffer, void* data, VkDeviceSize bufferSize)
+	void VertexBuffer::CopyData(VkDevice& logicalDevice, VkCommandBuffer& commandBuffer, void* data, VkDeviceSize size)
 	{
 		// Map the memory
 		void* bufferPtr;
-		VkResult res = vkMapMemory(logicalDevice, stagingBufferMemory, 0, bufferSize, 0, &bufferPtr);
+		VkResult res = vkMapMemory(logicalDevice, stagingBufferMemory, 0, size, 0, &bufferPtr);
 		if (res != VK_SUCCESS)
 		{
 			LogError("Failed to map memory for staging buffer!");
 		}
-		memcpy(bufferPtr, data, bufferSize);
+		memcpy(bufferPtr, data, size);
 		vkUnmapMemory(logicalDevice, stagingBufferMemory);
 
 		// Copy the data from the staging buffer into the vertex buffer
-		CopyFromBuffer(commandBuffer, stagingBuffer, buffer, bufferSize);
+		CopyFromBuffer(commandBuffer, stagingBuffer, buffer, size);
 
 		bufferState = BUFFER_STATE::MAPPED;
 	}

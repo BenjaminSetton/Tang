@@ -21,7 +21,7 @@ namespace TANG
 
 		void DestroyIntermediateBuffers(VkDevice logicalDevice);
 
-		void CopyData(VkDevice& logicalDevice, VkCommandBuffer& commandBuffer, void* data, VkDeviceSize bufferSize);
+		void CopyData(VkDevice& logicalDevice, VkCommandBuffer& commandBuffer, void* data, VkDeviceSize size);
 
 	private:
 

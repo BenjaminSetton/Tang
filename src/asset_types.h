@@ -16,11 +16,16 @@ namespace TANG
 {
 	struct Transform
 	{
-		Transform() : pos(0), rotation(0), scale(1)
+		Transform() : position(0), rotation(0), scale(1)
 		{
 		}
 
-		glm::vec3 pos;
+		Transform(glm::vec3 _position, glm::vec3 _rotation, glm::vec3 _scale) :
+			position(_position), rotation(_rotation), scale(_scale)
+		{
+		}
+
+		glm::vec3 position;
 		glm::vec3 rotation;
 		glm::vec3 scale;
 	};
@@ -115,7 +120,11 @@ namespace TANG
 		std::vector<uint32_t> offsets;				// Describes the offsets into a single combined buffer of vertex buffers, and the length of the offsets vector must match that of the vertex buffer vector!
 		IndexBuffer indexBuffer;
 		uint64_t indexCount = 0;					// Used when calling vkCmdDrawIndexed
-		Transform transform;						// Stores all the transform properties of the asset
+
+		// TODO - Convert AssetResources into a structure of arrays, rather than an array of structs.
+		//        The two members below are unordered_maps, accessed by the Asset's UUID.
+		//Transform transform;						// Stores all the transform properties of the asset
+		//bool show;								// Renders the asset the current frame, if set to true
 	};
 }
 

@@ -74,25 +74,27 @@ namespace TANG
 	// 
 	///////////////////////////////////////////////////////////
 
-	// Renders an asset given it's UUID. This function will not do anything on the following
+	// Renders an asset given it's UUID for this particular frame. This function will not do anything on the following
 	// cases:
 	// 1. The UUID points to an asset internally that does not exist
 	// 2. The UUID is invalid (refer to INVALID_UUID inside uuid.h)
-	void RenderAsset(UUID uuid);
+	void ShowAsset(UUID uuid);
 
 	// Update the transform of the asset represented by the provided UUID. 
 	// NOTE - The position, rotation and scale parameters MUST be vectors with exactly three components
 	void UpdateAssetTransform(UUID uuid, float* position, float* rotation, float* scale);
 
-	// Update the position of the asset represented by the provided UUID
+	// Update the position of the asset represented by the provided UUID.
 	// NOTE - The position parameter MUST be a vector with exactly three components
 	void UpdateAssetPosition(UUID uuid, float* position);
 
-	// Update the rotation of the asset represented by the provided UUID
+	// Update the rotation of the asset represented by the provided UUID.
+	// If the given rotation is in degrees it must be specified using the "isDegrees" parameter,
+	// a value of false is interpreted as a rotation in radians instead.
 	// NOTE - The rotation parameter MUST be a vector with exactly three components
-	void UpdateAssetRotation(UUID uuid, float* rotation);
+	void UpdateAssetRotation(UUID uuid, float* rotation, bool isRadians);
 
-	// Update the scale of the asset represented by the provided UUID
+	// Update the scale of the asset represented by the provided UUID.
 	// NOTE - The scale parameter MUST be a vector with exactly three components
 	void UpdateAssetScale(UUID uuid, float* scale);
 

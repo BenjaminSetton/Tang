@@ -1,6 +1,10 @@
 
 #include "renderer.h"
 
+// DISABLE WARNINGS FROM GLM AND STB_IMAGE DEPENDENCIES
+#pragma warning( push )
+#pragma warning( disable : 4201 4244)
+
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #define GLM_FORCE_ALIGNED_GENTYPES
@@ -13,6 +17,8 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
+
+#pragma warning( pop ) 
 
 #include <array>
 #include <algorithm>
@@ -34,6 +40,7 @@
 static constexpr uint32_t WINDOW_WIDTH = 1920;
 static constexpr uint32_t WINDOW_HEIGHT = 1080;
 static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
+static constexpr uint32_t MAX_ASSET_COUNT = 100;
 
 static std::vector<const char*> validationLayers = {
 	"VK_LAYER_KHRONOS_validation"
@@ -112,6 +119,10 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
 	void* pUserData
 )
 {
+	UNUSED(pUserData);
+	UNUSED(messageType);
+	UNUSED(messageSeverity);
+
 	std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl;
 
 	return VK_FALSE;
@@ -213,10 +224,12 @@ namespace TANG
 
 	void Renderer::Update(float* deltaTime)
 	{
-		static auto startTime = std::chrono::high_resolution_clock::now();
+		UNUSED(deltaTime);
+
+		/*static auto startTime = std::chrono::high_resolution_clock::now();
 
 		float elapsedTime = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - startTime).count();
-		float dt = deltaTime == nullptr ? elapsedTime : *deltaTime;
+		float dt = deltaTime == nullptr ? elapsedTime : *deltaTime;*/
 
 		glfwPollEvents();
 
@@ -296,6 +309,7 @@ namespace TANG
 		// Insert the asset's uuid into the assetDrawState map. We do not render it
 		// upon insertion by default
 		assetDrawStates.insert({ asset->uuid, false });
+		assetTransforms.insert({ asset->uuid, Transform() });
 
 		resources.indexCount = totalIndexCount;
 		resources.uuid = asset->uuid;
@@ -364,8 +378,9 @@ namespace TANG
 
 			if (resources.uuid == asset->uuid)
 			{
-				// Remove this assets' entry from the assetDrawState container
+				// Remove draw state and transform references
 				assetDrawStates.erase(asset->uuid);
+				assetTransforms.erase(asset->uuid);
 
 				DestroyAssetBuffersHelper(resources);
 
@@ -386,8 +401,9 @@ namespace TANG
 
 		assetResources.clear();
 
-		// Clear the asset draw states
+		// Clear all asset draw states and transforms
 		assetDrawStates.clear();
+		assetTransforms.clear();
 	}
 
 	bool Renderer::WindowShouldClose()
@@ -419,16 +435,27 @@ namespace TANG
 		assetDrawStates[uuid] = true;
 	}
 
-	bool Renderer::GetAssetDrawState(UUID uuid)
+	void Renderer::SetAssetTransform(UUID uuid, Transform& transform)
 	{
-		auto iter = assetDrawStates.find(uuid);
-		if (iter == assetDrawStates.end())
-		{
-			TNG_ASSERT_MSG(false, "Attempted to get asset draw state, but none could be found in the map!");
-			return false;
-		}
+		assetTransforms[uuid] = transform;
+	}
 
-		return iter->second;
+	void Renderer::SetAssetPosition(UUID uuid, glm::vec3& position)
+	{
+		Transform& transform = assetTransforms[uuid];
+		transform.position = position;
+	}
+
+	void Renderer::SetAssetRotation(UUID uuid, glm::vec3& rotation)
+	{
+		Transform& transform = assetTransforms[uuid];
+		transform.rotation = rotation;
+	}
+
+	void Renderer::SetAssetScale(UUID uuid, glm::vec3& scale)
+	{
+		Transform& transform = assetTransforms[uuid];
+		transform.scale = scale;
 	}
 
 	void Renderer::InitWindow()
@@ -500,13 +527,13 @@ namespace TANG
 
 		for (uint32_t i = 0; i < GetFDDSize(); i++)
 		{
-			FrameDependentData* currentFrame = GetFDDAtIndex(i);
-			for (uint32_t j = 0; j < currentFrame->descriptorBundles.size(); j++)
+			FrameDependentData* currentFDD = GetFDDAtIndex(i);
+			for (uint32_t j = 0; j < currentFDD->descriptorBundles.size(); j++)
 			{
-				DescriptorBundle& currentDescriptorBundle = currentFrame->descriptorBundles[j];
+				DescriptorBundle& currentDescriptorBundle = currentFDD->descriptorBundles[j];
 
-				// Destroy the descriptor sets and descriptor set layout
-				currentDescriptorBundle.GetDescriptorSet()->Destroy(logicalDevice, *currentDescriptorBundle.GetDescriptorSetLayout());
+				// Destroy the descriptor set layout, the descriptor set will automatically be freed when the descriptor pool is destroyed
+				//currentDescriptorBundle.GetDescriptorSet()->Destroy(logicalDevice, *currentDescriptorBundle.GetDescriptorSetLayout());
 				currentDescriptorBundle.GetDescriptorSetLayout()->Destroy(logicalDevice);
 			}
 		}
@@ -556,11 +583,11 @@ namespace TANG
 
 		FrameDependentData* currentFDD = GetCurrentFDD();
 
-		vkWaitForFences(logicalDevice, 1, &GetCurrentFDD()->inFlightFence, VK_TRUE, UINT64_MAX);
+		vkWaitForFences(logicalDevice, 1, &currentFDD->inFlightFence, VK_TRUE, UINT64_MAX);
 
 		uint32_t imageIndex;
 		result = vkAcquireNextImageKHR(logicalDevice, swapChain, UINT64_MAX,
-			GetCurrentFDD()->imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+			currentFDD->imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
 
 		if (result == VK_ERROR_OUT_OF_DATE_KHR)
 		{
@@ -573,7 +600,7 @@ namespace TANG
 		}
 
 		// Only reset the fence if we're submitting work, otherwise we might deadlock
-		vkResetFences(logicalDevice, 1, &GetCurrentFDD()->inFlightFence);
+		vkResetFences(logicalDevice, 1, &(currentFDD->inFlightFence));
 
 		///////////////////////////////////////
 		// 
@@ -583,7 +610,7 @@ namespace TANG
 		RecordPrimaryCommandBuffer(imageIndex);
 
 		VkCommandBuffer commandBuffers[] = { GetCurrentPrimaryBuffer()->GetBuffer() };
-		VkSemaphore waitSemaphores[] = { GetCurrentFDD()->imageAvailableSemaphore };
+		VkSemaphore waitSemaphores[] = { currentFDD->imageAvailableSemaphore };
 
 		VkSubmitInfo submitInfo{};
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -594,11 +621,11 @@ namespace TANG
 		submitInfo.commandBufferCount = 1;
 		submitInfo.pCommandBuffers = commandBuffers;
 
-		VkSemaphore signalSemaphores[] = { GetCurrentFDD()->renderFinishedSemaphore };
+		VkSemaphore signalSemaphores[] = { currentFDD->renderFinishedSemaphore };
 		submitInfo.signalSemaphoreCount = 1;
 		submitInfo.pSignalSemaphores = signalSemaphores;
 
-		if (vkQueueSubmit(queues[GRAPHICS_QUEUE], 1, &submitInfo, GetCurrentFDD()->inFlightFence) != VK_SUCCESS)
+		if (vkQueueSubmit(queues[GRAPHICS_QUEUE], 1, &submitInfo, currentFDD->inFlightFence) != VK_SUCCESS)
 		{
 			TNG_ASSERT_MSG(false, "Failed to submit draw command buffer!");
 			return;
@@ -842,8 +869,8 @@ namespace TANG
 		std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
 		vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
 
-		int32_t graphicsTransferQueue = -1;
-		int i = 0;
+		uint32_t graphicsTransferQueue = std::numeric_limits<uint32_t>::max();
+		uint32_t i = 0;
 		for (const auto& queueFamily : queueFamilies)
 		{
 			// Check that the device supports a graphics queue
@@ -882,7 +909,7 @@ namespace TANG
 
 		// If we couldn't find a different queue for the TRANSFER and GRAPHICS operations, then simply
 		// use the same queue for both (if it supports TRANSFER operations)
-		if (!indices.IsValid(TRANSFER_QUEUE) && graphicsTransferQueue != -1)
+		if (!indices.IsValid(TRANSFER_QUEUE) && graphicsTransferQueue != std::numeric_limits<uint32_t>::max())
 		{
 			indices.queueFamilies[TRANSFER_QUEUE] = graphicsTransferQueue;
 		}
@@ -1642,7 +1669,7 @@ namespace TANG
 			TNG_ASSERT_MSG(false, "Failed to load texture!");
 		}
 
-		mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1;
+		textureMipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1;
 
 		VkDeviceSize imageSize = width * height * 4;
 		VkBuffer stagingBuffer;
@@ -1657,13 +1684,13 @@ namespace TANG
 		// Now that we've copied over the texture data to the staging buffer, we don't need the original pixels array anymore
 		stbi_image_free(pixels);
 
-		CreateImage(width, height, mipLevels, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,
+		CreateImage(width, height, textureMipLevels, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,
 			VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 			textureImage, textureImageMemory);
 
-		TransitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, mipLevels);
+		TransitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, textureMipLevels);
 		CopyBufferToImage(stagingBuffer, textureImage, static_cast<uint32_t>(width), static_cast<uint32_t>(height));
-		GenerateMipmaps(textureImage, VK_FORMAT_R8G8B8A8_SRGB, width, height, mipLevels);
+		GenerateMipmaps(textureImage, VK_FORMAT_R8G8B8A8_SRGB, width, height, textureMipLevels);
 
 		vkDestroyBuffer(logicalDevice, stagingBuffer, nullptr);
 		vkFreeMemory(logicalDevice, stagingBufferMemory, nullptr);
@@ -1671,6 +1698,14 @@ namespace TANG
 
 	void Renderer::CreateDescriptorPool()
 	{
+		// We will create a descriptor pool that can allocate a large number of descriptor sets using the following logic:
+		// Since we have to allocate a descriptor set for every unique asset (not sure if this is the correct way, to be honest)
+		// and for every frame in flight, we'll set a maximum number of assets (100) and multiply that by the max number of frames
+		// in flight
+		// TODO - Once I learn how to properly set a different transform for every asset, this will probably have to change...I just
+		//        don't know what I'm doing.
+		const uint32_t fddSize = GetFDDSize();
+
 		const uint32_t numUniformBuffers = 2;
 		const uint32_t numImageSamplers = 1;
 
@@ -1680,7 +1715,7 @@ namespace TANG
 		poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 		poolSizes[1].descriptorCount = numImageSamplers * GetFDDSize();
 
-		descriptorPool.Create(logicalDevice, poolSizes.data(), static_cast<uint32_t>(poolSizes.size()), static_cast<uint32_t>(poolSizes.size()) * GetFDDSize());
+		descriptorPool.Create(logicalDevice, poolSizes.data(), static_cast<uint32_t>(poolSizes.size()), static_cast<uint32_t>(poolSizes.size()) * fddSize * MAX_ASSET_COUNT);
 	}
 
 	void Renderer::CreateDescriptorBundles()
@@ -1697,12 +1732,12 @@ namespace TANG
 			auto& currentBundle = frameData->descriptorBundles;
 
 			// Holds ViewProjUBO + ImageSampler
-			currentBundle[0].GetDescriptorSetLayout()->AddBinding(logicalDevice, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
-			currentBundle[0].GetDescriptorSetLayout()->AddBinding(logicalDevice, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
+			currentBundle[0].GetDescriptorSetLayout()->AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
+			currentBundle[0].GetDescriptorSetLayout()->AddBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
 			currentBundle[0].GetDescriptorSetLayout()->Create(logicalDevice);
 
 			// Holds TransformUBO
-			currentBundle[1].GetDescriptorSetLayout()->AddBinding(logicalDevice, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
+			currentBundle[1].GetDescriptorSetLayout()->AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
 			currentBundle[1].GetDescriptorSetLayout()->Create(logicalDevice);
 
 			// Create the descriptor sets
@@ -1738,7 +1773,7 @@ namespace TANG
 
 	void Renderer::CreateTextureImageView()
 	{
-		textureImageView = CreateImageView(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, mipLevels);
+		textureImageView = CreateImageView(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, textureMipLevels);
 	}
 
 	void Renderer::CreateTextureSampler()
@@ -1762,7 +1797,7 @@ namespace TANG
 		samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
 		samplerInfo.mipLodBias = 0.0f;
 		samplerInfo.minLod = 0.0f;
-		samplerInfo.maxLod = static_cast<float>(mipLevels);
+		samplerInfo.maxLod = static_cast<float>(textureMipLevels);
 
 		if (vkCreateSampler(logicalDevice, &samplerInfo, nullptr, &textureSampler) != VK_SUCCESS)
 		{
@@ -1813,7 +1848,7 @@ namespace TANG
 			{
 				SecondaryCommandBuffer* secondaryCmdBuffer = GetSecondaryCommandBufferAtIndex(frameBufferIndex, iter.uuid);
 
-				UpdatePerFrameUniformBuffers(0, iter.transform);
+				UpdatePerFrameUniformBuffers(assetTransforms[iter.uuid]);
 				UpdatePerFrameDescriptorSets();
 
 				secondaryCmdBuffer->Reset();
@@ -1940,8 +1975,8 @@ namespace TANG
 
 		// Construct the ViewProj UBO
 		ViewProjUBO viewProjUBO;
-		viewProjUBO.view = lookAt(vec3(0.0f, 2.0f, 5.0f), vec3(0.0f, 0.0f, 0.0f), vec3(0.0f, 1.0f, 0.0f));
-		viewProjUBO.proj = perspective(radians(45.0f), aspectRatio, 0.1f, 10.0f);
+		viewProjUBO.view = lookAt(vec3(0.0f, 5.0f, 10.0f), vec3(0.0f, 0.0f, 0.0f), vec3(0.0f, 1.0f, 0.0f));
+		viewProjUBO.proj = perspective(radians(45.0f), aspectRatio, 0.1f, 1000.0f);
 
 		// NOTE - GLM was originally designed for OpenGL, where the Y coordinate of the clip coordinates is inverted
 		viewProjUBO.proj[1][1] *= -1;
@@ -1962,14 +1997,14 @@ namespace TANG
 		currentBundle[0].GetDescriptorSet()->Update(logicalDevice, writeDescSets);
 	}
 
-	void Renderer::UpdatePerFrameUniformBuffers(float deltaTime, const Transform& transform)
+	void Renderer::UpdatePerFrameUniformBuffers(const Transform& transform)
 	{
 		using namespace glm;
 
 		// Construct the transform UBO
 		TransformUBO tempUBO{};
 
-		tempUBO.transform = translate(tempUBO.transform, transform.pos);
+		tempUBO.transform = translate(tempUBO.transform, transform.position);
 		mat4 rotationMat = eulerAngleXYZ(transform.rotation.x, transform.rotation.y, transform.rotation.z);
 		tempUBO.transform = tempUBO.transform * rotationMat; // NOTE - Is this the correct order?
 		tempUBO.transform = scale(tempUBO.transform, transform.scale);
@@ -2065,8 +2100,8 @@ namespace TANG
 		barrier.srcAccessMask = 0; // TODO
 		barrier.dstAccessMask = 0; // TODO
 
-		VkPipelineStageFlags sourceStage;
-		VkPipelineStageFlags destinationStage;
+		VkPipelineStageFlags sourceStage = VK_PIPELINE_STAGE_NONE;
+		VkPipelineStageFlags destinationStage = VK_PIPELINE_STAGE_NONE;
 
 		if (newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
 		{

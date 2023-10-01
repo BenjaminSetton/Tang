@@ -115,25 +115,25 @@ namespace TANG
 				mesh.indices.resize(faceCount * 3);
 
 				// Fill out the vertices from the imported mesh object
-				for (uint32_t i = 0; i < vertexCount; i++)
+				for (uint32_t j = 0; j < vertexCount; j++)
 				{
-					const aiVector3D& importedPos = importedMesh->mVertices[i];
-					const aiVector3D& importedNormal = importedMesh->mNormals[i];
-					const aiVector3D& importedUVs = importedMesh->HasTextureCoords(0) ? importedMesh->mTextureCoords[0][i] : aiVector3D(0, 0, 0);
+					const aiVector3D& importedPos = importedMesh->mVertices[j];
+					const aiVector3D& importedNormal = importedMesh->mNormals[j];
+					const aiVector3D& importedUVs = importedMesh->HasTextureCoords(0) ? importedMesh->mTextureCoords[0][j] : aiVector3D(0, 0, 0);
 
 					VertexType vertex{};
 					vertex.pos    = { importedPos.x, importedPos.y, importedPos.z };
 					vertex.normal = { importedNormal.x, importedNormal.y, importedNormal.z };
 					vertex.uv     = { importedUVs.x, importedUVs.y };
 
-					mesh.vertices[i] = vertex;
+					mesh.vertices[j] = vertex;
 				}
 
 				// Fill out the indices from the imported mesh object
-				for (uint32_t i = 0; i < faceCount; i++)
+				for (uint32_t j = 0; j < faceCount; j++)
 				{
-					uint32_t indexCount = i * 3;
-					const aiFace& importedFace = importedMesh->mFaces[i];
+					uint32_t indexCount = j * 3;
+					const aiFace& importedFace = importedMesh->mFaces[j];
 
 					mesh.indices[indexCount]     = importedFace.mIndices[0];
 					mesh.indices[indexCount + 1] = importedFace.mIndices[1];

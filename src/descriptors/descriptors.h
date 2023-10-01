@@ -33,7 +33,7 @@ namespace TANG
 		DescriptorSetLayout(DescriptorSetLayout&& other);
 		DescriptorSetLayout& operator=(const DescriptorSetLayout& other);
 
-		void AddBinding(VkDevice logicalDevice, uint32_t binding, VkDescriptorType descriptorType, VkShaderStageFlags stageFlags);
+		void AddBinding(uint32_t binding, VkDescriptorType descriptorType, VkShaderStageFlags stageFlags);
 
 		void Create(VkDevice logicalDevice);
 		void Destroy(VkDevice logicalDevice);
@@ -99,8 +99,6 @@ namespace TANG
 		void Create(VkDevice logicalDevice, DescriptorPool& descriptorPool, DescriptorSetLayout& setLayouts);
 
 		void Update(VkDevice logicalDevice, WriteDescriptorSets& writeDescriptorSets);
-
-		void Destroy(VkDevice logicalDevice, DescriptorSetLayout& setLayout);
 
 		VkDescriptorSet GetDescriptorSet() const;
 

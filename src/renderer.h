@@ -53,12 +53,19 @@ namespace TANG
 		// Releases all internal handles to Vulkan objects
 		void Shutdown();
 
-		// Helper functions for setting and retrieving the asset draw state of a particular asset.
-		// The asset draw state is cleared every frame, so SetAssetDrawState must be called on a
+		// Sets the draw state of the given asset to TRUE.
+		// The asset draw state is cleared every frame, so SetAssetDrawState() must be called on a
 		// per-frame basis to draw assets. In other words, assets will not be drawn unless SetAssetDrawState()
-		// is explicitly called that frame
+		// is explicitly called that frame.
+		// NOTE - No getter is defined on purpose, the data should only be received from the API and kept in the renderer
 		void SetAssetDrawState(UUID uuid);
-		bool GetAssetDrawState(UUID uuid);
+
+		// The following functions provide different ways of modifying the internal transform data of the provided asset
+		// NOTE - No getters are defined on purpose, the data should only be received from the API and kept in the renderer
+		void SetAssetTransform(UUID uuid, Transform& transform);
+		void SetAssetPosition(UUID uuid, glm::vec3& position);
+		void SetAssetRotation(UUID uuid, glm::vec3& rotation);
+		void SetAssetScale(UUID uuid, glm::vec3& scale);
 
 		// Loads an asset which implies grabbing the vertices and indices from the asset container
 		// and creating vertex/index buffers to contain them. It also includes creating all other
@@ -210,7 +217,7 @@ namespace TANG
 		void UpdateInfrequentDescriptorSets(uint32_t frameIndex);
 
 		// Updates the uniform buffers and descriptor sets that are updated at least once per frame
-		void UpdatePerFrameUniformBuffers(float deltaTime, const Transform& transform);
+		void UpdatePerFrameUniformBuffers(const Transform& transform);
 		void UpdatePerFrameDescriptorSets();
 
 		VkCommandBuffer BeginSingleTimeCommands(VkCommandPool pool);
@@ -237,7 +244,6 @@ namespace TANG
 		PrimaryCommandBuffer* GetCurrentPrimaryBuffer();
 		SecondaryCommandBuffer* GetSecondaryCommandBufferAtIndex(uint32_t frameBufferIndex, UUID uuid);
 		VkFramebuffer GetFramebufferAtIndex(uint32_t frameBufferIndex);
-		DescriptorSet GetCurrentDescriptorSet();
 
 	private:
 
@@ -322,9 +328,17 @@ namespace TANG
 
 		std::unordered_map<QueueType, VkCommandPool> commandPools;
 
-		// The two following maps represent the drawable state of an asset, given it's UUID. AssetDrawStates tells us whether the asset must
-		// be drawn this frame, and secondaryCommandBuffers holds a correspondence between an asset's UUID and it's generated secondary command buffer
+		// This map represents the drawable state of an asset given it's UUID. AssetDrawStates tells us whether the asset must
+		// be drawn this frame and is therefore dependent directly on the frame in flight we're currently on.
+		// NOTE - The size of this map exactly equals the number of loaded assets we have
 		std::unordered_map<UUID, bool> assetDrawStates;
+
+		// Stores the transform data for any asset given it's UUID
+		// NOTE - The API user must update and keep track of the transform data for the assets,
+		//        and pass it to the renderer every frame for drawing. The design decision behind
+		//        this is so we can own copy of the data, rather than holding a ton of pointers 
+		//        to data somewhere else which will probably be very slow
+		std::unordered_map<UUID, Transform> assetTransforms;
 
 		uint32_t currentFrame = 0;
 
@@ -332,7 +346,7 @@ namespace TANG
 
 		DescriptorPool descriptorPool;
 
-		uint32_t mipLevels;
+		uint32_t textureMipLevels;
 		VkImage textureImage;
 		VkDeviceMemory textureImageMemory;
 		VkImageView textureImageView;

@@ -64,9 +64,9 @@ namespace TANG
 		bufferState = BUFFER_STATE::DESTROYED;
 	}
 
-	void UniformBuffer::MapMemory(VkDevice& logicalDevice, VkDeviceSize bufferSize)
+	void UniformBuffer::MapMemory(VkDevice& logicalDevice, VkDeviceSize size)
 	{
-		vkMapMemory(logicalDevice, bufferMemory, 0, bufferSize, 0, &mappedData);
+		vkMapMemory(logicalDevice, bufferMemory, 0, size, 0, &mappedData);
 		bufferState = BUFFER_STATE::MAPPED;
 	}
 

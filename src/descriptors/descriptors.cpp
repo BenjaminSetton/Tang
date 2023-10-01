@@ -55,7 +55,7 @@ namespace TANG
 		return *this;
 	}
 
-	void DescriptorSetLayout::AddBinding(VkDevice logicalDevice, uint32_t binding, VkDescriptorType descriptorType, VkShaderStageFlags stageFlags)
+	void DescriptorSetLayout::AddBinding(uint32_t binding, VkDescriptorType descriptorType, VkShaderStageFlags stageFlags)
 	{
 		if (bindings.find(binding) != bindings.end())
 		{
@@ -211,10 +211,12 @@ namespace TANG
 
 	DescriptorSet::~DescriptorSet()
 	{
-		if (setState != DESCRIPTOR_SET_STATE::DESTROYED)
+		// TODO - Figure out a way to report descriptor sets that were never freed because the pool itself was never freed
+
+		/*if (setState != DESCRIPTOR_SET_STATE::DESTROYED)
 		{
 			LogWarning("Descriptor set object was destructed, but memory was not freed!");
-		}
+		}*/
 
 		LogInfo("Destructed descriptor set!");
 	}
@@ -287,19 +289,6 @@ namespace TANG
 		uint32_t numWriteDescriptorSets = writeDescriptorSets.GetWriteDescriptorSetCount();
 
 		vkUpdateDescriptorSets(logicalDevice, numWriteDescriptorSets, writeDescriptorSets.GetWriteDescriptorSets(), 0, nullptr);
-	}
-
-	void DescriptorSet::Destroy(VkDevice logicalDevice, DescriptorSetLayout& setLayout)
-	{
-		if (setState == DESCRIPTOR_SET_STATE::DESTROYED)
-		{
-			LogError("Attempted to destroy descriptor set object more than once! Bailing...");
-			return;
-		}
-
-		vkDestroyDescriptorSetLayout(logicalDevice, setLayout.GetLayout(), nullptr);
-
-		setState = DESCRIPTOR_SET_STATE::DESTROYED;
 	}
 
 	VkDescriptorSet DescriptorSet::GetDescriptorSet() const

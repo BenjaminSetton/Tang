@@ -6,7 +6,7 @@ project(TANG)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 if (MSVC)
-    add_compile_options(/W3)
+    add_compile_options(/W4)
 endif()
 
 # Set the source directory
@@ -61,6 +61,7 @@ set(SOURCES
 	src/shaders/shader.frag
 	
 	src/utils/uuid.cpp
+	src/utils/logger.cpp
 )
 
 # Set the output directories

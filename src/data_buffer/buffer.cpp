@@ -1,4 +1,6 @@
 
+#include <limits>
+
 #include "buffer.h"
 #include "../utils/logger.h"
 
