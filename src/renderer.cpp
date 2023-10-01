@@ -314,6 +314,13 @@ namespace TANG
 		resources.indexCount = totalIndexCount;
 		resources.uuid = asset->uuid;
 
+		// Create uniform buffers for this asset
+		CreateUniformBuffers(resources.uuid);
+		UpdateInfrequentUniformBuffers(resources.uuid);
+
+		CreateDescriptorSets(resources.uuid);
+		UpdateInfrequentDescriptorSets(resources.uuid);
+
 		return &resources;
 	}
 
@@ -321,7 +328,7 @@ namespace TANG
 	{
 		UUID assetID = resources->uuid;
 
-		// For every frame in flight, insert object into map and then grab a reference to it
+		// For every swap-chain image, insert object into map and then grab a reference to it
 		for (uint32_t i = 0; i < GetSWIDDSize(); i++)
 		{
 			auto& secondaryCmdBufferMap = GetSWIDDAtIndex(i)->secondaryCommandBuffer;
@@ -335,11 +342,6 @@ namespace TANG
 			secondaryCmdBufferMap.emplace(assetID, SecondaryCommandBuffer());
 			SecondaryCommandBuffer& commandBuffer = secondaryCmdBufferMap[assetID];
 			commandBuffer.Create(logicalDevice, commandPools[GRAPHICS_QUEUE]);
-
-			//UpdatePerFrameUniformBuffers(0, resources->transform);
-			//UpdatePerFrameDescriptorSets();
-
-			//RecordSecondaryCommandBuffer(commandBuffer, resources, i);
 		}
 	}
 
@@ -482,9 +484,8 @@ namespace TANG
 		CreateLogicalDevice();
 		CreateSwapChain();
 		CreateImageViews();
-		CreateUniformBuffers();
+		CreateDescriptorSetLayouts();
 		CreateDescriptorPool();
-		CreateDescriptorBundles();
 		CreateRenderPass();
 		CreateGraphicsPipeline();
 		CreateCommandPools();
@@ -496,13 +497,6 @@ namespace TANG
 		CreateFramebuffers();
 		CreatePrimaryCommandBuffers(GRAPHICS_QUEUE);
 		CreateSyncObjects();
-
-		// Update the infrequent uniform buffers and descriptor sets
-		for (uint32_t i = 0; i < GetFDDSize(); i++)
-		{
-			UpdateInfrequentUniformBuffers(i);
-			UpdateInfrequentDescriptorSets(i);
-		}
 	}
 
 	void Renderer::ShutdownWindow()
@@ -525,24 +519,20 @@ namespace TANG
 		vkDestroyImage(logicalDevice, textureImage, nullptr);
 		vkFreeMemory(logicalDevice, textureImageMemory, nullptr);
 
-		for (uint32_t i = 0; i < GetFDDSize(); i++)
+		for (auto& setLayout : setLayouts)
 		{
-			FrameDependentData* currentFDD = GetFDDAtIndex(i);
-			for (uint32_t j = 0; j < currentFDD->descriptorBundles.size(); j++)
-			{
-				DescriptorBundle& currentDescriptorBundle = currentFDD->descriptorBundles[j];
-
-				// Destroy the descriptor set layout, the descriptor set will automatically be freed when the descriptor pool is destroyed
-				//currentDescriptorBundle.GetDescriptorSet()->Destroy(logicalDevice, *currentDescriptorBundle.GetDescriptorSetLayout());
-				currentDescriptorBundle.GetDescriptorSetLayout()->Destroy(logicalDevice);
-			}
+			setLayout.Destroy(logicalDevice);
 		}
+		setLayouts.clear();
 
 		for (uint32_t i = 0; i < GetFDDSize(); i++)
 		{
 			auto frameData = GetFDDAtIndex(i);
-			frameData->transformUBO.Destroy(logicalDevice);
-			frameData->viewProjUBO.Destroy(logicalDevice);
+			for (auto& iter : frameData->assetDescriptorDataMap)
+			{
+				iter.second.viewProjUBO.Destroy(logicalDevice);
+				iter.second.transformUBO.Destroy(logicalDevice);
+			}
 		}
 
 		descriptorPool.Destroy(logicalDevice);
@@ -1335,18 +1325,16 @@ namespace TANG
 		depthStencil.back = {}; // Optional
 
 		// Pipeline layout
-		FrameDependentData* frameZeroData = GetFDDAtIndex(0);
-		uint32_t numLayouts = static_cast<uint32_t>(frameZeroData->descriptorBundles.size());
-		std::vector<VkDescriptorSetLayout> layouts(numLayouts); // The number of layouts and bundles are equivalent...for now
-		for (uint32_t i = 0; i < numLayouts; i++)
+		std::vector<VkDescriptorSetLayout> vkDescSetLayouts;
+		for (auto& setLayout : setLayouts)
 		{
-			layouts[i] = frameZeroData->descriptorBundles[i].GetDescriptorSetLayout()->GetLayout();
+			vkDescSetLayouts.push_back(setLayout.GetLayout());
 		}
 
 		VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 		pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-		pipelineLayoutInfo.setLayoutCount = numLayouts;
-		pipelineLayoutInfo.pSetLayouts = layouts.data();
+		pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(vkDescSetLayouts.size());
+		pipelineLayoutInfo.pSetLayouts = vkDescSetLayouts.data();
 		pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
 		pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
 
@@ -1594,30 +1582,28 @@ namespace TANG
 		vkBindBufferMemory(logicalDevice, buffer, bufferMemory, 0);
 	}
 
-	void Renderer::CreateUniformBuffers()
+	void Renderer::CreateUniformBuffers(UUID uuid)
 	{
-		// Create the transform uniform buffer objects
 		VkDeviceSize transformUBOSize = sizeof(TransformUBO);
-
-		for (uint32_t i = 0; i < GetFDDSize(); i++)
-		{
-			UniformBuffer& uniformBuffer = GetFDDAtIndex(i)->transformUBO;
-
-			uniformBuffer.Create(physicalDevice, logicalDevice, transformUBOSize);
-			uniformBuffer.MapMemory(logicalDevice, transformUBOSize);
-		}
-
-		// Create the view-projection uniform buffer objects
 		VkDeviceSize viewProjUBOSize = sizeof(ViewProjUBO);
 
 		for (uint32_t i = 0; i < GetFDDSize(); i++)
 		{
-			UniformBuffer& uniformBuffer = GetFDDAtIndex(i)->viewProjUBO;
+			FrameDependentData* currentFDD = GetFDDAtIndex(i);
+			AssetDescriptorData& assetDescriptorData = currentFDD->assetDescriptorDataMap[uuid];
 
-			uniformBuffer.Create(physicalDevice, logicalDevice, viewProjUBOSize);
-			uniformBuffer.MapMemory(logicalDevice, viewProjUBOSize);
+			UniformBuffer& transUBO = assetDescriptorData.transformUBO;
+
+			// Create the TransformUBO
+			transUBO.Create(physicalDevice, logicalDevice, transformUBOSize);
+			transUBO.MapMemory(logicalDevice, transformUBOSize);
+
+			// Create the ViewProjUBO
+			UniformBuffer& vpUBO = assetDescriptorData.viewProjUBO;
+
+			vpUBO.Create(physicalDevice, logicalDevice, viewProjUBOSize);
+			vpUBO.MapMemory(logicalDevice, viewProjUBOSize);
 		}
-
 	}
 
 	void Renderer::CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format,
@@ -1696,6 +1682,21 @@ namespace TANG
 		vkFreeMemory(logicalDevice, stagingBufferMemory, nullptr);
 	}
 
+	void Renderer::CreateDescriptorSetLayouts()
+	{
+		const uint32_t numSetLayouts = 2;
+		setLayouts.resize(numSetLayouts);
+
+		// Holds ViewProjUBO + ImageSampler
+		setLayouts[0].AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
+		setLayouts[0].AddBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
+		setLayouts[0].Create(logicalDevice);
+
+		// Holds TransformUBO
+		setLayouts[1].AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
+		setLayouts[1].Create(logicalDevice);
+	}
+
 	void Renderer::CreateDescriptorPool()
 	{
 		// We will create a descriptor pool that can allocate a large number of descriptor sets using the following logic:
@@ -1718,32 +1719,20 @@ namespace TANG
 		descriptorPool.Create(logicalDevice, poolSizes.data(), static_cast<uint32_t>(poolSizes.size()), static_cast<uint32_t>(poolSizes.size()) * fddSize * MAX_ASSET_COUNT);
 	}
 
-	void Renderer::CreateDescriptorBundles()
+	void Renderer::CreateDescriptorSets(UUID uuid)
 	{
-		const uint32_t numDescriptorBundles = 2;
 		uint32_t fddSize = GetFDDSize();
 
 		for (uint32_t i = 0; i < fddSize; i++)
 		{
-			FrameDependentData* frameData = GetFDDAtIndex(i);
-			frameData->descriptorBundles.resize(numDescriptorBundles);
+			FrameDependentData* currentFDD = GetFDDAtIndex(i);
+			currentFDD->assetDescriptorDataMap.insert({uuid, AssetDescriptorData()});
+			AssetDescriptorData& assetDescriptorData = currentFDD->assetDescriptorDataMap[uuid];
 
-			// Set up and create the descriptor set layouts
-			auto& currentBundle = frameData->descriptorBundles;
-
-			// Holds ViewProjUBO + ImageSampler
-			currentBundle[0].GetDescriptorSetLayout()->AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
-			currentBundle[0].GetDescriptorSetLayout()->AddBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
-			currentBundle[0].GetDescriptorSetLayout()->Create(logicalDevice);
-
-			// Holds TransformUBO
-			currentBundle[1].GetDescriptorSetLayout()->AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
-			currentBundle[1].GetDescriptorSetLayout()->Create(logicalDevice);
-
-			// Create the descriptor sets
-			for (uint32_t j = 0; j < numDescriptorBundles; j++)
+			for (uint32_t j = 0; j < setLayouts.size(); j++)
 			{
-				currentBundle[j].GetDescriptorSet()->Create(logicalDevice, descriptorPool, *currentBundle[j].GetDescriptorSetLayout());
+				assetDescriptorData.descriptorSets.push_back(DescriptorSet());
+				assetDescriptorData.descriptorSets[j].Create(logicalDevice, descriptorPool, setLayouts[j]);
 			}
 		}
 
@@ -1843,13 +1832,15 @@ namespace TANG
 		uint32_t secondaryCmdBufferCount = 0;
 		for (auto& iter : assetResources)
 		{
-			bool shouldDraw = assetDrawStates[iter.uuid];
+			UUID& uuid = iter.uuid;
+
+			bool shouldDraw = assetDrawStates[uuid];
 			if (shouldDraw)
 			{
-				SecondaryCommandBuffer* secondaryCmdBuffer = GetSecondaryCommandBufferAtIndex(frameBufferIndex, iter.uuid);
+				SecondaryCommandBuffer* secondaryCmdBuffer = GetSecondaryCommandBufferAtIndex(frameBufferIndex, uuid);
 
-				UpdatePerFrameUniformBuffers(assetTransforms[iter.uuid]);
-				UpdatePerFrameDescriptorSets();
+				UpdatePerFrameUniformBuffers(assetTransforms[uuid], uuid);
+				UpdatePerFrameDescriptorSets(uuid);
 
 				secondaryCmdBuffer->Reset();
 				RecordSecondaryCommandBuffer(*secondaryCmdBuffer, &iter, frameBufferIndex);
@@ -1871,12 +1862,12 @@ namespace TANG
 
 	void Renderer::RecordSecondaryCommandBuffer(SecondaryCommandBuffer& commandBuffer, AssetResources* resources, uint32_t frameBufferIndex)
 	{
-		// Retrieve the vector of descriptor bundles for this current frame
-		auto& descBundles = GetCurrentFDD()->descriptorBundles;
-		std::vector<VkDescriptorSet> descSets(descBundles.size());
-		for (uint32_t i = 0; i < descBundles.size(); i++)
+		// Retrieve the vector of descriptor sets for the given asset
+		auto& descSets = GetCurrentFDD()->assetDescriptorDataMap[resources->uuid].descriptorSets;
+		std::vector<VkDescriptorSet> vkDescSets(descSets.size());
+		for (uint32_t i = 0; i < descSets.size(); i++)
 		{
-			descSets[i] = descBundles[i].GetDescriptorSet()->GetDescriptorSet();
+			vkDescSets[i] = descSets[i].GetDescriptorSet();
 		}
 
 		VkCommandBufferInheritanceInfo inheritanceInfo{};
@@ -1889,7 +1880,7 @@ namespace TANG
 		commandBuffer.BeginRecording(VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT | VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT, &inheritanceInfo);
 
 		commandBuffer.CMD_BindMesh(resources);
-		commandBuffer.CMD_BindDescriptorSets(pipelineLayout, static_cast<uint32_t>(descSets.size()), descSets.data());
+		commandBuffer.CMD_BindDescriptorSets(pipelineLayout, static_cast<uint32_t>(vkDescSets.size()), vkDescSets.data());
 		commandBuffer.CMD_BindGraphicsPipeline(graphicsPipeline);
 		commandBuffer.CMD_SetScissor({ 0, 0 }, swapChainExtent);
 		commandBuffer.CMD_SetViewport(static_cast<float>(swapChainExtent.width), static_cast<float>(swapChainExtent.height));
@@ -1967,37 +1958,46 @@ namespace TANG
 		vkDestroySwapchainKHR(logicalDevice, swapChain, nullptr);
 	}
 
-	void Renderer::UpdateInfrequentUniformBuffers(uint32_t frameIndex)
+	void Renderer::UpdateInfrequentUniformBuffers(UUID uuid)
 	{
 		using namespace glm;
 
 		float aspectRatio = swapChainExtent.width / static_cast<float>(swapChainExtent.height);
 
 		// Construct the ViewProj UBO
-		ViewProjUBO viewProjUBO;
-		viewProjUBO.view = lookAt(vec3(0.0f, 5.0f, 10.0f), vec3(0.0f, 0.0f, 0.0f), vec3(0.0f, 1.0f, 0.0f));
-		viewProjUBO.proj = perspective(radians(45.0f), aspectRatio, 0.1f, 1000.0f);
+		ViewProjUBO vpUBO;
+		vpUBO.view = lookAt(vec3(0.0f, 5.0f, 10.0f), vec3(0.0f, 0.0f, 0.0f), vec3(0.0f, 1.0f, 0.0f));
+		vpUBO.proj = perspective(radians(45.0f), aspectRatio, 0.1f, 1000.0f);
 
 		// NOTE - GLM was originally designed for OpenGL, where the Y coordinate of the clip coordinates is inverted
-		viewProjUBO.proj[1][1] *= -1;
+		vpUBO.proj[1][1] *= -1;
 
-		GetFDDAtIndex(frameIndex)->viewProjUBO.UpdateData(&viewProjUBO, sizeof(ViewProjUBO));
+		uint32_t fddSize = GetFDDSize();
+		for (uint32 i = 0; i < fddSize; i++)
+		{
+			FrameDependentData* currentFDD = GetFDDAtIndex(i);
+			auto& currentAssetDataMap = currentFDD->assetDescriptorDataMap[uuid];
+
+			currentAssetDataMap.viewProjUBO.UpdateData(&vpUBO, sizeof(ViewProjUBO));
+		}
 	}
 
-	void Renderer::UpdateInfrequentDescriptorSets(uint32_t frameIndex)
+	void Renderer::UpdateInfrequentDescriptorSets(UUID uuid)
 	{
-		FrameDependentData* currentFDD = GetFDDAtIndex(frameIndex);
-		auto& currentBundle = currentFDD->descriptorBundles; // vector<DescriptorBundle>
+		uint32_t fddSize = GetFDDSize();
+		for (uint32_t i = 0; i < fddSize; i++)
+		{
+			FrameDependentData* currentFDD = GetFDDAtIndex(i);
+			auto& currentAssetDataMap = currentFDD->assetDescriptorDataMap[uuid];
 
-		// Update ViewProj / image sampler descriptor sets
-		WriteDescriptorSets writeDescSets{};
-		writeDescSets.AddUniformBuffer(currentBundle[0].GetDescriptorSet()->GetDescriptorSet(), 0, currentFDD->viewProjUBO.GetBuffer(), currentFDD->viewProjUBO.GetBufferSize());
-		//writeDescSets.AddImageSampler(currentBundle[0].GetDescriptorSet()->GetDescriptorSet(), 1, textureImageView, textureSampler);
-		//TransitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_UINT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 1);
-		currentBundle[0].GetDescriptorSet()->Update(logicalDevice, writeDescSets);
+			// Update ViewProj / image sampler descriptor sets
+			WriteDescriptorSets writeDescSets{};
+			writeDescSets.AddUniformBuffer(currentAssetDataMap.descriptorSets[0].GetDescriptorSet(), 0, currentAssetDataMap.viewProjUBO.GetBuffer(), currentAssetDataMap.viewProjUBO.GetBufferSize());
+			currentAssetDataMap.descriptorSets[0].Update(logicalDevice, writeDescSets);
+		}
 	}
 
-	void Renderer::UpdatePerFrameUniformBuffers(const Transform& transform)
+	void Renderer::UpdatePerFrameUniformBuffers(const Transform& transform, UUID uuid)
 	{
 		using namespace glm;
 
@@ -2009,20 +2009,18 @@ namespace TANG
 		tempUBO.transform = tempUBO.transform * rotationMat; // NOTE - Is this the correct order?
 		tempUBO.transform = scale(tempUBO.transform, transform.scale);
 
-		GetCurrentFDD()->transformUBO.UpdateData(&tempUBO, sizeof(TransformUBO));
+		GetCurrentFDD()->assetDescriptorDataMap[uuid].transformUBO.UpdateData(&tempUBO, sizeof(TransformUBO));
 	}
 
-	void Renderer::UpdatePerFrameDescriptorSets()
+	void Renderer::UpdatePerFrameDescriptorSets(UUID uuid)
 	{
 		FrameDependentData* currentFDD = GetCurrentFDD();
-		auto& currentBundle = currentFDD->descriptorBundles; // vector<DescriptorBundle>
+		auto& currentAssetDataMap = currentFDD->assetDescriptorDataMap[uuid];
 
 		// Update transform descriptor sets
-		{
-			WriteDescriptorSets writeDescSets{};
-			writeDescSets.AddUniformBuffer(currentBundle[1].GetDescriptorSet()->GetDescriptorSet(), 0, currentFDD->transformUBO.GetBuffer(), currentFDD->transformUBO.GetBufferSize());
-			currentBundle[1].GetDescriptorSet()->Update(logicalDevice, writeDescSets);
-		}
+		WriteDescriptorSets writeDescSets{};
+		writeDescSets.AddUniformBuffer(currentAssetDataMap.descriptorSets[1].GetDescriptorSet(), 0, currentAssetDataMap.transformUBO.GetBuffer(), currentAssetDataMap.transformUBO.GetBufferSize());
+		currentAssetDataMap.descriptorSets[1].Update(logicalDevice, writeDescSets);
 	}
 
 	VkCommandBuffer Renderer::BeginSingleTimeCommands(VkCommandPool pool)

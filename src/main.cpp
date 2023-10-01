@@ -3,6 +3,7 @@
 #include <iostream>
 #include <random>
 #include <string>
+#include <time.h>
 #include <vector>
 
 #include "tang.h"
@@ -47,6 +48,9 @@ int main(uint32_t argc, const char** argv)
     UNUSED(argc);
     UNUSED(argv);
 
+    // Seed rand()
+    srand(static_cast<unsigned int>(time(NULL)));
+
     TANG::Initialize();
 
     std::vector<MyAsset> assets;
@@ -62,13 +66,14 @@ int main(uint32_t argc, const char** argv)
             asset.pos[0] = RandomRangeFloat(-5.0f, 5.0f);
             asset.pos[2] = RandomRangeFloat(-5.0f, 5.0f);
 
+            asset.rot[0] = RandomRangeFloat(-90.0f, 90.0f);
+
             float randScale = RandomRangeFloat(0.5f, 1.5f);
             asset.scale[0] = randScale;
             asset.scale[1] = randScale;
             asset.scale[2] = randScale;
 
-            TANG::UpdateAssetPosition(id, asset.pos);
-            TANG::UpdateAssetScale(id, asset.scale);
+            TANG::UpdateAssetTransform(id, asset.pos, asset.rot, asset.scale);
 
             assets.push_back(asset);
         }
@@ -86,8 +91,7 @@ int main(uint32_t argc, const char** argv)
 
 		for (auto& asset : assets)
 		{
-            // Update the asset transform, 45 degree Y-axis rotation every second
-            float rot[3] = {0.0f, 90.0f * elapsedTime, 0.0f};
+            float rot[3] = {asset.rot[0], 90.0f * elapsedTime, asset.rot[2]};
 
             TANG::UUID id = asset.uuid;
 

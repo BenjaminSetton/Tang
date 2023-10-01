@@ -180,7 +180,7 @@ namespace TANG
 
 		void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
 
-		void CreateUniformBuffers();
+		void CreateUniformBuffers(UUID uuid);
 
 		void CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format,
 			VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties,
@@ -188,9 +188,11 @@ namespace TANG
 
 		void CreateTextureImage();
 
+		void CreateDescriptorSetLayouts();
+
 		void CreateDescriptorPool();
 
-		void CreateDescriptorBundles();
+		void CreateDescriptorSets(UUID uuid);
 
 		VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels);
 
@@ -213,12 +215,12 @@ namespace TANG
 
 		// Updates the uniform buffers and descriptor sets that need to be update very infrequently. In this case, the view/proj uniform buffers and descriptor sets.
 		// Note that this should also be called when the swap chain resizes!
-		void UpdateInfrequentUniformBuffers(uint32_t frameIndex);
-		void UpdateInfrequentDescriptorSets(uint32_t frameIndex);
+		void UpdateInfrequentUniformBuffers(UUID uuid);
+		void UpdateInfrequentDescriptorSets(UUID uuid);
 
-		// Updates the uniform buffers and descriptor sets that are updated at least once per frame
-		void UpdatePerFrameUniformBuffers(const Transform& transform);
-		void UpdatePerFrameDescriptorSets();
+		// Updates the uniform buffers and descriptor sets for all frames in flight
+		void UpdatePerFrameUniformBuffers(const Transform& transform, UUID uuid);
+		void UpdatePerFrameDescriptorSets(UUID uuid);
 
 		VkCommandBuffer BeginSingleTimeCommands(VkCommandPool pool);
 
@@ -263,6 +265,14 @@ namespace TANG
 		VkFormat swapChainImageFormat;
 		VkExtent2D swapChainExtent;
 
+		// Stores all the data we need to describe an asset with regards to the graphics pipeline
+		struct AssetDescriptorData
+		{
+			std::vector<DescriptorSet> descriptorSets;
+			UniformBuffer viewProjUBO;
+			UniformBuffer transformUBO;
+		};
+
 
 		////////////////////////////////////////////////////////////////////
 		// 
@@ -273,14 +283,7 @@ namespace TANG
 		////////////////////////////////////////////////////////////////////
 		struct FrameDependentData
 		{
-			// Stores all the descriptor bundles (set and its layout) for a given frame
-			std::vector<DescriptorBundle> descriptorBundles;
-
-			// These two sets of UniformBuffer vector objects are sent to the shaders separately so that we can update them at different intervals
-			// For instance, the transform for an asset can be updated every frame, while the view/projection most likely won't change every frame
-			// and are usually updated when the window is resized.
-			UniformBuffer transformUBO;
-			UniformBuffer viewProjUBO;
+			std::unordered_map<UUID, AssetDescriptorData> assetDescriptorDataMap;
 
 			VkSemaphore imageAvailableSemaphore;
 			VkSemaphore renderFinishedSemaphore;
@@ -293,15 +296,16 @@ namespace TANG
 		std::vector<FrameDependentData> frameDependentData;
 		// We want to organize our descriptor sets as follows:
 		// 
-		// FOR EVERY FRAME IN FLIGHT:
-		//		Descriptor set 0:
-		//			- viewProj uniform buffer	(binding 0)
-		//			- image sampler				(binding 1)
-		//		Descriptor set 1:
-		//			- transform					(binding 0)
+		// FOR EVERY ASSET:
+		//		FOR EVERY FRAME IN FLIGHT:
+		//			Descriptor set 0:
+		//				- viewProj uniform buffer	(binding 0)
+		//				- image sampler				(binding 1)
+		//			Descriptor set 1:
+		//				- transform					(binding 0)
 		// 
-		// Total per frame in flight: 2 descriptor sets, 2 uniform buffers and 1 image sampler
-		// Total for 2 frames in flight: 4 descriptor sets, 4 uniform buffers and 2 image samplers
+		// Total per all frames in flight (2): 4 descriptor sets - 4 uniform buffers and 2 image samplers
+		// Multiply the above for every asset, for 2 assets: 8 descriptor sets - 8 uniform buffers and 4 image samplers
 
 
 		////////////////////////////////////////////////////////////////////
@@ -321,6 +325,7 @@ namespace TANG
 		};
 		std::vector<SwapChainImageDependentData> swapChainImageDependentData;
 
+		std::vector<DescriptorSetLayout> setLayouts;
 		VkRenderPass renderPass;
 		VkPipelineLayout pipelineLayout;
 

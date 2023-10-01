@@ -92,7 +92,7 @@ namespace TANG
 	// If the given rotation is in degrees it must be specified using the "isDegrees" parameter,
 	// a value of false is interpreted as a rotation in radians instead.
 	// NOTE - The rotation parameter MUST be a vector with exactly three components
-	void UpdateAssetRotation(UUID uuid, float* rotation, bool isRadians);
+	void UpdateAssetRotation(UUID uuid, float* rotation, bool isDegrees);
 
 	// Update the scale of the asset represented by the provided UUID.
 	// NOTE - The scale parameter MUST be a vector with exactly three components
