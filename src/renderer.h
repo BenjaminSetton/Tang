@@ -81,7 +81,7 @@ namespace TANG
 		// the asset.
 		void CreateAssetCommandBuffer(AssetResources* resources);
 
-		void DestroyAssetResources(AssetDisk* asset);
+		void DestroyAssetResources(UUID uuid);
 		void DestroyAllAssetResources();
 
 		// TODO - Abstract this out into a window class, this really shouldn't be part of the renderer
@@ -333,20 +333,11 @@ namespace TANG
 
 		std::unordered_map<QueueType, VkCommandPool> commandPools;
 
-		// This map represents the drawable state of an asset given it's UUID. AssetDrawStates tells us whether the asset must
-		// be drawn this frame and is therefore dependent directly on the frame in flight we're currently on.
-		// NOTE - The size of this map exactly equals the number of loaded assets we have
-		std::unordered_map<UUID, bool> assetDrawStates;
-
-		// Stores the transform data for any asset given it's UUID
-		// NOTE - The API user must update and keep track of the transform data for the assets,
-		//        and pass it to the renderer every frame for drawing. The design decision behind
-		//        this is so we can own copy of the data, rather than holding a ton of pointers 
-		//        to data somewhere else which will probably be very slow
-		std::unordered_map<UUID, Transform> assetTransforms;
-
 		uint32_t currentFrame = 0;
 
+		// The assetResources vector contains all the vital information that we need for every asset in order to render it
+		// The resourcesMap maps an asset's UUID to a location within the assetResources vector
+		std::unordered_map<UUID, uint32_t> resourcesMap;
 		std::vector<AssetResources> assetResources;
 
 		DescriptorPool descriptorPool;

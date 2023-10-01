@@ -25,6 +25,33 @@ namespace TANG
 		{
 		}
 
+		Transform(const Transform& other) : 
+			position(other.position), rotation(other.rotation), scale(other.scale)
+		{
+		}
+
+		Transform(Transform&& other) :
+			position(other.position), rotation(other.rotation), scale(other.scale)
+		{
+			other.position = glm::vec3(0);
+			other.rotation = glm::vec3(0);
+			other.scale = glm::vec3(1);
+		}
+
+		Transform& operator=(const Transform& other)
+		{
+			if (this == &other)
+			{
+				return *this;
+			}
+
+			position = other.position;
+			rotation = other.rotation;
+			scale = other.scale;
+
+			return *this;
+		}
+
 		glm::vec3 position;
 		glm::vec3 rotation;
 		glm::vec3 scale;
@@ -113,6 +140,8 @@ namespace TANG
 		std::vector<Texture> textures;
 	};
 
+	// TODO - Convert AssetResources into a structure of arrays, rather than an array of structs.
+	//        The two members below are unordered_maps, accessed by the Asset's UUID.
 	struct AssetResources
 	{
 		UUID uuid;
@@ -121,10 +150,13 @@ namespace TANG
 		IndexBuffer indexBuffer;
 		uint64_t indexCount = 0;					// Used when calling vkCmdDrawIndexed
 
-		// TODO - Convert AssetResources into a structure of arrays, rather than an array of structs.
-		//        The two members below are unordered_maps, accessed by the Asset's UUID.
-		//Transform transform;						// Stores all the transform properties of the asset
-		//bool show;								// Renders the asset the current frame, if set to true
+		// NOTE - The API user must update and keep track of the transform data for the assets,
+		//        and pass it to the renderer every frame for drawing. The design decision behind
+		//        this is so we can own copy of the data, rather than holding a ton of pointers 
+		//        to data somewhere else which will probably be very slow
+		Transform transform;
+
+		bool shouldDraw;							// Determines whether the asset should be drawn on the current frame. This value is reset every frame
 	};
 }
 

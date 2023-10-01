@@ -31,6 +31,7 @@ static std::vector<std::string> assetNames =
 {
     "../src/data/assets/sample/suzanne_smooth.fbx",
     "../src/data/assets/sample/torus.fbx",
+    "../src/data/assets/sample/sphere.fbx",
 };
 
 int RandomRangeInt(int min, int max)
@@ -66,7 +67,7 @@ int main(uint32_t argc, const char** argv)
             asset.pos[0] = RandomRangeFloat(-5.0f, 5.0f);
             asset.pos[2] = RandomRangeFloat(-5.0f, 5.0f);
 
-            asset.rot[0] = RandomRangeFloat(-90.0f, 90.0f);
+            //asset.rot[0] = RandomRangeFloat(-90.0f, 90.0f);
 
             float randScale = RandomRangeFloat(0.5f, 1.5f);
             asset.scale[0] = randScale;

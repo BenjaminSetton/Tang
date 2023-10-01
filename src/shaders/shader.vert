@@ -20,6 +20,6 @@ layout(location = 1) out vec2 outUV;
 void main() {
     gl_Position = viewProjUBO.proj * viewProjUBO.view * transformUBO.transform * vec4(inPosition, 1.0);
 
-    outNormal = (transformUBO.transform * vec4(inNormal, 1.0)).xyz;
+    outNormal = (transformUBO.transform * vec4(inNormal, 0.0)).xyz;
     outUV = inUV;
 }

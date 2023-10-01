@@ -243,9 +243,9 @@ namespace TANG
 		// TODO - This is pretty slow to do per-frame, so I need to find a better way to
 		//        clear the asset draw states. Maybe a sorted pool would work better but
 		//        I want to avoid premature optimization so this'll do for now
-		for (auto& iter : assetDrawStates)
+		for (auto& resources : assetResources)
 		{
-			iter.second = false;
+			resources.shouldDraw = false;
 		}
 
 		currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
@@ -258,6 +258,8 @@ namespace TANG
 	AssetResources* Renderer::CreateAssetResources(AssetDisk* asset)
 	{
 		assetResources.emplace_back(AssetResources());
+		resourcesMap.insert({ asset->uuid, static_cast<uint32_t>(assetResources.size() - 1) });
+
 		AssetResources& resources = assetResources.back();
 
 		uint32_t meshCount = static_cast<uint32_t>(asset->meshes.size());
@@ -308,9 +310,8 @@ namespace TANG
 
 		// Insert the asset's uuid into the assetDrawState map. We do not render it
 		// upon insertion by default
-		assetDrawStates.insert({ asset->uuid, false });
-		assetTransforms.insert({ asset->uuid, Transform() });
-
+		resources.shouldDraw = false;
+		resources.transform = Transform();
 		resources.indexCount = totalIndexCount;
 		resources.uuid = asset->uuid;
 
@@ -372,24 +373,19 @@ namespace TANG
 		return GetSWIDDAtIndex(frameBufferIndex)->swapChainFramebuffer;
 	}
 
-	void Renderer::DestroyAssetResources(AssetDisk* asset)
+	void Renderer::DestroyAssetResources(UUID uuid)
 	{
-		for (auto iter = assetResources.begin(); iter != assetResources.end(); iter++)
-		{
-			AssetResources& resources = *iter;
+		TNG_ASSERT_MSG(resourcesMap.find(uuid) != resourcesMap.end(), "Failed to find asset resources!");
 
-			if (resources.uuid == asset->uuid)
-			{
-				// Remove draw state and transform references
-				assetDrawStates.erase(asset->uuid);
-				assetTransforms.erase(asset->uuid);
+		// Destroy the resources
+		DestroyAssetBuffersHelper(assetResources[resourcesMap[uuid]]);
 
-				DestroyAssetBuffersHelper(resources);
+		// Remove resources from the vector
+		uint32_t resourceIndex = static_cast<uint32_t>((&assetResources[resourcesMap[uuid]] - &assetResources[0]) / sizeof(assetResources));
+		assetResources.erase(assetResources.begin() + resourceIndex);
 
-				// Remove this specific set of asset resources from the vector
-				assetResources.erase(iter);
-			}
-		}
+		// Destroy reference to resources
+		resourcesMap.erase(uuid);
 	}
 
 	void Renderer::DestroyAllAssetResources()
@@ -402,10 +398,7 @@ namespace TANG
 		}
 
 		assetResources.clear();
-
-		// Clear all asset draw states and transforms
-		assetDrawStates.clear();
-		assetTransforms.clear();
+		resourcesMap.clear();
 	}
 
 	bool Renderer::WindowShouldClose()
@@ -428,35 +421,35 @@ namespace TANG
 
 	void Renderer::SetAssetDrawState(UUID uuid)
 	{
-		if (assetDrawStates.find(uuid) == assetDrawStates.end())
+		if (resourcesMap.find(uuid) == resourcesMap.end())
 		{
 			// Undefined behavior. Maybe the asset resources were deleted but we somehow forgot to remove it from the assetDrawStates map?
 			TNG_ASSERT_MSG(false, "Attempted to set asset draw state, but draw state doesn't exist in the map!");
 		}
 
-		assetDrawStates[uuid] = true;
+		assetResources[resourcesMap[uuid]].shouldDraw = true;
 	}
 
 	void Renderer::SetAssetTransform(UUID uuid, Transform& transform)
 	{
-		assetTransforms[uuid] = transform;
+		assetResources[resourcesMap[uuid]].transform = transform;
 	}
 
 	void Renderer::SetAssetPosition(UUID uuid, glm::vec3& position)
 	{
-		Transform& transform = assetTransforms[uuid];
+		Transform& transform = assetResources[resourcesMap[uuid]].transform;
 		transform.position = position;
 	}
 
 	void Renderer::SetAssetRotation(UUID uuid, glm::vec3& rotation)
 	{
-		Transform& transform = assetTransforms[uuid];
+		Transform& transform = assetResources[resourcesMap[uuid]].transform;
 		transform.rotation = rotation;
 	}
 
 	void Renderer::SetAssetScale(UUID uuid, glm::vec3& scale)
 	{
-		Transform& transform = assetTransforms[uuid];
+		Transform& transform = assetResources[resourcesMap[uuid]].transform;
 		transform.scale = scale;
 	}
 
@@ -1834,12 +1827,11 @@ namespace TANG
 		{
 			UUID& uuid = iter.uuid;
 
-			bool shouldDraw = assetDrawStates[uuid];
-			if (shouldDraw)
+			if (assetResources[resourcesMap[uuid]].shouldDraw)
 			{
 				SecondaryCommandBuffer* secondaryCmdBuffer = GetSecondaryCommandBufferAtIndex(frameBufferIndex, uuid);
 
-				UpdatePerFrameUniformBuffers(assetTransforms[uuid], uuid);
+				UpdatePerFrameUniformBuffers(assetResources[resourcesMap[uuid]].transform, uuid);
 				UpdatePerFrameDescriptorSets(uuid);
 
 				secondaryCmdBuffer->Reset();
@@ -1966,7 +1958,7 @@ namespace TANG
 
 		// Construct the ViewProj UBO
 		ViewProjUBO vpUBO;
-		vpUBO.view = lookAt(vec3(0.0f, 5.0f, 10.0f), vec3(0.0f, 0.0f, 0.0f), vec3(0.0f, 1.0f, 0.0f));
+		vpUBO.view = lookAt(vec3(0.0f, 20.0f, 0.1f), vec3(0.0f, 0.0f, 0.0f), vec3(0.0f, 1.0f, 0.0f));
 		vpUBO.proj = perspective(radians(45.0f), aspectRatio, 0.1f, 1000.0f);
 
 		// NOTE - GLM was originally designed for OpenGL, where the Y coordinate of the clip coordinates is inverted
@@ -1999,16 +1991,16 @@ namespace TANG
 
 	void Renderer::UpdatePerFrameUniformBuffers(const Transform& transform, UUID uuid)
 	{
-		using namespace glm;
-
 		// Construct the transform UBO
 		TransformUBO tempUBO{};
 
-		tempUBO.transform = translate(tempUBO.transform, transform.position);
-		mat4 rotationMat = eulerAngleXYZ(transform.rotation.x, transform.rotation.y, transform.rotation.z);
-		tempUBO.transform = tempUBO.transform * rotationMat; // NOTE - Is this the correct order?
-		tempUBO.transform = scale(tempUBO.transform, transform.scale);
+		glm::mat4 finalTransform = glm::identity<glm::mat4>();
 
+		glm::mat4 translation = glm::translate(glm::identity<glm::mat4>(), transform.position);
+		glm::mat4 rotation = glm::eulerAngleXYZ(transform.rotation.x, transform.rotation.y, transform.rotation.z);
+		glm::mat4 scale = glm::scale(glm::identity<glm::mat4>(), transform.scale);
+
+		tempUBO.transform = translation * rotation * scale;
 		GetCurrentFDD()->assetDescriptorDataMap[uuid].transformUBO.UpdateData(&tempUBO, sizeof(TransformUBO));
 	}
 
