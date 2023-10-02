@@ -222,6 +222,15 @@ namespace TANG
 		glm::mat4 proj;
 	};
 
+	// The minimum uniform buffer alignment of the chosen physical device is 64 bytes...an entire matrix 4
+	// 
+	struct CameraDataUBO
+	{
+		glm::vec4 cameraPos;
+		char padding[48];
+	};
+	TNG_ASSERT_COMPILE(sizeof(CameraDataUBO) == 64);
+
 	void Renderer::Update(float* deltaTime)
 	{
 		UNUSED(deltaTime);
@@ -490,6 +499,15 @@ namespace TANG
 		CreateFramebuffers();
 		CreatePrimaryCommandBuffers(GRAPHICS_QUEUE);
 		CreateSyncObjects();
+
+		// Create the CameraDataUBO
+		VkDeviceSize cameraUBOSize = sizeof(CameraDataUBO);
+		for (uint32_t i = 0; i < GetFDDSize(); i++)
+		{
+			UniformBuffer& cameraUBO = GetFDDAtIndex(i)->cameraDataUBO;
+			cameraUBO.Create(physicalDevice, logicalDevice, cameraUBOSize);
+			cameraUBO.MapMemory(logicalDevice, cameraUBOSize);
+		}
 	}
 
 	void Renderer::ShutdownWindow()
@@ -526,6 +544,7 @@ namespace TANG
 				iter.second.viewProjUBO.Destroy(logicalDevice);
 				iter.second.transformUBO.Destroy(logicalDevice);
 			}
+			frameData->cameraDataUBO.Destroy(logicalDevice);
 		}
 
 		descriptorPool.Destroy(logicalDevice);
@@ -1642,7 +1661,7 @@ namespace TANG
 	void Renderer::CreateTextureImage()
 	{
 		int width, height, channels;
-		stbi_uc* pixels = stbi_load("../src/data/textures/texture.jpg", &width, &height, &channels, STBI_rgb_alpha);
+		stbi_uc* pixels = stbi_load("../src/data/textures/sample/texture.jpg", &width, &height, &channels, STBI_rgb_alpha);
 		if (pixels == nullptr)
 		{
 			TNG_ASSERT_MSG(false, "Failed to load texture!");
@@ -1685,8 +1704,9 @@ namespace TANG
 		setLayouts[0].AddBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
 		setLayouts[0].Create(logicalDevice);
 
-		// Holds TransformUBO
+		// Holds TransformUBO + CameraDataUBO
 		setLayouts[1].AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
+		setLayouts[1].AddBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT);
 		setLayouts[1].Create(logicalDevice);
 	}
 
@@ -1700,7 +1720,7 @@ namespace TANG
 		//        don't know what I'm doing.
 		const uint32_t fddSize = GetFDDSize();
 
-		const uint32_t numUniformBuffers = 2;
+		const uint32_t numUniformBuffers = 3;
 		const uint32_t numImageSamplers = 1;
 
 		std::array<VkDescriptorPoolSize, 2> poolSizes{};
@@ -1958,7 +1978,7 @@ namespace TANG
 
 		// Construct the ViewProj UBO
 		ViewProjUBO vpUBO;
-		vpUBO.view = lookAt(vec3(0.0f, 20.0f, 0.1f), vec3(0.0f, 0.0f, 0.0f), vec3(0.0f, 1.0f, 0.0f));
+		vpUBO.view = lookAt(cameraPos, vec3(0.0f, 0.0f, 0.0f), vec3(0.0f, 1.0f, 0.0f));
 		vpUBO.proj = perspective(radians(45.0f), aspectRatio, 0.1f, 1000.0f);
 
 		// NOTE - GLM was originally designed for OpenGL, where the Y coordinate of the clip coordinates is inverted
@@ -1983,15 +2003,15 @@ namespace TANG
 			auto& currentAssetDataMap = currentFDD->assetDescriptorDataMap[uuid];
 
 			// Update ViewProj / image sampler descriptor sets
-			WriteDescriptorSets writeDescSets{};
-			writeDescSets.AddUniformBuffer(currentAssetDataMap.descriptorSets[0].GetDescriptorSet(), 0, currentAssetDataMap.viewProjUBO.GetBuffer(), currentAssetDataMap.viewProjUBO.GetBufferSize());
+			WriteDescriptorSets writeDescSets(1, 0);
+			writeDescSets.AddUniformBuffer(currentAssetDataMap.descriptorSets[0].GetDescriptorSet(), 0, currentAssetDataMap.viewProjUBO.GetBuffer(), currentAssetDataMap.viewProjUBO.GetBufferSize(), 0);
 			currentAssetDataMap.descriptorSets[0].Update(logicalDevice, writeDescSets);
 		}
 	}
 
 	void Renderer::UpdatePerFrameUniformBuffers(const Transform& transform, UUID uuid)
 	{
-		// Construct the transform UBO
+		// Construct and update the transform UBO
 		TransformUBO tempUBO{};
 
 		glm::mat4 finalTransform = glm::identity<glm::mat4>();
@@ -2002,6 +2022,12 @@ namespace TANG
 
 		tempUBO.transform = translation * rotation * scale;
 		GetCurrentFDD()->assetDescriptorDataMap[uuid].transformUBO.UpdateData(&tempUBO, sizeof(TransformUBO));
+
+		// Update the CameraDataUBO
+		CameraDataUBO cameraUBO{};
+		cameraUBO.cameraPos = glm::vec4(cameraPos, 1.0f);
+
+		GetCurrentFDD()->cameraDataUBO.UpdateData(&cameraUBO, sizeof(CameraDataUBO));
 	}
 
 	void Renderer::UpdatePerFrameDescriptorSets(UUID uuid)
@@ -2009,9 +2035,10 @@ namespace TANG
 		FrameDependentData* currentFDD = GetCurrentFDD();
 		auto& currentAssetDataMap = currentFDD->assetDescriptorDataMap[uuid];
 
-		// Update transform descriptor sets
-		WriteDescriptorSets writeDescSets{};
-		writeDescSets.AddUniformBuffer(currentAssetDataMap.descriptorSets[1].GetDescriptorSet(), 0, currentAssetDataMap.transformUBO.GetBuffer(), currentAssetDataMap.transformUBO.GetBufferSize());
+		// Update transform + cameraData descriptor sets
+		WriteDescriptorSets writeDescSets(2, 0);
+		writeDescSets.AddUniformBuffer(currentAssetDataMap.descriptorSets[1].GetDescriptorSet(), 0, currentAssetDataMap.transformUBO.GetBuffer(), currentAssetDataMap.transformUBO.GetBufferSize(), 0);
+		writeDescSets.AddUniformBuffer(currentAssetDataMap.descriptorSets[1].GetDescriptorSet(), 1, currentFDD->cameraDataUBO.GetBuffer(), currentFDD->cameraDataUBO.GetBufferSize(), 0);
 		currentAssetDataMap.descriptorSets[1].Update(logicalDevice, writeDescSets);
 	}
 

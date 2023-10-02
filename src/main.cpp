@@ -30,8 +30,6 @@ struct MyAsset
 static std::vector<std::string> assetNames =
 {
     "../src/data/assets/sample/suzanne_smooth.fbx",
-    "../src/data/assets/sample/torus.fbx",
-    "../src/data/assets/sample/sphere.fbx",
 };
 
 int RandomRangeInt(int min, int max)
@@ -64,8 +62,11 @@ int main(uint32_t argc, const char** argv)
             MyAsset asset(assetName, id);
 
             // Give every asset some random transforms for testing
-            asset.pos[0] = RandomRangeFloat(-5.0f, 5.0f);
-            asset.pos[2] = RandomRangeFloat(-5.0f, 5.0f);
+            //asset.pos[0] = RandomRangeFloat(-5.0f, 5.0f);
+            //asset.pos[2] = RandomRangeFloat(-2.0f, 0.0f);
+            asset.pos[0] = 0.0f;
+            asset.pos[1] = 2.5f;
+            asset.pos[2] = 6.0f;
 
             //asset.rot[0] = RandomRangeFloat(-90.0f, 90.0f);
 

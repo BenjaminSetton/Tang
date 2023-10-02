@@ -14,12 +14,17 @@ layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inNormal;
 layout(location = 2) in vec2 inUV;
 
-layout(location = 0) out vec3 outNormal;
-layout(location = 1) out vec2 outUV;
+layout(location = 0) out vec3 outPosition;
+layout(location = 1) out vec3 outNormal;
+layout(location = 2) out vec2 outUV;
 
 void main() {
     gl_Position = viewProjUBO.proj * viewProjUBO.view * transformUBO.transform * vec4(inPosition, 1.0);
 
-    outNormal = (transformUBO.transform * vec4(inNormal, 0.0)).xyz;
+    // Calculate the output variables going to the pixel shader
+    outPosition = (viewProjUBO.view * transformUBO.transform * vec4(inPosition, 1.0)).xyz;
+
+    // NOTE - should we multiply the normal by the view matrix too??
+    outNormal = (viewProjUBO.view * transformUBO.transform * vec4(inNormal, 0.0)).xyz;
     outUV = inUV;
 }

@@ -285,6 +285,8 @@ namespace TANG
 		{
 			std::unordered_map<UUID, AssetDescriptorData> assetDescriptorDataMap;
 
+			UniformBuffer cameraDataUBO;
+
 			VkSemaphore imageAvailableSemaphore;
 			VkSemaphore renderFinishedSemaphore;
 			VkFence inFlightFence;
@@ -335,6 +337,8 @@ namespace TANG
 
 		uint32_t currentFrame = 0;
 
+		glm::vec3 cameraPos = { 0.0f, 5.0f, 10.0f };
+
 		// The assetResources vector contains all the vital information that we need for every asset in order to render it
 		// The resourcesMap maps an asset's UUID to a location within the assetResources vector
 		std::unordered_map<UUID, uint32_t> resourcesMap;
@@ -358,7 +362,7 @@ namespace TANG
 		VkDeviceMemory colorImageMemory;
 		VkImageView colorImageView;
 
-		private:
+	private:
 
 		// Returns the current frame-dependent data
 		FrameDependentData* GetCurrentFDD();
