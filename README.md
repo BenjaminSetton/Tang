@@ -21,6 +21,7 @@ NOTES:
 - Vulkan Tutorial - https://vulkan-tutorial.com
 - GLFW input - https://www.glfw.org/docs/3.3/input_guide.html#input_keyboard
 - Amazing Vulkan tutorials by Brendan Galea - https://www.youtube.com/@BrendanGalea
+- Vulkan abstraction guide - https://vkguide.dev
 
 ## DEPENDENCIES
 

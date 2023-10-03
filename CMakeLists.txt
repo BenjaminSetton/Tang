@@ -29,8 +29,12 @@ set(HEADERS
 	src/cmd_buffer/primary_command_buffer.h
 	src/cmd_buffer/secondary_command_buffer.h
 	
+	src/descriptors/write_descriptor_set.h
 	src/descriptors/descriptor_pool.h
-	src/descriptors/descriptors.h
+	src/descriptors/descriptor_set.h
+	src/descriptors/descriptor_allocator.h
+	src/descriptors/set_layout/set_layout_cache.h
+	src/descriptors/set_layout/set_layout.h
 	
 	src/utils/logger.h
 	src/utils/sanity_check.h
@@ -53,8 +57,12 @@ set(SOURCES
 	src/cmd_buffer/primary_command_buffer.cpp
 	src/cmd_buffer/secondary_command_buffer.cpp
 	
+	src/descriptors/write_descriptor_set.cpp
+	src/descriptors/descriptor_set.cpp
 	src/descriptors/descriptor_pool.cpp
-	src/descriptors/descriptors.cpp
+	src/descriptors/descriptor_allocator.cpp
+	src/descriptors/set_layout/set_layout_cache.cpp
+	src/descriptors/set_layout/set_layout.cpp
 	
 	# Shaders
 	src/shaders/shader.vert

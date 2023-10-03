@@ -36,6 +36,7 @@
 #include "asset_loader.h"
 #include "data_buffer/vertex_buffer.h"
 #include "data_buffer/index_buffer.h"
+#include "descriptors/write_descriptor_set.h"
 
 static constexpr uint32_t WINDOW_WIDTH = 1920;
 static constexpr uint32_t WINDOW_HEIGHT = 1080;

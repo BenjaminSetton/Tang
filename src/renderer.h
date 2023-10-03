@@ -21,7 +21,8 @@
 #include "cmd_buffer/secondary_command_buffer.h"
 #include "data_buffer/uniform_buffer.h"
 #include "descriptors/descriptor_pool.h"
-#include "descriptors/descriptors.h"
+#include "descriptors/descriptor_set.h"
+#include "descriptors/set_layout/set_layout.h"
 #include "utils/sanity_check.h"
 
 namespace TANG
