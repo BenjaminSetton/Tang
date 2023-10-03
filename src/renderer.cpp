@@ -1701,14 +1701,14 @@ namespace TANG
 		setLayouts.resize(numSetLayouts);
 
 		// Holds ViewProjUBO + ImageSampler
-		setLayouts[0].AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
-		setLayouts[0].AddBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
-		setLayouts[0].Create(logicalDevice);
+		//setLayouts[0].AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
+		//setLayouts[0].AddBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
+		//setLayouts[0].Create(logicalDevice);
 
 		// Holds TransformUBO + CameraDataUBO
-		setLayouts[1].AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
-		setLayouts[1].AddBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT);
-		setLayouts[1].Create(logicalDevice);
+		//setLayouts[1].AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
+		//setLayouts[1].AddBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT);
+		//setLayouts[1].Create(logicalDevice);
 	}
 
 	void Renderer::CreateDescriptorPool()

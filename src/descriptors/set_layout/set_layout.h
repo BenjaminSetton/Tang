@@ -7,19 +7,10 @@
 
 namespace TANG
 {
-	// Encapsulates a descriptor set layout, as well as the functionality for adding bindings and creating the descriptor set layout itself
-	// Note that it's allowed to copy this object. This is because we must use one set layout for every descriptor set, but we may only
-	// define one set layout and decide to reuse it for every descriptor set
+	// Encapsulates a descriptor set layout, and the size is guaranteed to be the same as the underlying VkDescriptorSetLayout object
 	class DescriptorSetLayout
 	{
 	public:
-
-		enum class SET_LAYOUT_STATE
-		{
-			DEFAULT,
-			CREATED,
-			DESTROYED
-		};
 
 		DescriptorSetLayout();
 		~DescriptorSetLayout();
@@ -27,9 +18,9 @@ namespace TANG
 		DescriptorSetLayout(DescriptorSetLayout&& other) noexcept;
 		DescriptorSetLayout& operator=(const DescriptorSetLayout& other);
 
-		void AddBinding(uint32_t binding, VkDescriptorType descriptorType, VkShaderStageFlags stageFlags);
+		//void AddBinding(uint32_t binding, VkDescriptorType descriptorType, VkShaderStageFlags stageFlags);
 
-		void Create(VkDevice logicalDevice);
+		void Create(VkDevice logicalDevice, VkDescriptorSetLayoutCreateInfo& createInfo);
 		void Destroy(VkDevice logicalDevice);
 
 		VkDescriptorSetLayout& GetLayout();
@@ -37,8 +28,6 @@ namespace TANG
 	private:
 
 		VkDescriptorSetLayout setLayout;
-		std::unordered_map<uint32_t, VkDescriptorSetLayoutBinding> bindings;
-		SET_LAYOUT_STATE state;
 	};
 }
 
