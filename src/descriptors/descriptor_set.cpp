@@ -9,8 +9,10 @@
 
 namespace TANG
 {
+	// Guarantee that the size of DescriptorSet and VkDescriptorSet matches
+	TNG_ASSERT_SAME_SIZE(sizeof(DescriptorSet), sizeof(VkDescriptorSet));
 
-	DescriptorSet::DescriptorSet() : descriptorSet(VK_NULL_HANDLE), setState(DESCRIPTOR_SET_STATE::DEFAULT)
+	DescriptorSet::DescriptorSet() : descriptorSet(VK_NULL_HANDLE)
 	{
 		// Nothing to do here
 	}
@@ -30,7 +32,6 @@ namespace TANG
 	DescriptorSet::DescriptorSet(const DescriptorSet& other)
 	{
 		descriptorSet = other.descriptorSet;
-		setState = other.setState;
 
 		LogInfo("Copied descriptor set!");
 	}
@@ -38,10 +39,8 @@ namespace TANG
 	DescriptorSet::DescriptorSet(DescriptorSet&& other) noexcept
 	{
 		descriptorSet = other.descriptorSet;
-		setState = other.setState;
 
 		other.descriptorSet = VK_NULL_HANDLE;
-		other.setState = DESCRIPTOR_SET_STATE::DEFAULT; // Maybe we should make a MOVED state?
 
 		LogInfo("Moved descriptor set!");
 	}
@@ -55,19 +54,18 @@ namespace TANG
 		}
 
 		descriptorSet = other.descriptorSet;
-		setState = other.setState;
 
 		LogInfo("Copy-assigned descriptor set!");
 
 		return *this;
 	}
 
-	void DescriptorSet::Create(VkDevice logicalDevice, DescriptorPool& descriptorPool, DescriptorSetLayout& setLayout)
+	bool DescriptorSet::Create(VkDevice logicalDevice, DescriptorPool& descriptorPool, DescriptorSetLayout& setLayout)
 	{
-		if (setState == DESCRIPTOR_SET_STATE::CREATED)
+		if (descriptorSet != VK_NULL_HANDLE)
 		{
 			LogWarning("Attempted to create the same descriptor set more than once!");
-			return;
+			return false;
 		}
 
 		VkDescriptorSetAllocateInfo allocInfo{};
@@ -78,15 +76,16 @@ namespace TANG
 
 		if (vkAllocateDescriptorSets(logicalDevice, &allocInfo, &descriptorSet) != VK_SUCCESS)
 		{
-			TNG_ASSERT_MSG(false, "Failed to allocate descriptor sets!");
+			LogError("Failed to allocate descriptor sets!");
+			return false;
 		}
 
-		setState = DESCRIPTOR_SET_STATE::CREATED;
+		return true;
 	}
 
 	void DescriptorSet::Update(VkDevice logicalDevice, WriteDescriptorSets& writeDescriptorSets)
 	{
-		if (setState != DESCRIPTOR_SET_STATE::CREATED)
+		if (descriptorSet == VK_NULL_HANDLE)
 		{
 			LogError("Cannot update a descriptor set that has not been created or has already been destroyed! Bailing...");
 			return;

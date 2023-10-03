@@ -6,10 +6,11 @@
 
 namespace TANG
 {
+	// Assert that the DescriptorPool class remains the same size as the underlying VkDescriptorPool
+	TNG_ASSERT_SAME_SIZE(sizeof(DescriptorPool), sizeof(VkDescriptorPool));
 
 	DescriptorPool::DescriptorPool() : pool(VK_NULL_HANDLE)
 	{
-
 	}
 
 	DescriptorPool::~DescriptorPool()
@@ -19,15 +20,13 @@ namespace TANG
 
 	DescriptorPool::DescriptorPool(const DescriptorPool& other)
 	{
-		// Is this necessary??
-		LogWarning("Copy constructor for descriptor pool invoked!");
+		LogInfo("Copy constructor for descriptor pool invoked!");
 		pool = other.pool;
 	}
 
 	DescriptorPool::DescriptorPool(DescriptorPool&& other)
 	{
-		// Is this necessary??
-		LogWarning("Move constructor for descriptor pool invoked!");
+		LogInfo("Move constructor for descriptor pool invoked!");
 		pool = other.pool;
 
 		other.pool = VK_NULL_HANDLE;
@@ -41,23 +40,28 @@ namespace TANG
 			return *this;
 		}
 
-		// Is this necessary??
-		LogWarning("Assignment operator for descriptor pool invoked!");
+		LogInfo("Assignment operator for descriptor pool invoked!");
 		pool = other.pool;
 		return *this;
 	}
 
-	void DescriptorPool::Create(VkDevice logicalDevice, VkDescriptorPoolSize* poolSizes, uint32_t poolSizeCounts, uint32_t maxSets)
+	void DescriptorPool::Create(VkDevice logicalDevice, VkDescriptorPoolSize* poolSizes, uint32_t poolSizeCounts, uint32_t maxSets, VkDescriptorPoolCreateFlags flags)
 	{
 		VkDescriptorPoolCreateInfo poolInfo{};
 		poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 		poolInfo.poolSizeCount = poolSizeCounts;
 		poolInfo.pPoolSizes = poolSizes;
 		poolInfo.maxSets = maxSets;
+		poolInfo.flags = flags;
 
 		if (vkCreateDescriptorPool(logicalDevice, &poolInfo, nullptr, &pool) != VK_SUCCESS) {
 			TNG_ASSERT_MSG(false, "Failed to create descriptor pool!");
 		}
+	}
+
+	void DescriptorPool::Reset(VkDevice logicalDevice)
+	{
+		vkResetDescriptorPool(logicalDevice, pool, 0);
 	}
 
 	void DescriptorPool::Destroy(VkDevice logicalDevice)
@@ -68,6 +72,21 @@ namespace TANG
 	VkDescriptorPool DescriptorPool::GetPool()
 	{
 		return pool;
+	}
+
+	bool DescriptorPool::IsValid()
+	{
+		return pool != VK_NULL_HANDLE;
+	}
+
+	void DescriptorPool::ClearHandle()
+	{
+		if (pool == VK_NULL_HANDLE)
+		{
+			LogError("Attempting to clear handle of a descriptor pool when the handle doesn't exist!");
+		}
+
+		pool = VK_NULL_HANDLE;
 	}
 
 }

@@ -13,17 +13,12 @@ namespace TANG
 	class DescriptorSetLayout;
 	class WriteDescriptorSets;
 
-	// All the components above must be used in one way or another to create and update the descriptor sets
+	// All the components above must be used in one way or another to create and update the descriptor sets.
+	// The size of a DescriptorSet object is equivalent to that of a VkDescriptorSet object, meaning an array
+	// of DescriptorSet objects can be interpreted as an array of VkDescriptorSet objects
 	class DescriptorSet
 	{
 	public:
-
-		enum class DESCRIPTOR_SET_STATE
-		{
-			DEFAULT,
-			CREATED,
-			DESTROYED
-		};
 
 		DescriptorSet();
 		~DescriptorSet();
@@ -31,7 +26,7 @@ namespace TANG
 		DescriptorSet(DescriptorSet&& other) noexcept;
 		DescriptorSet& operator=(const DescriptorSet& other);
 
-		void Create(VkDevice logicalDevice, DescriptorPool& descriptorPool, DescriptorSetLayout& setLayouts);
+		bool Create(VkDevice logicalDevice, DescriptorPool& descriptorPool, DescriptorSetLayout& setLayouts);
 
 		void Update(VkDevice logicalDevice, WriteDescriptorSets& writeDescriptorSets);
 
@@ -40,7 +35,6 @@ namespace TANG
 	private:
 
 		VkDescriptorSet descriptorSet;
-		DESCRIPTOR_SET_STATE setState;
 
 	};
 }
