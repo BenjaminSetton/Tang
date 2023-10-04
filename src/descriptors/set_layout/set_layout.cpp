@@ -8,7 +8,7 @@ namespace TANG
 {
 	TNG_ASSERT_SAME_SIZE(sizeof(DescriptorSetLayout), sizeof(VkDescriptorSetLayout));
 
-	DescriptorSetLayout::DescriptorSetLayout()
+	DescriptorSetLayout::DescriptorSetLayout() : setLayout(VK_NULL_HANDLE)
 	{
 		// Nothing to do here
 	}
@@ -17,7 +17,8 @@ namespace TANG
 	{
 		if (setLayout != VK_NULL_HANDLE)
 		{
-			LogError("Descriptor set layout destructor called but memory was not freed! Memory will be leaked");
+			// TODO - Detect if the layout has been copied or moved so we can avoid warning in those cases
+			LogWarning("Descriptor set layout destructor called but memory was not freed! Memory will be leaked");
 		}
 
 		setLayout = VK_NULL_HANDLE;

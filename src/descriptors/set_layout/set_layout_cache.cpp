@@ -36,32 +36,6 @@ namespace TANG
 			return VK_NULL_HANDLE;
 		}
 
-		//SetLayoutInfo layoutInfo{};
-		//layoutInfo.bindings.reserve(builder.GetBindingCount());
-		//bool isSorted = true;
-		//int lastBinding = -1;
-
-		//// Copy the bindings from the create info to our internal info struct
-		//for (uint32_t i = 0; i < builder.GetBindingCount(); i++)
-		//{
-		//	layoutInfo.bindings.push_back(createInfo->pBindings[i]);
-
-		//	// Check that the bindings are in ascending order. This is necessary when hashing
-		//	// If the current binding is smaller or equal to the last binding, then we'll say it's NOT sorted
-		//	int currentBinding = static_cast<int>(createInfo->pBindings[i].binding);
-		//	isSorted &= (currentBinding <= lastBinding);
-
-		//	lastBinding = currentBinding;
-		//}
-
-		//// Sort the bindings if they aren't already
-		//if (!isSorted)
-		//{
-		//	std::sort(layoutInfo.bindings.begin(), layoutInfo.bindings.end(), [](VkDescriptorSetLayoutBinding& a, VkDescriptorSetLayoutBinding& b) {
-		//		return a.binding < b.binding;
-		//	});
-		//}
-
 		// Attempt to grab the layout from the cache
 		auto iter = layoutCache.find(layoutSummary);
 		if (iter != layoutCache.end())

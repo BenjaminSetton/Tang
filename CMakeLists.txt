@@ -12,6 +12,9 @@ endif()
 # Set the source directory
 set(CMAKE_SOURCE_DIR ${PROJECT_SOURCE_DIR})
 
+# Force debug and release configurations only, no ugly MinSizeRel or anything like that...
+set(CMAKE_CONFIGURATION_TYPES "Debug;Release" CACHE STRING "Configurations" FORCE)
+
 # Header files
 set(HEADERS
 	src/tang.h
@@ -19,6 +22,7 @@ set(HEADERS
 	src/asset_types.h
 	src/renderer.h
 	src/vertex_type.h
+	src/window.h
 	
 	src/data_buffer/buffer.h
 	src/data_buffer/vertex_buffer.h
@@ -48,6 +52,7 @@ set(SOURCES
 	src/main.cpp
 	src/asset_loader.cpp
 	src/renderer.cpp
+	src/window.cpp
 	
 	src/data_buffer/buffer.cpp
 	src/data_buffer/vertex_buffer.cpp

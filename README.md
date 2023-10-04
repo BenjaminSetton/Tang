@@ -38,3 +38,4 @@ NOTES:
 - Write a basic Camera class that allows us to move around the scene
 - Organize the renderer data so it's easier to conceptualize. Currently it's a mess...
 - Gather user input using GLFW
+- Create an abstraction for textures. These must be imported, loaded, and uploaded to the shaders
