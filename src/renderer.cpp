@@ -531,11 +531,7 @@ namespace TANG
 		vkDestroyImage(logicalDevice, textureImage, nullptr);
 		vkFreeMemory(logicalDevice, textureImageMemory, nullptr);
 
-		for (auto& setLayout : setLayouts)
-		{
-			setLayout.Destroy(logicalDevice);
-		}
-		setLayouts.clear();
+		setLayoutCache.DestroyLayouts(logicalDevice);
 
 		for (uint32_t i = 0; i < GetFDDSize(); i++)
 		{
@@ -1339,9 +1335,10 @@ namespace TANG
 
 		// Pipeline layout
 		std::vector<VkDescriptorSetLayout> vkDescSetLayouts;
-		for (auto& setLayout : setLayouts)
+		LayoutCache& cache = setLayoutCache.GetLayoutCache();
+		for (auto& iter : cache)
 		{
-			vkDescSetLayouts.push_back(setLayout.GetLayout());
+			vkDescSetLayouts.push_back(iter.second.GetLayout());
 		}
 
 		VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
@@ -1697,18 +1694,18 @@ namespace TANG
 
 	void Renderer::CreateDescriptorSetLayouts()
 	{
-		const uint32_t numSetLayouts = 2;
-		setLayouts.resize(numSetLayouts);
-
 		// Holds ViewProjUBO + ImageSampler
-		//setLayouts[0].AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
-		//setLayouts[0].AddBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
-		//setLayouts[0].Create(logicalDevice);
+		// TODO - Switch ViewProjUBO to volatile set layout in preparation for camera movement
+		SetLayoutSummary persistentLayout;
+		persistentLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
+		persistentLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
+		setLayoutCache.CreateSetLayout(logicalDevice, persistentLayout, 0);
 
 		// Holds TransformUBO + CameraDataUBO
-		//setLayouts[1].AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
-		//setLayouts[1].AddBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT);
-		//setLayouts[1].Create(logicalDevice);
+		SetLayoutSummary volatileLayout;
+		volatileLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
+		volatileLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT);
+		setLayoutCache.CreateSetLayout(logicalDevice, volatileLayout, 0);
 	}
 
 	void Renderer::CreateDescriptorPool()
@@ -1743,10 +1740,13 @@ namespace TANG
 			currentFDD->assetDescriptorDataMap.insert({uuid, AssetDescriptorData()});
 			AssetDescriptorData& assetDescriptorData = currentFDD->assetDescriptorDataMap[uuid];
 
-			for (uint32_t j = 0; j < setLayouts.size(); j++)
+			LayoutCache& cache = setLayoutCache.GetLayoutCache();
+			for (auto iter : cache)
 			{
 				assetDescriptorData.descriptorSets.push_back(DescriptorSet());
-				assetDescriptorData.descriptorSets[j].Create(logicalDevice, descriptorPool, setLayouts[j]);
+				DescriptorSet* currentSet = &assetDescriptorData.descriptorSets.back();
+
+				currentSet->Create(logicalDevice, descriptorPool, iter.second);
 			}
 		}
 

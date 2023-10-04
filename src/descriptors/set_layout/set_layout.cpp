@@ -46,24 +46,6 @@ namespace TANG
 		return *this;
 	}
 
-	//void DescriptorSetLayout::AddBinding(uint32_t binding, VkDescriptorType descriptorType, VkShaderStageFlags stageFlags)
-	//{
-	//	if (bindings.find(binding) != bindings.end())
-	//	{
-	//		LogError("Binding %u already in use! Failed to add new binding for descriptor set layout", binding);
-	//		return;
-	//	}
-
-	//	VkDescriptorSetLayoutBinding layoutBinding{};
-	//	layoutBinding.binding = binding;
-	//	layoutBinding.descriptorType = descriptorType;
-	//	layoutBinding.descriptorCount = 1;
-	//	layoutBinding.stageFlags = stageFlags;
-	//	layoutBinding.pImmutableSamplers = nullptr; // Optional
-
-	//	bindings.insert({ binding, layoutBinding });
-	//}
-
 	void DescriptorSetLayout::Create(VkDevice logicalDevice, VkDescriptorSetLayoutCreateInfo& createInfo)
 	{
 		if (setLayout != VK_NULL_HANDLE)

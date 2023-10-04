@@ -28,49 +28,60 @@ namespace TANG
 		// Nothing to do here
 	}
 
-	DescriptorSetLayout SetLayoutCache::CreateSetLayout(VkDevice logicalDevice, VkDescriptorSetLayoutCreateInfo* createInfo)
+	VkDescriptorSetLayout SetLayoutCache::CreateSetLayout(VkDevice logicalDevice, SetLayoutSummary& layoutSummary, VkDescriptorSetLayoutCreateFlags flags)
 	{
-		TNG_ASSERT_MSG(createInfo != nullptr, "Cannot create descriptor set layout when create info is nullptr!");
-
-		SetLayoutInfo layoutInfo{};
-		layoutInfo.bindings.reserve(createInfo->bindingCount);
-		bool isSorted = true;
-		int lastBinding = -1;
-
-		// Copy the bindings from the create info to our internal info struct
-		for (uint32_t i = 0; i < createInfo->bindingCount; i++)
+		if (!layoutSummary.IsValid())
 		{
-			layoutInfo.bindings.push_back(createInfo->pBindings[i]);
-
-			// Check that the bindings are in ascending order. This is necessary when hashing
-			// If the current binding is smaller or equal to the last binding, then we'll say it's NOT sorted
-			int currentBinding = static_cast<int>(createInfo->pBindings[i].binding);
-			isSorted &= (currentBinding <= lastBinding);
-
-			lastBinding = currentBinding;
+			LogError("Cannot create set layout with an invalid builder!");
+			return VK_NULL_HANDLE;
 		}
 
-		// Sort the bindings if they aren't already
-		if (!isSorted)
-		{
-			std::sort(layoutInfo.bindings.begin(), layoutInfo.bindings.end(), [](VkDescriptorSetLayoutBinding& a, VkDescriptorSetLayoutBinding& b) {
-				return a.binding < b.binding;
-			});
-		}
+		//SetLayoutInfo layoutInfo{};
+		//layoutInfo.bindings.reserve(builder.GetBindingCount());
+		//bool isSorted = true;
+		//int lastBinding = -1;
+
+		//// Copy the bindings from the create info to our internal info struct
+		//for (uint32_t i = 0; i < builder.GetBindingCount(); i++)
+		//{
+		//	layoutInfo.bindings.push_back(createInfo->pBindings[i]);
+
+		//	// Check that the bindings are in ascending order. This is necessary when hashing
+		//	// If the current binding is smaller or equal to the last binding, then we'll say it's NOT sorted
+		//	int currentBinding = static_cast<int>(createInfo->pBindings[i].binding);
+		//	isSorted &= (currentBinding <= lastBinding);
+
+		//	lastBinding = currentBinding;
+		//}
+
+		//// Sort the bindings if they aren't already
+		//if (!isSorted)
+		//{
+		//	std::sort(layoutInfo.bindings.begin(), layoutInfo.bindings.end(), [](VkDescriptorSetLayoutBinding& a, VkDescriptorSetLayoutBinding& b) {
+		//		return a.binding < b.binding;
+		//	});
+		//}
 
 		// Attempt to grab the layout from the cache
-		auto iter = layoutCache.find(layoutInfo);
+		auto iter = layoutCache.find(layoutSummary);
 		if (iter != layoutCache.end())
 		{
-			return iter->second;
+			return iter->second.GetLayout();
 		}
 
 		// We didn't find a descriptor set layout matching the description, so let's make a new one
+		VkDescriptorSetLayoutCreateInfo createInfo{};
+		createInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+		createInfo.flags = flags;
+		createInfo.pBindings = layoutSummary.GetBindings();
+		createInfo.bindingCount = layoutSummary.GetBindingCount();
+
 		DescriptorSetLayout layout;
-		layout.Create(logicalDevice, *createInfo);
+		layout.Create(logicalDevice, createInfo);
 		
-		layoutCache[layoutInfo] = layout;
-		return layout;
+		layoutCache[layoutSummary] = layout;
+
+		return layout.GetLayout();
 	}
 
 	void SetLayoutCache::DestroyLayouts(VkDevice logicalDevice)
@@ -83,47 +94,14 @@ namespace TANG
 		layoutCache.clear();
 	}
 
-	///////////////////////////////////////////////////////
-	//
-	//		DESCRIPTOR LAYOUT INFO
-	//
-	///////////////////////////////////////////////////////
-
-	bool SetLayoutCache::SetLayoutInfo::operator==(const SetLayoutInfo& other) const
+	LayoutCache& SetLayoutCache::GetLayoutCache()
 	{
-		if (bindings.size() != other.bindings.size())
-		{
-			return false;
-		}
-
-		// Check that the bindings are equal. We check for everything EXCEPT pImmutableSamplers
-		for (uint32_t i = 0; i < bindings.size(); i++)
-		{
-			if (bindings[i].binding != other.bindings[i].binding)                 return false;
-			if (bindings[i].descriptorType != other.bindings[i].descriptorType)   return false;
-			if (bindings[i].descriptorCount != other.bindings[i].descriptorCount) return false;
-			if (bindings[i].stageFlags != other.bindings[i].stageFlags)           return false;
-		}
-
-		return true;
+		return layoutCache;
 	}
 
-	size_t SetLayoutCache::SetLayoutInfo::Hash() const
+	DescriptorSetLayout* SetLayoutCache::GetSetLayout(const SetLayoutSummary& summary)
 	{
-		size_t hashResult = std::hash<size_t>()(bindings.size());
-
-		// I'll admit, I did not come up with this hashing algorithm. Full credit to:
-		// https://vkguide.dev/docs/extra-chapter/abstracting_descriptors/
-		for (auto& binding : bindings)
-		{
-			//pack the binding data into a single int64. Not fully correct but it's ok
-			size_t bindingHash = binding.binding | binding.descriptorType << 8 | binding.descriptorCount << 16 | binding.stageFlags << 24;
-
-			//shuffle the packed binding data and xor it with the main hash
-			hashResult ^= std::hash<size_t>()(bindingHash);
-		}
-
-		return hashResult;
+		auto result = layoutCache.find(summary);
+		return result == layoutCache.end() ? nullptr : &(result->second);
 	}
-
 }

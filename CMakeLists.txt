@@ -33,8 +33,9 @@ set(HEADERS
 	src/descriptors/descriptor_pool.h
 	src/descriptors/descriptor_set.h
 	src/descriptors/descriptor_allocator.h
-	src/descriptors/set_layout/set_layout_cache.h
 	src/descriptors/set_layout/set_layout.h
+	src/descriptors/set_layout/set_layout_cache.h
+	src/descriptors/set_layout/set_layout_summary.h
 	
 	src/utils/logger.h
 	src/utils/sanity_check.h
@@ -61,8 +62,9 @@ set(SOURCES
 	src/descriptors/descriptor_set.cpp
 	src/descriptors/descriptor_pool.cpp
 	src/descriptors/descriptor_allocator.cpp
-	src/descriptors/set_layout/set_layout_cache.cpp
 	src/descriptors/set_layout/set_layout.cpp
+	src/descriptors/set_layout/set_layout_cache.cpp
+	src/descriptors/set_layout/set_layout_summary.cpp
 	
 	# Shaders
 	src/shaders/shader.vert

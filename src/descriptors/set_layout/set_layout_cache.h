@@ -4,11 +4,23 @@
 #include <vector>
 #include <unordered_map>
 
+#include "set_layout_summary.h"
 #include "set_layout.h"
 #include "vulkan/vulkan.h"
 
 namespace TANG
 {
+	// PRIVATE - DO NOT USE
+	// This is only here so we can define a convenient typedef for the cache type below
+	struct SetLayoutHash {
+
+		size_t operator()(const SetLayoutSummary& layoutSummary) const {
+			return layoutSummary.Hash();
+		}
+	};
+
+	typedef std::unordered_map<SetLayoutSummary, DescriptorSetLayout, SetLayoutHash> LayoutCache;
+
 	// An allocator and cache class for tracking all the allocated descriptor set layouts
 	class SetLayoutCache
 	{
@@ -20,30 +32,15 @@ namespace TANG
 		SetLayoutCache(SetLayoutCache&& other) noexcept;
 		SetLayoutCache& operator=(const SetLayoutCache& other) = delete;
 
-		// TODO - Create a SetLayoutBuilder class that contains a vector of bindings, so that we can easily create a set layout
-		//        by chaining a bunch of AddBinding calls and then pass it into the CreateSetLayout function below
-		DescriptorSetLayout CreateSetLayout(VkDevice logicalDevice, VkDescriptorSetLayoutCreateInfo* createInfo);
+		VkDescriptorSetLayout CreateSetLayout(VkDevice logicalDevice, SetLayoutSummary& layoutSummary, VkDescriptorSetLayoutCreateFlags flags);
 		void DestroyLayouts(VkDevice logicalDevice);
 
-		struct SetLayoutInfo {
-
-			std::vector<VkDescriptorSetLayoutBinding> bindings;
-
-			bool operator==(const SetLayoutInfo& other) const;
-
-			size_t Hash() const;
-		};
+		LayoutCache& GetLayoutCache();
+		DescriptorSetLayout* GetSetLayout(const SetLayoutSummary& summary);
 
 	private:
 
-		struct SetLayoutHash {
-
-			std::size_t operator()(const SetLayoutInfo& layoutInfo) const {
-				return layoutInfo.Hash();
-			}
-		};
-
-		std::unordered_map<SetLayoutInfo, DescriptorSetLayout, SetLayoutHash> layoutCache;
+		LayoutCache layoutCache;
 
 	};
 

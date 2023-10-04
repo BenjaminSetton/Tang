@@ -22,7 +22,8 @@
 #include "data_buffer/uniform_buffer.h"
 #include "descriptors/descriptor_pool.h"
 #include "descriptors/descriptor_set.h"
-#include "descriptors/set_layout/set_layout.h"
+#include "descriptors/set_layout/set_layout_cache.h"
+#include "descriptors/set_layout/set_layout_summary.h"
 #include "utils/sanity_check.h"
 
 namespace TANG
@@ -328,7 +329,9 @@ namespace TANG
 		};
 		std::vector<SwapChainImageDependentData> swapChainImageDependentData;
 
-		std::vector<DescriptorSetLayout> setLayouts;
+		SetLayoutCache setLayoutCache;
+		std::vector<SetLayoutSummary> layoutSummaries;
+
 		VkRenderPass renderPass;
 		VkPipelineLayout pipelineLayout;
 
