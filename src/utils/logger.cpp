@@ -23,25 +23,28 @@ namespace TANG
 		{
 		case LogType::DEBUG:
 		{
-			std::cerr << "[DEBUG] " << buffer << std::endl;
+			std::cerr << "\x1B[36m" << "[DEBUG] " << buffer << "\033[0m";
 			break;
 		}
 		case LogType::INFO:
 		{
-			std::cerr << "[INFO] " << buffer << std::endl;
+			std::cerr << "\x1B[37m" << "[INFO] " << buffer << "\033[0m";
 			break;
 		}
 		case LogType::WARNING:
 		{
-			std::cerr << "[WARNING] " << buffer << std::endl;
+			std::cerr << "\x1B[33m" << "[WARNING] " << buffer << "\033[0m";
 			break;
 		}
 		case LogType::ERR:
 		{
-			std::cerr << "[ERROR] " << buffer << std::endl;
+			std::cerr << "\x1B[31m" << "[ERROR] " << buffer << "\033[0m";
 			break;
 		}
 		}
+
+		// End the line
+		std::cerr << std::endl;
 	}
 
 	void LogError(const char* format, ...)
