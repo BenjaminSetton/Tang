@@ -103,7 +103,7 @@ int main(uint32_t argc, const char** argv)
             TANG::UpdateAssetRotation(id, rot, true);
 		}
         
-        TANG::Update(&dt);
+        TANG::Update(dt);
 
         TANG::Draw();
     }

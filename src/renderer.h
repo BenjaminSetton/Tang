@@ -6,13 +6,6 @@
 // https://vulkan-tutorial.com
 //
 
-#define VK_USE_PLATFORM_WIN32_KHR
-#define GLFW_INCLUDE_VULKAN
-#include <glfw3.h>
-
-#define GLFW_EXPOSE_NATIVE_WIN32
-#include <glfw3native.h>
-
 #include <unordered_map>
 #include <vector>
 
@@ -25,6 +18,8 @@
 #include "descriptors/set_layout/set_layout_cache.h"
 #include "descriptors/set_layout/set_layout_summary.h"
 #include "utils/sanity_check.h"
+
+class GLFWwindow;
 
 namespace TANG
 {
@@ -39,15 +34,18 @@ namespace TANG
 		QUEUE_COUNT			// NOTE! This value must come last at all times!! This is used to count the number of values inside this enum
 	};
 
+	// Function pointer callbacks
+	using GetWindowSizeCallback = void(*)(uint32_t*, uint32_t*);
+	using BlockIfWindowMinimizedCallback = void(*)(void);
+
 	class Renderer {
 
 	public:
 
-		void Initialize();
+		void Initialize(GLFWwindow* windowHandle, uint32_t windowWidth, uint32_t windowHeight);
 
-		// Receives an OPTIONAL parameter of deltaTime. Since this renderer is meant to work with the API, we'll give the user the option
-		// of passing in a deltaTime to the renderer. If nullptr is passed in, we'll calculate it instead
-		void Update(float* deltaTime);
+		// Core update loop for the renderer
+		void Update(float deltaTime);
 
 		// The core draw call. Conventionally, the state of the renderer must be updated through a call to Update() before this call is made
 		void Draw();
@@ -86,29 +84,12 @@ namespace TANG
 		void DestroyAssetResources(UUID uuid);
 		void DestroyAllAssetResources();
 
-		// TODO - Abstract this out into a window class, this really shouldn't be part of the renderer
-		bool WindowShouldClose();
+		void CreateSurface(GLFWwindow* windowHandle);
 
-		bool framebufferResized = false;
+		// This is registered as a callback, which the Window class will call once GLFW notifies us about a window resize event
+		void RecreateSwapChain(uint32_t width, uint32_t height);
 
 	private:
-
-		static void framebufferResizeCallback(GLFWwindow* windowHandle, int width, int height)
-		{
-			UNUSED(width);
-			UNUSED(height);
-
-			auto app = reinterpret_cast<Renderer*>(glfwGetWindowUserPointer(windowHandle));
-			app->framebufferResized = true;
-		}
-
-		// NOTE - The window creation and management using GLFW will be abstracted away from this class in the future.
-		//        The renderer should only be in charge of initializing, maintaining and destroying Vulkan-related objects.
-		void InitWindow();
-		void InitVulkan();
-
-		void ShutdownWindow();
-		void ShutdownVulkan();
 
 		void DrawFrame();
 
@@ -141,25 +122,13 @@ namespace TANG
 
 		VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
 
-		VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
+		VkExtent2D ChooseSwapChainExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32_t actualWidth, uint32_t actualHeight);
 
 		uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 
-		////////////////////////////////////////
-		//
-		//  LOGICAL DEVICE
-		//
-		////////////////////////////////////////
 		void CreateLogicalDevice();
 
-		////////////////////////////////////////
-		//
-		//  SURFACE
-		//
-		////////////////////////////////////////
-		void CreateSurface();
-
-		void CreateSwapChain();
+		void CreateSwapChain(uint32_t width, uint32_t height);
 
 		// Create image views for all images on the swap chain
 		void CreateImageViews();
@@ -209,8 +178,6 @@ namespace TANG
 		void RecordPrimaryCommandBuffer(uint32_t frameBufferIndex);
 		void RecordSecondaryCommandBuffer(SecondaryCommandBuffer& commandBuffer, AssetResources* resources, uint32_t frameBufferIndex);
 
-		void RecreateSwapChain();
-
 		void RecreateAllSecondaryCommandBuffers();
 
 		void CleanupSwapChain();
@@ -251,7 +218,7 @@ namespace TANG
 
 	private:
 
-		GLFWwindow* windowHandle = nullptr;
+		//GLFWwindow* windowHandle = nullptr;
 
 		VkInstance vkInstance;
 		VkDebugUtilsMessengerEXT debugMessenger;

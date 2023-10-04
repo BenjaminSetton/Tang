@@ -2,6 +2,7 @@
 #include "asset_loader.h"
 #include "renderer.h"
 #include "utils/sanity_check.h"
+#include "window.h"
 #include "tang.h"
 
 namespace TANG
@@ -10,7 +11,13 @@ namespace TANG
 	// works exactly as expected
 	TNG_ASSERT_COMPILE(sizeof(glm::vec3) == 3 * sizeof(float));
 
+	// TODO - Maybe move this to a config?
+	static constexpr uint32_t WINDOW_WIDTH = 1920;
+	static constexpr uint32_t WINDOW_HEIGHT = 1080;
+
+	// Static global handles
 	static Renderer rendererHandle;
+	static Window windowHandle;
 
 	///////////////////////////////////////////////////////////
 	//
@@ -19,11 +26,22 @@ namespace TANG
 	///////////////////////////////////////////////////////////
 	void Initialize()
 	{
-		rendererHandle.Initialize();
+		windowHandle.Create(WINDOW_WIDTH, WINDOW_HEIGHT);
+		rendererHandle.Initialize(windowHandle.GetHandle());
+
+		// Register the callbacks
+		windowHandle.SetRecreateSwapChainCallback(Renderer::RecreateSwapChain);
 	}
 
-	void Update(float* deltaTime)
+	void Update(float deltaTime)
 	{
+		windowHandle.Update(deltaTime);
+		if (windowHandle.WasWindowResized())
+		{
+			// Notify the renderer that the window was resized
+			//rendererHandle.
+		}
+
 		rendererHandle.Update(deltaTime);
 	}
 
@@ -36,6 +54,7 @@ namespace TANG
 	{
 		LoaderUtils::UnloadAll();
 		rendererHandle.Shutdown();
+		windowHandle.Destroy();
 	}
 
 	///////////////////////////////////////////////////////////
@@ -45,10 +64,7 @@ namespace TANG
 	///////////////////////////////////////////////////////////
 	bool WindowShouldClose()
 	{
-		// NOTE - This is definitely going to move to a separate Window class at some point...
-		//        This function call should not be part of the renderer, it's just that GLFW
-		//        and the renderer class are too tightly coupled atm
-		return rendererHandle.WindowShouldClose();
+		return windowHandle.ShouldClose();
 	}
 
 	UUID LoadAsset(const char* filepath)

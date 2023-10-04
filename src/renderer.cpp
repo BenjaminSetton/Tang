@@ -33,6 +33,11 @@
 #include <unordered_map>
 #include <vector>
 
+// Unfortunately the renderer has to know about GLFW in order to create the surface, since the vulkan call itself
+// takes in a GLFWwindow pointer >:(. This also means we have to pass it into the renderer's Initialize() call,
+// since the surface has to be initialized for other Vulkan objects to be properly initialized as well...
+#include <glfw3.h>
+
 #include "asset_loader.h"
 #include "data_buffer/vertex_buffer.h"
 #include "data_buffer/index_buffer.h"
@@ -232,17 +237,9 @@ namespace TANG
 	};
 	TNG_ASSERT_COMPILE(sizeof(CameraDataUBO) == 64);
 
-	void Renderer::Update(float* deltaTime)
+	void Renderer::Update(float deltaTime)
 	{
 		UNUSED(deltaTime);
-
-		/*static auto startTime = std::chrono::high_resolution_clock::now();
-
-		float elapsedTime = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - startTime).count();
-		float dt = deltaTime == nullptr ? elapsedTime : *deltaTime;*/
-
-		glfwPollEvents();
-
 	}
 
 	void Renderer::Draw()
@@ -411,81 +408,50 @@ namespace TANG
 		resourcesMap.clear();
 	}
 
-	bool Renderer::WindowShouldClose()
+	void Renderer::CreateSurface(GLFWwindow* windowHandle)
 	{
-		return glfwWindowShouldClose(windowHandle);
-	}
-
-	void Renderer::Initialize()
-	{
-		InitWindow();
-		InitVulkan();
-	}
-
-	void Renderer::Shutdown()
-	{
-		ShutdownVulkan();
-		ShutdownWindow();
-
-	}
-
-	void Renderer::SetAssetDrawState(UUID uuid)
-	{
-		if (resourcesMap.find(uuid) == resourcesMap.end())
+		if (glfwCreateWindowSurface(vkInstance, windowHandle, nullptr, &surface) != VK_SUCCESS)
 		{
-			// Undefined behavior. Maybe the asset resources were deleted but we somehow forgot to remove it from the assetDrawStates map?
-			TNG_ASSERT_MSG(false, "Attempted to set asset draw state, but draw state doesn't exist in the map!");
+			TNG_ASSERT_MSG(false, "Failed to create window surface!");
 		}
-
-		assetResources[resourcesMap[uuid]].shouldDraw = true;
 	}
 
-	void Renderer::SetAssetTransform(UUID uuid, Transform& transform)
+	void Renderer::RecreateSwapChain(uint32_t width, uint32_t height)
 	{
-		assetResources[resourcesMap[uuid]].transform = transform;
+		//// This bit of code handles window minimization. When the window is minimized GLFW returns a size of 0,
+		//// so we block until the window is maximized again
+		//int width = 0;
+		//int height = 0;
+		//glfwGetFramebufferSize(windowHandle, &width, &height);
+		//while (width == 0 || height == 0)
+		//{
+		//	glfwGetFramebufferSize(windowHandle, &width, &height);
+		//	glfwWaitEvents();
+		//}
+
+		vkDeviceWaitIdle(logicalDevice);
+
+		CleanupSwapChain();
+
+		CreateSwapChain(width, height);
+		CreateImageViews();
+		CreateColorResources();
+		CreateDepthResources();
+		CreateFramebuffers();
+		RecreateAllSecondaryCommandBuffers();
 	}
 
-	void Renderer::SetAssetPosition(UUID uuid, glm::vec3& position)
-	{
-		Transform& transform = assetResources[resourcesMap[uuid]].transform;
-		transform.position = position;
-	}
-
-	void Renderer::SetAssetRotation(UUID uuid, glm::vec3& rotation)
-	{
-		Transform& transform = assetResources[resourcesMap[uuid]].transform;
-		transform.rotation = rotation;
-	}
-
-	void Renderer::SetAssetScale(UUID uuid, glm::vec3& scale)
-	{
-		Transform& transform = assetResources[resourcesMap[uuid]].transform;
-		transform.scale = scale;
-	}
-
-	void Renderer::InitWindow()
-	{
-		// Initialize the window
-		glfwInit();
-
-		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-
-		windowHandle = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "TANG", nullptr, nullptr);
-		glfwSetWindowUserPointer(windowHandle, this);
-		glfwSetFramebufferSizeCallback(windowHandle, framebufferResizeCallback);
-	}
-
-	void Renderer::InitVulkan()
+	void Renderer::Initialize(GLFWwindow* windowHandle, uint32_t windowWidth, uint32_t windowHeight)
 	{
 		frameDependentData.resize(MAX_FRAMES_IN_FLIGHT);
 
 		// Initialize Vulkan-related objects
 		CreateInstance();
 		SetupDebugMessenger();
-		CreateSurface();
+		CreateSurface(windowHandle);
 		PickPhysicalDevice();
 		CreateLogicalDevice();
-		CreateSwapChain();
+		CreateSwapChain(windowWidth, windowHeight);
 		CreateImageViews();
 		CreateDescriptorSetLayouts();
 		CreateDescriptorPool();
@@ -511,13 +477,7 @@ namespace TANG
 		}
 	}
 
-	void Renderer::ShutdownWindow()
-	{
-		glfwDestroyWindow(windowHandle);
-		glfwTerminate();
-	}
-
-	void Renderer::ShutdownVulkan()
+	void Renderer::Shutdown()
 	{
 		vkDeviceWaitIdle(logicalDevice);
 
@@ -574,6 +534,40 @@ namespace TANG
 		}
 
 		vkDestroyInstance(vkInstance, nullptr);
+	}
+
+	void Renderer::SetAssetDrawState(UUID uuid)
+	{
+		if (resourcesMap.find(uuid) == resourcesMap.end())
+		{
+			// Undefined behavior. Maybe the asset resources were deleted but we somehow forgot to remove it from the assetDrawStates map?
+			TNG_ASSERT_MSG(false, "Attempted to set asset draw state, but draw state doesn't exist in the map!");
+		}
+
+		assetResources[resourcesMap[uuid]].shouldDraw = true;
+	}
+
+	void Renderer::SetAssetTransform(UUID uuid, Transform& transform)
+	{
+		assetResources[resourcesMap[uuid]].transform = transform;
+	}
+
+	void Renderer::SetAssetPosition(UUID uuid, glm::vec3& position)
+	{
+		Transform& transform = assetResources[resourcesMap[uuid]].transform;
+		transform.position = position;
+	}
+
+	void Renderer::SetAssetRotation(UUID uuid, glm::vec3& rotation)
+	{
+		Transform& transform = assetResources[resourcesMap[uuid]].transform;
+		transform.rotation = rotation;
+	}
+
+	void Renderer::SetAssetScale(UUID uuid, glm::vec3& scale)
+	{
+		Transform& transform = assetResources[resourcesMap[uuid]].transform;
+		transform.scale = scale;
 	}
 
 	void Renderer::DrawFrame()
@@ -648,9 +642,8 @@ namespace TANG
 
 		result = vkQueuePresentKHR(queues[PRESENT_QUEUE], &presentInfo);
 
-		if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebufferResized)
+		if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
 		{
-			framebufferResized = false;
 			RecreateSwapChain();
 		}
 		else if (result != VK_SUCCESS)
@@ -977,7 +970,7 @@ namespace TANG
 		return VK_PRESENT_MODE_FIFO_KHR;
 	}
 
-	VkExtent2D Renderer::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities)
+	VkExtent2D Renderer::ChooseSwapChainExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32_t actualWidth, uint32_t actualHeight)
 	{
 		if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max())
 		{
@@ -985,13 +978,10 @@ namespace TANG
 		}
 		else
 		{
-			int width, height;
-			glfwGetFramebufferSize(windowHandle, &width, &height);
-
 			VkExtent2D actualExtent =
 			{
-				static_cast<uint32_t>(width),
-				static_cast<uint32_t>(height)
+				static_cast<uint32_t>(actualWidth),
+				static_cast<uint32_t>(actualHeight)
 			};
 
 			actualExtent.width = std::clamp(actualExtent.width, capabilities.minImageExtent.width,
@@ -1021,11 +1011,6 @@ namespace TANG
 		return std::numeric_limits<uint32_t>::max();
 	}
 
-	////////////////////////////////////////
-	//
-	//  LOGICAL DEVICE
-	//
-	////////////////////////////////////////
 	void Renderer::CreateLogicalDevice()
 	{
 		QueueFamilyIndices indices = FindQueueFamilies(physicalDevice);
@@ -1086,25 +1071,12 @@ namespace TANG
 
 	}
 
-	////////////////////////////////////////
-	//
-	//  SURFACE
-	//
-	////////////////////////////////////////
-	void Renderer::CreateSurface()
-	{
-		if (glfwCreateWindowSurface(vkInstance, windowHandle, nullptr, &surface) != VK_SUCCESS)
-		{
-			TNG_ASSERT_MSG(false, "Failed to create window surface!");
-		}
-	}
-
-	void Renderer::CreateSwapChain()
+	void Renderer::CreateSwapChain(uint32_t width, uint32_t height)
 	{
 		SwapChainSupportDetails details = QuerySwapChainSupport(physicalDevice);
 		VkSurfaceFormatKHR surfaceFormat = ChooseSwapSurfaceFormat(details.formats);
 		VkPresentModeKHR presentMode = ChooseSwapPresentMode(details.presentModes);
-		VkExtent2D extent = ChooseSwapExtent(details.capabilities);
+		VkExtent2D extent = ChooseSwapChainExtent(details.capabilities, width, height);
 
 		uint32_t imageCount = details.capabilities.minImageCount + 1;
 		if (details.capabilities.maxImageCount > 0 && imageCount > details.capabilities.maxImageCount)
@@ -1900,29 +1872,6 @@ namespace TANG
 		commandBuffer.CMD_DrawIndexed(static_cast<uint32_t>(resources->indexCount));
 
 		commandBuffer.EndRecording();
-	}
-
-	void Renderer::RecreateSwapChain()
-	{
-		int width = 0;
-		int height = 0;
-		glfwGetFramebufferSize(windowHandle, &width, &height);
-		while (width == 0 || height == 0)
-		{
-			glfwGetFramebufferSize(windowHandle, &width, &height);
-			glfwWaitEvents();
-		}
-
-		vkDeviceWaitIdle(logicalDevice);
-
-		CleanupSwapChain();
-
-		CreateSwapChain();
-		CreateImageViews();
-		CreateColorResources();
-		CreateDepthResources();
-		CreateFramebuffers();
-		RecreateAllSecondaryCommandBuffers();
 	}
 
 	void Renderer::RecreateAllSecondaryCommandBuffers()

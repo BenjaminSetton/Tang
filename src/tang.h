@@ -42,7 +42,7 @@ namespace TANG
 	void Initialize();
 
 	// TODO
-	void Update(float* deltaTime);
+	void Update(float deltaTime);
 
 	// TODO
 	void Draw();
