@@ -27,7 +27,7 @@ namespace TANG
 	void Initialize()
 	{
 		windowHandle.Create(WINDOW_WIDTH, WINDOW_HEIGHT);
-		rendererHandle.Initialize(windowHandle.GetHandle());
+		rendererHandle.Initialize(windowHandle.GetHandle(), WINDOW_WIDTH, WINDOW_HEIGHT);
 
 		// Register the callbacks
 		windowHandle.SetRecreateSwapChainCallback(Renderer::RecreateSwapChain);
