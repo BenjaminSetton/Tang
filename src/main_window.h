@@ -1,26 +1,20 @@
-#ifndef WINDOW_H
-#define WINDOW_H
+#ifndef TANG_MAIN_WINDOW_H
+#define TANG_MAIN_WINDOW_H
 
-#define VK_USE_PLATFORM_WIN32_KHR
-#include <glfw3.h>
-
-#define GLFW_EXPOSE_NATIVE_WIN32
-#include <glfw3native.h>
+struct GLFWwindow;
 
 namespace TANG
 {
-	// Singleton Window class, we do not support multiple windows
-	class Window
+	// Main window class, we do not support multiple windows
+	class MainWindow
 	{
 	public:
 
-		using RecreateSwapChainCallback = void(*)(uint32_t, uint32_t);
-
-		Window();
-		~Window();
-		Window(const Window& other);
-		Window(Window&& other) noexcept;
-		Window& operator=(const Window& other);
+		MainWindow();
+		~MainWindow();
+		MainWindow(const MainWindow& other);
+		MainWindow(MainWindow&& other) noexcept;
+		MainWindow& operator=(const MainWindow& other);
 
 		GLFWwindow* GetHandle() const;
 
@@ -35,18 +29,14 @@ namespace TANG
 		bool WasWindowResized();
 
 		// Returns the immediately available framebuffer width and height
-		void GetFramebufferSize(int* outWidth, int* outHeight) const;
+		void GetFramebufferSize(uint32_t* outWidth, uint32_t* outHeight);
 
 		// Blocks the calling thread if the window is minimized, and unblocks only until the window is maximized again.
 		// The two out parameters are populated with the windows' size after it's maximized
-		void BlockIfMinimized(uint32_t* outWidth, uint32_t* outHeight) const;
-
-		// Sets the callback to recreate the renderer's swap chain upon receiving a window-resized event from GLFW
-		void SetRecreateSwapChainCallback(RecreateSwapChainCallback callback);
+		void BlockIfMinimized(uint32_t* outWidth, uint32_t* outHeight);
 
 		// Set to true only by the GLFW callback, set to false and read only by WasWindowResized
 		bool windowResized;
-		RecreateSwapChainCallback swapChainCallback;
 
 	private:
 
@@ -55,6 +45,5 @@ namespace TANG
 
 	};
 }
-
 
 #endif

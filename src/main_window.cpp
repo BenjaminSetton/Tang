@@ -1,7 +1,13 @@
 
+#define VK_USE_PLATFORM_WIN32_KHR
+#include <glfw3.h>
+
+#define GLFW_EXPOSE_NATIVE_WIN32
+#include <glfw3native.h>
+
 #include <utility>
 
-#include "window.h"
+#include "main_window.h"
 #include "utils/logger.h"
 #include "utils/sanity_check.h"
 
@@ -13,23 +19,20 @@ namespace TANG
 		UNUSED(windowWidth);
 		UNUSED(windowHeight);
 
-		auto app = reinterpret_cast<Window*>(glfwGetWindowUserPointer(windowHandle));
+		auto app = reinterpret_cast<MainWindow*>(glfwGetWindowUserPointer(windowHandle));
 		app->windowResized = true;
 
 		// Block if the window is minimized
 		uint32_t width, height;
 		app->BlockIfMinimized(&width, &height);
-
-		// Call the renderer's ResizeSwapChain callback
-		app->swapChainCallback(width, height);
 	}
 
-	Window::Window() : glfwWinHandle(nullptr)
+	MainWindow::MainWindow() : glfwWinHandle(nullptr)
 	{
 		// Nothing to do here
 	}
 
-	Window::~Window()
+	MainWindow::~MainWindow()
 	{
 		if (glfwWinHandle != nullptr)
 		{
@@ -39,27 +42,35 @@ namespace TANG
 		glfwWinHandle = nullptr;
 	}
 
-	Window::Window(const Window& other) : glfwWinHandle(other.glfwWinHandle)
+	MainWindow::MainWindow(const MainWindow& other) : glfwWinHandle(other.glfwWinHandle)
 	{
 		// Nothing to do here
 	}
 
-	Window::Window(Window&& other) noexcept : glfwWinHandle(std::move(other.glfwWinHandle))
+	MainWindow::MainWindow(MainWindow&& other) noexcept : glfwWinHandle(std::move(other.glfwWinHandle))
 	{
 		other.glfwWinHandle = nullptr;
 	}
 
-	Window& Window::operator=(const Window& other)
+	MainWindow& MainWindow::operator=(const MainWindow& other)
 	{
+		// Protect against self-assignment
+		if (this == &other)
+		{
+			return *this;
+		}
+
 		glfwWinHandle = other.glfwWinHandle;
+
+		return *this;
 	}
 
-	GLFWwindow* Window::GetHandle() const
+	GLFWwindow* MainWindow::GetHandle() const
 	{
 		return glfwWinHandle;
 	}
 
-	void Window::Create(uint32_t width, uint32_t height)
+	void MainWindow::Create(uint32_t width, uint32_t height)
 	{
 		if (glfwWinHandle != nullptr)
 		{
@@ -76,14 +87,14 @@ namespace TANG
 		glfwSetFramebufferSizeCallback(glfwWinHandle, FramebufferResizeCallback);
 	}
 
-	void Window::Update(float deltaTime)
+	void MainWindow::Update(float deltaTime)
 	{
 		UNUSED(deltaTime);
 
 		glfwPollEvents();
 	}
 
-	void Window::Destroy()
+	void MainWindow::Destroy()
 	{
 		if (glfwWinHandle == nullptr)
 		{
@@ -97,12 +108,12 @@ namespace TANG
 		glfwWinHandle = nullptr;
 	}
 
-	bool Window::ShouldClose() const
+	bool MainWindow::ShouldClose() const
 	{
 		return glfwWindowShouldClose(glfwWinHandle);
 	}
 
-	bool Window::WasWindowResized()
+	bool MainWindow::WasWindowResized()
 	{
 		bool res = windowResized;
 		windowResized = false;
@@ -110,15 +121,19 @@ namespace TANG
 		return res;
 	}
 
-	void Window::GetFramebufferSize(int* outWidth, int* outHeight) const
+	void MainWindow::GetFramebufferSize(uint32_t* outWidth, uint32_t* outHeight)
 	{
 		TNG_ASSERT_MSG(outWidth != nullptr, "Width parameter must not be nullptr!");
 		TNG_ASSERT_MSG(outHeight != nullptr, "Height parameter must not be nullptr!");
 
-		glfwGetFramebufferSize(glfwWinHandle, outWidth, outHeight);
+		int width, height;
+		glfwGetFramebufferSize(glfwWinHandle, &width, &height);
+		
+		*outWidth = static_cast<uint32_t>(width);
+		*outHeight = static_cast<uint32_t>(height);
 	}
 
-	void Window::BlockIfMinimized(uint32_t* outWidth, uint32_t* outHeight) const
+	void MainWindow::BlockIfMinimized(uint32_t* outWidth, uint32_t* outHeight)
 	{
 		TNG_ASSERT_MSG(outWidth != nullptr, "Width parameter must not be nullptr!");
 		TNG_ASSERT_MSG(outHeight != nullptr, "Height parameter must not be nullptr!");
@@ -131,13 +146,8 @@ namespace TANG
 			glfwWaitEvents();
 		}
 
-		*outWidth = width;
-		*outHeight = height;
-	}
-
-	void Window::SetRecreateSwapChainCallback(RecreateSwapChainCallback callback)
-	{
-		swapChainCallback = callback;
+		*outWidth = static_cast<uint32_t>(width);
+		*outHeight = static_cast<uint32_t>(height);
 	}
 }
 

@@ -22,7 +22,7 @@ set(HEADERS
 	src/asset_types.h
 	src/renderer.h
 	src/vertex_type.h
-	src/window.h
+	src/main_window.h
 	
 	src/data_buffer/buffer.h
 	src/data_buffer/vertex_buffer.h
@@ -52,7 +52,7 @@ set(SOURCES
 	src/main.cpp
 	src/asset_loader.cpp
 	src/renderer.cpp
-	src/window.cpp
+	src/main_window.cpp
 	
 	src/data_buffer/buffer.cpp
 	src/data_buffer/vertex_buffer.cpp

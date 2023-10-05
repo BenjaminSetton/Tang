@@ -26,17 +26,19 @@
 #include <cstdlib>
 #include <cstdint>
 #include <fstream>
-#include <glm.hpp>
-#include <iostream>
-#include <optional>
-#include <set>
-#include <unordered_map>
-#include <vector>
 
 // Unfortunately the renderer has to know about GLFW in order to create the surface, since the vulkan call itself
 // takes in a GLFWwindow pointer >:(. This also means we have to pass it into the renderer's Initialize() call,
 // since the surface has to be initialized for other Vulkan objects to be properly initialized as well...
-#include <glfw3.h>
+#include <glfw3.h> // GLFWwindow, glfwCreateWindowSurface() and glfwGetRequiredInstanceExtensions()
+
+#include <glm.hpp>
+#include <iostream>
+#include <limits>
+#include <optional>
+#include <set>
+#include <unordered_map>
+#include <vector>
 
 #include "asset_loader.h"
 #include "data_buffer/vertex_buffer.h"
@@ -240,6 +242,11 @@ namespace TANG
 	void Renderer::Update(float deltaTime)
 	{
 		UNUSED(deltaTime);
+
+		if (swapChainExtent.width != framebufferWidth || swapChainExtent.height != framebufferHeight)
+		{
+			RecreateSwapChain();
+		}
 	}
 
 	void Renderer::Draw()
@@ -416,24 +423,19 @@ namespace TANG
 		}
 	}
 
-	void Renderer::RecreateSwapChain(uint32_t width, uint32_t height)
+	void Renderer::SetNextFramebufferSize(uint32_t newWidth, uint32_t newHeight)
 	{
-		//// This bit of code handles window minimization. When the window is minimized GLFW returns a size of 0,
-		//// so we block until the window is maximized again
-		//int width = 0;
-		//int height = 0;
-		//glfwGetFramebufferSize(windowHandle, &width, &height);
-		//while (width == 0 || height == 0)
-		//{
-		//	glfwGetFramebufferSize(windowHandle, &width, &height);
-		//	glfwWaitEvents();
-		//}
+		framebufferWidth = newWidth;
+		framebufferHeight = newHeight;
+	}
 
+	void Renderer::RecreateSwapChain()
+	{
 		vkDeviceWaitIdle(logicalDevice);
 
 		CleanupSwapChain();
 
-		CreateSwapChain(width, height);
+		CreateSwapChain();
 		CreateImageViews();
 		CreateColorResources();
 		CreateDepthResources();
@@ -444,6 +446,8 @@ namespace TANG
 	void Renderer::Initialize(GLFWwindow* windowHandle, uint32_t windowWidth, uint32_t windowHeight)
 	{
 		frameDependentData.resize(MAX_FRAMES_IN_FLIGHT);
+		framebufferWidth = windowWidth;
+		framebufferHeight = windowHeight;
 
 		// Initialize Vulkan-related objects
 		CreateInstance();
@@ -451,7 +455,7 @@ namespace TANG
 		CreateSurface(windowHandle);
 		PickPhysicalDevice();
 		CreateLogicalDevice();
-		CreateSwapChain(windowWidth, windowHeight);
+		CreateSwapChain();
 		CreateImageViews();
 		CreateDescriptorSetLayouts();
 		CreateDescriptorPool();
@@ -1071,12 +1075,12 @@ namespace TANG
 
 	}
 
-	void Renderer::CreateSwapChain(uint32_t width, uint32_t height)
+	void Renderer::CreateSwapChain()
 	{
 		SwapChainSupportDetails details = QuerySwapChainSupport(physicalDevice);
 		VkSurfaceFormatKHR surfaceFormat = ChooseSwapSurfaceFormat(details.formats);
 		VkPresentModeKHR presentMode = ChooseSwapPresentMode(details.presentModes);
-		VkExtent2D extent = ChooseSwapChainExtent(details.capabilities, width, height);
+		VkExtent2D extent = ChooseSwapChainExtent(details.capabilities, framebufferWidth, framebufferHeight);
 
 		uint32_t imageCount = details.capabilities.minImageCount + 1;
 		if (details.capabilities.maxImageCount > 0 && imageCount > details.capabilities.maxImageCount)

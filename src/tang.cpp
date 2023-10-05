@@ -2,7 +2,7 @@
 #include "asset_loader.h"
 #include "renderer.h"
 #include "utils/sanity_check.h"
-#include "window.h"
+#include "main_window.h"
 #include "tang.h"
 
 namespace TANG
@@ -17,7 +17,18 @@ namespace TANG
 
 	// Static global handles
 	static Renderer rendererHandle;
-	static Window windowHandle;
+	static MainWindow windowHandle;
+
+	//static uint32_t newWindowWidth = WINDOW_WIDTH;
+	//static uint32_t newWindowHeight = WINDOW_HEIGHT;
+	//static bool windowResized = false;
+
+	//static void OnMainWindowResized(uint32_t newWidth, uint32_t newHeight)
+	//{
+	//	newWindowWidth = newWidth;
+	//	newWindowHeight = newHeight;
+	//	windowResized = true;
+	//}
 
 	///////////////////////////////////////////////////////////
 	//
@@ -28,18 +39,20 @@ namespace TANG
 	{
 		windowHandle.Create(WINDOW_WIDTH, WINDOW_HEIGHT);
 		rendererHandle.Initialize(windowHandle.GetHandle(), WINDOW_WIDTH, WINDOW_HEIGHT);
-
-		// Register the callbacks
-		windowHandle.SetRecreateSwapChainCallback(Renderer::RecreateSwapChain);
 	}
 
 	void Update(float deltaTime)
 	{
 		windowHandle.Update(deltaTime);
+
+		// Poll the main window for resizes, rather than doing it through events
 		if (windowHandle.WasWindowResized())
 		{
 			// Notify the renderer that the window was resized
-			//rendererHandle.
+			uint32_t width, height;
+			windowHandle.GetFramebufferSize(&width, &height);
+
+			rendererHandle.SetNextFramebufferSize(width, height);
 		}
 
 		rendererHandle.Update(deltaTime);

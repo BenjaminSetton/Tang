@@ -19,7 +19,7 @@
 #include "descriptors/set_layout/set_layout_summary.h"
 #include "utils/sanity_check.h"
 
-class GLFWwindow;
+struct GLFWwindow;
 
 namespace TANG
 {
@@ -33,10 +33,6 @@ namespace TANG
 		TRANSFER_QUEUE,
 		QUEUE_COUNT			// NOTE! This value must come last at all times!! This is used to count the number of values inside this enum
 	};
-
-	// Function pointer callbacks
-	using GetWindowSizeCallback = void(*)(uint32_t*, uint32_t*);
-	using BlockIfWindowMinimizedCallback = void(*)(void);
 
 	class Renderer {
 
@@ -86,8 +82,8 @@ namespace TANG
 
 		void CreateSurface(GLFWwindow* windowHandle);
 
-		// This is registered as a callback, which the Window class will call once GLFW notifies us about a window resize event
-		void RecreateSwapChain(uint32_t width, uint32_t height);
+		// Sets the size that the next framebuffer should be. This function will only be called when the main window is resized
+		void SetNextFramebufferSize(uint32_t newWidth, uint32_t newHeight);
 
 	private:
 
@@ -128,7 +124,7 @@ namespace TANG
 
 		void CreateLogicalDevice();
 
-		void CreateSwapChain(uint32_t width, uint32_t height);
+		void CreateSwapChain();
 
 		// Create image views for all images on the swap chain
 		void CreateImageViews();
@@ -179,6 +175,8 @@ namespace TANG
 		void RecordSecondaryCommandBuffer(SecondaryCommandBuffer& commandBuffer, AssetResources* resources, uint32_t frameBufferIndex);
 
 		void RecreateAllSecondaryCommandBuffers();
+
+		void RecreateSwapChain();
 
 		void CleanupSwapChain();
 
@@ -332,6 +330,9 @@ namespace TANG
 		VkImage colorImage;
 		VkDeviceMemory colorImageMemory;
 		VkImageView colorImageView;
+
+		// Cached window sizes
+		uint32_t framebufferWidth, framebufferHeight;
 
 	private:
 
