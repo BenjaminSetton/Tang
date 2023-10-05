@@ -105,6 +105,12 @@ int main(uint32_t argc, const char** argv)
         
         TANG::Update(dt);
 
+        // Test input system
+        if (TANG::GetKeyState(69) == TANG::KeyState::RELEASED) // E
+        {
+            TANG::LogInfo("E key is released!");
+        }
+
         TANG::Draw();
     }
 

@@ -1,9 +1,10 @@
 
+
 #include "asset_loader.h"
 #include "renderer.h"
-#include "utils/sanity_check.h"
 #include "main_window.h"
 #include "tang.h"
+#include "utils/sanity_check.h"
 
 namespace TANG
 {
@@ -18,17 +19,7 @@ namespace TANG
 	// Static global handles
 	static Renderer rendererHandle;
 	static MainWindow windowHandle;
-
-	//static uint32_t newWindowWidth = WINDOW_WIDTH;
-	//static uint32_t newWindowHeight = WINDOW_HEIGHT;
-	//static bool windowResized = false;
-
-	//static void OnMainWindowResized(uint32_t newWidth, uint32_t newHeight)
-	//{
-	//	newWindowWidth = newWidth;
-	//	newWindowHeight = newHeight;
-	//	windowResized = true;
-	//}
+	static InputManager inputManager;
 
 	///////////////////////////////////////////////////////////
 	//
@@ -38,12 +29,15 @@ namespace TANG
 	void Initialize()
 	{
 		windowHandle.Create(WINDOW_WIDTH, WINDOW_HEIGHT);
+		inputManager.Initialize(windowHandle.GetHandle());
 		rendererHandle.Initialize(windowHandle.GetHandle(), WINDOW_WIDTH, WINDOW_HEIGHT);
 	}
 
 	void Update(float deltaTime)
 	{
 		windowHandle.Update(deltaTime);
+
+		inputManager.Update();
 
 		// Poll the main window for resizes, rather than doing it through events
 		if (windowHandle.WasWindowResized())
@@ -67,6 +61,7 @@ namespace TANG
 	{
 		LoaderUtils::UnloadAll();
 		rendererHandle.Shutdown();
+		inputManager.Shutdown();
 		windowHandle.Destroy();
 	}
 
@@ -150,5 +145,20 @@ namespace TANG
 	{
 		TNG_ASSERT_MSG(scale != nullptr, "Scale cannot be null!");
 		rendererHandle.SetAssetScale(uuid, *(reinterpret_cast<glm::vec3*>(scale)));
+	}
+
+	bool IsKeyPressed(int key)
+	{
+		return inputManager.IsKeyPressed(key);
+	}
+
+	bool IsKeyReleased(int key)
+	{
+		return inputManager.IsKeyReleased(key);
+	}
+
+	KeyState GetKeyState(int key)
+	{
+		return inputManager.GetKeyState(key);
 	}
 }

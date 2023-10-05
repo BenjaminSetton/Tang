@@ -27,6 +27,7 @@
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include "utils/uuid.h"
+#include "input.h" // TANG::KeyState
 
 namespace TANG
 {
@@ -97,5 +98,15 @@ namespace TANG
 	// Update the scale of the asset represented by the provided UUID.
 	// NOTE - The scale parameter MUST be a vector with exactly three components
 	void UpdateAssetScale(UUID uuid, float* scale);
+
+	// Returns whether the provided key is pressed. Note that this function will return true as long as the key is held down
+	bool IsKeyPressed(int key);
+
+	// Returns whether the provided key is released. Similar to the function above, it will return true as long as the
+	// key is NOT being pressed
+	bool IsKeyReleased(int key);
+
+	// Returns the current state of the provided key. This can be either PRESSED, HELD (TODO) or RELEASED.
+	KeyState GetKeyState(int key);
 
 }
