@@ -23,7 +23,10 @@ set(HEADERS
 	src/renderer.h
 	src/vertex_type.h
 	src/main_window.h
-	src/input.h
+	src/input_manager.h
+	
+	src/camera/base_camera.h
+	src/camera/freefly_camera.h
 	
 	src/data_buffer/buffer.h
 	src/data_buffer/vertex_buffer.h
@@ -45,6 +48,7 @@ set(HEADERS
 	src/utils/logger.h
 	src/utils/sanity_check.h
 	src/utils/uuid.h
+	src/utils/key_types.h
 )
 
 # Source files
@@ -54,7 +58,10 @@ set(SOURCES
 	src/asset_loader.cpp
 	src/renderer.cpp
 	src/main_window.cpp
-	src/input.cpp
+	src/input_manager.cpp
+	
+	src/camera/base_camera.cpp
+	src/camera/freefly_camera.cpp
 	
 	src/data_buffer/buffer.cpp
 	src/data_buffer/vertex_buffer.cpp

@@ -19,7 +19,6 @@ namespace TANG
 	// Static global handles
 	static Renderer rendererHandle;
 	static MainWindow windowHandle;
-	static InputManager inputManager;
 
 	///////////////////////////////////////////////////////////
 	//
@@ -29,7 +28,7 @@ namespace TANG
 	void Initialize()
 	{
 		windowHandle.Create(WINDOW_WIDTH, WINDOW_HEIGHT);
-		inputManager.Initialize(windowHandle.GetHandle());
+		InputManager::GetInstance().Initialize(windowHandle.GetHandle());
 		rendererHandle.Initialize(windowHandle.GetHandle(), WINDOW_WIDTH, WINDOW_HEIGHT);
 	}
 
@@ -37,7 +36,7 @@ namespace TANG
 	{
 		windowHandle.Update(deltaTime);
 
-		inputManager.Update();
+		InputManager::GetInstance().Update();
 
 		// Poll the main window for resizes, rather than doing it through events
 		if (windowHandle.WasWindowResized())
@@ -61,7 +60,7 @@ namespace TANG
 	{
 		LoaderUtils::UnloadAll();
 		rendererHandle.Shutdown();
-		inputManager.Shutdown();
+		InputManager::GetInstance().Shutdown();
 		windowHandle.Destroy();
 	}
 
@@ -149,16 +148,16 @@ namespace TANG
 
 	bool IsKeyPressed(int key)
 	{
-		return inputManager.IsKeyPressed(key);
+		return InputManager::GetInstance().IsKeyPressed(key);
 	}
 
 	bool IsKeyReleased(int key)
 	{
-		return inputManager.IsKeyReleased(key);
+		return InputManager::GetInstance().IsKeyReleased(key);
 	}
 
 	KeyState GetKeyState(int key)
 	{
-		return inputManager.GetKeyState(key);
+		return InputManager::GetInstance().GetKeyState(key);
 	}
 }

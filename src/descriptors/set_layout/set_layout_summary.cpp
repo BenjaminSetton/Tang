@@ -3,7 +3,6 @@
 
 #include "set_layout_summary.h"
 #include "../../utils/logger.h"
-#include "../../utils/sanity_check.h" // TNG_ASSERT_TODO
 
 static constexpr uint32_t MAX_BINDINGS = 25;
 static constexpr uint32_t INVALID_BINDING = std::numeric_limits<uint32_t>::max();

@@ -8,15 +8,15 @@ namespace TANG
 	// Regular run-time assertions.
 	#define TNG_ASSERT(x) assert(x)
 	#define TNG_ASSERT_MSG(x, msg) assert(x && msg)							// Msg parameter _must_ be a const char*
-	#define TNG_ASSERT_TODO() TNG_ASSERT_MSG(false, "TODO - Implement");	// Utility assert for when incomplete code is run
 
 
 	// Compile-time assert
 	#define TNG_ASSERT_COMPILE(x) static_assert(x)
 	#define TNG_ASSERT_SAME_SIZE(x, y) TNG_ASSERT_COMPILE(x == y)
 
-	// Marking parameters as unused
+	// Utility
 	#define UNUSED(x) (void)x
+	#define TNG_TODO() TNG_ASSERT_MSG(false, "TODO - Implement");	// Utility assert for when incomplete code is run
 }
 
 
