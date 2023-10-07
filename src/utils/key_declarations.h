@@ -1,11 +1,19 @@
-
-#include <unordered_map>
+#ifndef KEY_DECLARATIONS_H
+#define KEY_DECLARATIONS_H
 
 // Needed to include GLFW key types for mapping
 #include "glfw3.h"
 
 namespace TANG
 {
+	enum class KeyState
+	{
+		INVALID = -1,
+		RELEASED,
+		PRESSED,
+		HELD,
+	};
+
 	enum class KeyType
 	{
 		// Numbers
@@ -53,7 +61,7 @@ namespace TANG
 		KEY_RSHIFT,
 		KEY_LCTRL,
 		KEY_RCTRL,
-		KEY_SPACE,
+		KEY_SPACEBAR,
 		KEY_LALT,
 		KEY_RALT,
 		KEY_TAB,
@@ -96,20 +104,6 @@ namespace TANG
 		KEY_F11,
 		KEY_F12
 	};
-
-	static const std::unordered_map<int, KeyType> KeyMappings =
-	{
-		{ GLFW_KEY_0, KeyType::KEY_0 },
-		{ GLFW_KEY_1, KeyType::KEY_1 },
-		{ GLFW_KEY_2, KeyType::KEY_2 },
-		{ GLFW_KEY_3, KeyType::KEY_3 },
-		{ GLFW_KEY_4, KeyType::KEY_4 },
-		{ GLFW_KEY_5, KeyType::KEY_5 },
-		{ GLFW_KEY_6, KeyType::KEY_6 },
-		{ GLFW_KEY_7, KeyType::KEY_7 },
-		{ GLFW_KEY_8, KeyType::KEY_8 },
-		{ GLFW_KEY_9, KeyType::KEY_9 },
-		// TODO
-	};
-
 }
+
+#endif

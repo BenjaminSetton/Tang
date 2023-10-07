@@ -22,19 +22,19 @@ namespace TANG
 
 		glm::mat4 GetViewMatrix() const;
 
+	protected:
+
 		virtual void RegisterKeyCallbacks() = 0;
 		virtual void DeregisterKeyCallbacks() = 0;
 
-	protected:
-
 		void CalculateViewMatrix();
-
-	private:
 
 		glm::vec3 position;
 		glm::vec3 focus;
-
 		bool shouldUpdateMatrix;
+
+	private:
+
 		glm::mat4 viewMatrix;
 
 	};

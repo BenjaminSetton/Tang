@@ -1,8 +1,8 @@
 
-
 #include "asset_loader.h"
 #include "renderer.h"
 #include "main_window.h"
+#include "camera/freefly_camera.h"
 #include "tang.h"
 #include "utils/sanity_check.h"
 
@@ -19,6 +19,7 @@ namespace TANG
 	// Static global handles
 	static Renderer rendererHandle;
 	static MainWindow windowHandle;
+	static FreeflyCamera camera;
 
 	///////////////////////////////////////////////////////////
 	//
@@ -30,6 +31,7 @@ namespace TANG
 		windowHandle.Create(WINDOW_WIDTH, WINDOW_HEIGHT);
 		InputManager::GetInstance().Initialize(windowHandle.GetHandle());
 		rendererHandle.Initialize(windowHandle.GetHandle(), WINDOW_WIDTH, WINDOW_HEIGHT);
+		camera.Initialize();
 	}
 
 	void Update(float deltaTime)
@@ -37,6 +39,8 @@ namespace TANG
 		windowHandle.Update(deltaTime);
 
 		InputManager::GetInstance().Update();
+
+		camera.Update(deltaTime);
 
 		// Poll the main window for resizes, rather than doing it through events
 		if (windowHandle.WasWindowResized())
@@ -58,6 +62,7 @@ namespace TANG
 
 	void Shutdown()
 	{
+		camera.Shutdown();
 		LoaderUtils::UnloadAll();
 		rendererHandle.Shutdown();
 		InputManager::GetInstance().Shutdown();

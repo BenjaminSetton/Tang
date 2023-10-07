@@ -1,6 +1,7 @@
 
 #include "input_manager.h"
 #include "glfw3.h"
+#include "utils/key_mappings.h"
 #include "utils/logger.h"
 #include "utils/sanity_check.h"
 
@@ -15,26 +16,30 @@ namespace TANG
 	static void GLFW_KEY_CALLBACK(GLFWwindow* window, int key, int scancode, int action, int mods)
 	{
 		UNUSED(window);
-		UNUSED(key);
 		UNUSED(scancode);
-		UNUSED(action);
 		UNUSED(mods);
 
 		// Attempt to find the key in the key mappings, to go from GLFW key to TANG::KeyType
-		auto keyMappingsIter = KeyMappings.find(key);
-		if (keyMappingsIter == KeyMappings.end())
+		auto keyTypeMappingsIter = KeyTypeMappings.find(key);
+		if (keyTypeMappingsIter == KeyTypeMappings.end())
 		{
-			LogError("Received callback for key %i, but it's missing from the key mappings!", key);
+			LogError("Failed to map key type %i in key callback!", key);
 			return;
 		}
 		
-		// Kinda sketchy, but ok...
-		//InputManager* inputManagerHandle = static_cast<InputManager*>(glfwGetWindowUserPointer(window));
+		auto keyStateMappingsIter = KeyStateMappings.find(action);
+		if (keyStateMappingsIter == KeyStateMappings.end())
+		{
+			LogError("Failed to map key state %i in key callback!", action);
+			return;
+		}
 
-		TNG_TODO();
+		// Call the implementation
+		InputManager::GetInstance().KeyCallbackEvent_Impl(keyTypeMappingsIter->second, keyStateMappingsIter->second);
+		
 	}
 
-	InputManager::InputManager() : windowHandle(nullptr)
+	InputManager::InputManager() : windowHandle(nullptr), keyCallbacks()
 	{
 		// Nothing to do here yet
 	}
@@ -42,31 +47,33 @@ namespace TANG
 	InputManager::~InputManager()
 	{
 		windowHandle = nullptr;
+		keyCallbacks.clear();
 	}
 
-	InputManager::InputManager(const InputManager& other) : windowHandle(other.windowHandle)
-	{
-		// Nothing to do here yet
-	}
+	//InputManager::InputManager(const InputManager& other) : windowHandle(other.windowHandle)
+	//{
+	//	// Nothing to do here yet
+	//}
 
-	InputManager::InputManager(InputManager&& other) noexcept
+	InputManager::InputManager(InputManager&& other) noexcept : keyCallbacks(std::move(other.keyCallbacks))
 	{
 		windowHandle = other.windowHandle;
 
 		other.windowHandle = nullptr;
+		other.keyCallbacks.clear();
 	}
 
-	InputManager& InputManager::operator=(const InputManager& other)
-	{
-		if (this == &other)
-		{
-			return *this;
-		}
+	//InputManager& InputManager::operator=(const InputManager& other)
+	//{
+	//	if (this == &other)
+	//	{
+	//		return *this;
+	//	}
 
-		windowHandle = other.windowHandle;
+	//	windowHandle = other.windowHandle;
 
-		return *this;
-	}
+	//	return *this;
+	//}
 
 	void InputManager::Initialize(GLFWwindow* window)
 	{
@@ -77,6 +84,7 @@ namespace TANG
 		}
 
 		windowHandle = window;
+		glfwSetKeyCallback(window, GLFW_KEY_CALLBACK);
 	}
 
 	void InputManager::Update()
@@ -92,6 +100,7 @@ namespace TANG
 		}
 
 		windowHandle = nullptr;
+		keyCallbacks.clear();
 	}
 
 	bool InputManager::IsKeyPressed(int key)
@@ -132,7 +141,9 @@ namespace TANG
 		// If we can't find an existing vector, we must make one and insert the callback
 		if (keyIter == keyCallbacks.end())
 		{
-			keyCallbacks.insert({type, std::vector<KeyCallback>(CALLBACKS_PER_KEY)});
+			std::vector<KeyCallback> newCallbackVec;
+			newCallbackVec.reserve(CALLBACKS_PER_KEY);
+			keyCallbacks.insert({ type, std::move(newCallbackVec) });
 			callbackVec = &keyCallbacks.at(type);
 		}
 		else // push back the callback into the existing vector
@@ -162,7 +173,8 @@ namespace TANG
 		auto& callbackVec = keyIter->second;
 		for (auto callbackIter = callbackVec.begin(); callbackIter < callbackVec.end(); callbackIter++)
 		{
-			if(*callbackIter == callback)
+			// No idea if this even works...
+			if((*callbackIter).target<void(*)(KeyState)>() == callback.target<void(*)(KeyState)>())
 			{
 				callbackVec.erase(callbackIter);
 				return;
@@ -170,6 +182,20 @@ namespace TANG
 		}
 
 		LogError("Failed to deregister key callback, the provided callback was not found!");
+	}
+
+	void InputManager::KeyCallbackEvent_Impl(KeyType type, KeyState state)
+	{
+		auto keyCallbackIter = keyCallbacks.find(type);
+		if (keyCallbackIter == keyCallbacks.end())
+		{
+			return;
+		}
+
+		for (auto callback : keyCallbackIter->second)
+		{
+			callback(state);
+		}
 	}
 
 }

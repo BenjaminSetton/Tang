@@ -48,7 +48,8 @@ set(HEADERS
 	src/utils/logger.h
 	src/utils/sanity_check.h
 	src/utils/uuid.h
-	src/utils/key_types.h
+	src/utils/key_declarations.h
+	src/utils/key_mappings.h
 )
 
 # Source files
