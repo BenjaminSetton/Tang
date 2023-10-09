@@ -15,6 +15,9 @@ namespace TANG
 	{
 	public:
 
+		#define REGISTER_KEY_CALLBACK(keyType, funcPtr) InputManager::GetInstance().RegisterKeyCallback(keyType, std::bind(&funcPtr, this, std::placeholders::_1));
+		#define DEREGISTER_KEY_CALLBACK(keyType, funcPtr) InputManager::GetInstance().DeregisterKeyCallback(keyType, std::bind(&funcPtr, this, std::placeholders::_1));
+
 		using KeyCallback = std::function<void(KeyState)>;
 
 		~InputManager();
@@ -54,9 +57,6 @@ namespace TANG
 		GLFWwindow* windowHandle;
 
 	};
-
-#define REGISTER_CALLBACK(keyType, funcPtr) InputManager::GetInstance().RegisterKeyCallback(keyType, std::bind(&funcPtr, this, std::placeholders::_1));
-#define DEREGISTER_CALLBACK(keyType, funcPtr) InputManager::GetInstance().DeregisterKeyCallback(keyType, std::bind(&funcPtr, this, std::placeholders::_1));
 
 }
 

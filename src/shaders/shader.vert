@@ -1,9 +1,13 @@
 #version 450
 
-layout(set = 0, binding = 0) uniform ViewProjObject {
+layout(set = 0, binding = 0) uniform ProjObject {
+    mat4 proj;
+} projUBO;
+
+layout(set = 1, binding = 2) uniform ViewObject {
     mat4 view;
     mat4 proj;
-} viewProjUBO;
+} viewUBO;
 
 layout(set = 1, binding = 0) uniform TransformObject {
     mat4 transform;
@@ -19,12 +23,12 @@ layout(location = 1) out vec3 outNormal;
 layout(location = 2) out vec2 outUV;
 
 void main() {
-    gl_Position = viewProjUBO.proj * viewProjUBO.view * transformUBO.transform * vec4(inPosition, 1.0);
+    gl_Position = projUBO.proj * viewUBO.view * transformUBO.transform * vec4(inPosition, 1.0);
 
     // Calculate the output variables going to the pixel shader
-    outPosition = (viewProjUBO.view * transformUBO.transform * vec4(inPosition, 1.0)).xyz;
+    outPosition = (viewUBO.view * transformUBO.transform * vec4(inPosition, 1.0)).xyz;
 
     // NOTE - should we multiply the normal by the view matrix too??
-    outNormal = (viewProjUBO.view * transformUBO.transform * vec4(inNormal, 0.0)).xyz;
+    outNormal = (viewUBO.view * transformUBO.transform * vec4(inNormal, 0.0)).xyz;
     outUV = inUV;
 }

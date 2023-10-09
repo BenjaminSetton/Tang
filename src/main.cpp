@@ -56,6 +56,7 @@ int main(uint32_t argc, const char** argv)
 
     std::vector<MyAsset> assets;
 
+    // Load all the assets
     for (auto& assetName : assetNames)
     {
         TANG::UUID id = TANG::LoadAsset(assetName.c_str());
@@ -66,9 +67,6 @@ int main(uint32_t argc, const char** argv)
             // Give every asset some random transforms for testing
             asset.pos[0] = RandomRangeFloat(-6.0f, 6.0f);
             asset.pos[2] = RandomRangeFloat(-3.0f, 3.0f);
-            //asset.pos[0] = 0.0f;
-            //asset.pos[1] = 2.5f;
-            //asset.pos[2] = 6.0f;
 
             asset.rot[0] = RandomRangeFloat(-90.0f, 90.0f);
 
@@ -83,7 +81,9 @@ int main(uint32_t argc, const char** argv)
         }
     }
 
-    //uint64_t frameCount = 0;
+    // Set the camera's velocity
+    TANG::SetCameraVelocity(1.0f);
+
     float elapsedTime = 0;
     auto startTime = std::chrono::high_resolution_clock::now();
     while (!TANG::WindowShouldClose())

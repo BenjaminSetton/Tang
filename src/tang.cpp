@@ -31,7 +31,7 @@ namespace TANG
 		windowHandle.Create(WINDOW_WIDTH, WINDOW_HEIGHT);
 		InputManager::GetInstance().Initialize(windowHandle.GetHandle());
 		rendererHandle.Initialize(windowHandle.GetHandle(), WINDOW_WIDTH, WINDOW_HEIGHT);
-		camera.Initialize();
+		camera.Initialize({ 0.0f, 5.0f, 15.0f }, { 0.0f, 0.0f, -1.0f });
 	}
 
 	void Update(float deltaTime)
@@ -51,6 +51,9 @@ namespace TANG
 
 			rendererHandle.SetNextFramebufferSize(width, height);
 		}
+
+		// Update the camera data that the renderer is holding with the most up-to-date info
+		rendererHandle.UpdateCameraData(camera.GetPosition(), camera.GetFocus());
 
 		rendererHandle.Update(deltaTime);
 	}
@@ -99,6 +102,11 @@ namespace TANG
 		rendererHandle.CreateAssetCommandBuffer(resources);
 
 		return asset->uuid;
+	}
+
+	void SetCameraVelocity(float velocity)
+	{
+		camera.SetVelocity(velocity);
 	}
 
 	///////////////////////////////////////////////////////////

@@ -7,7 +7,7 @@
 namespace TANG
 {
 
-	BaseCamera::BaseCamera() : position(glm::vec3(0.0)), focus(glm::vec3(0.0)), shouldUpdateMatrix(false)
+	BaseCamera::BaseCamera() : position(glm::vec3(0.0)), focus(glm::vec3(0.0))
 	{
 		// Nothing to do here
 	}
@@ -17,12 +17,12 @@ namespace TANG
 		// Nothing to do here
 	}
 
-	BaseCamera::BaseCamera(const BaseCamera& other) : position(other.position), focus(other.focus), shouldUpdateMatrix(other.shouldUpdateMatrix)
+	BaseCamera::BaseCamera(const BaseCamera& other) : position(other.position), focus(other.focus)
 	{
 		// Nothing to do here
 	}
 
-	BaseCamera::BaseCamera(BaseCamera&& other) noexcept : position(std::move(other.position)), focus(std::move(other.focus)), shouldUpdateMatrix(std::move(other.shouldUpdateMatrix))
+	BaseCamera::BaseCamera(BaseCamera&& other) noexcept : position(std::move(other.position)), focus(std::move(other.focus))
 	{
 		// Nothing to do here
 	}
@@ -37,19 +37,18 @@ namespace TANG
 
 		position = other.position;
 		focus = other.focus;
-		shouldUpdateMatrix = other.shouldUpdateMatrix;
 
 		return *this;
 	}
 
-	glm::mat4 BaseCamera::GetViewMatrix() const
+	glm::vec3 BaseCamera::GetPosition() const
 	{
-		return viewMatrix;
+		return position;
 	}
 
-	void BaseCamera::CalculateViewMatrix()
+	glm::vec3 BaseCamera::GetFocus() const
 	{
-		viewMatrix = glm::lookAt(position, focus, glm::vec3(0.0f, 1.0f, 0.0f));
+		return focus;
 	}
 
 }

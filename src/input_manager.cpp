@@ -173,7 +173,7 @@ namespace TANG
 		auto& callbackVec = keyIter->second;
 		for (auto callbackIter = callbackVec.begin(); callbackIter < callbackVec.end(); callbackIter++)
 		{
-			// No idea if this even works...
+			// We're using the target for the equality check. This might not work in all cases
 			if((*callbackIter).target<void(*)(KeyState)>() == callback.target<void(*)(KeyState)>())
 			{
 				callbackVec.erase(callbackIter);

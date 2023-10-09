@@ -85,6 +85,9 @@ namespace TANG
 		// Sets the size that the next framebuffer should be. This function will only be called when the main window is resized
 		void SetNextFramebufferSize(uint32_t newWidth, uint32_t newHeight);
 
+		// Updates the view matrix using the provided position and focus. The caller usually gets this data from any derived BaseCamera object
+		void UpdateCameraData(const glm::vec3& position, const glm::vec3& focus);
+
 	private:
 
 		void DrawFrame();
@@ -147,7 +150,7 @@ namespace TANG
 
 		void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
 
-		void CreateUniformBuffers(UUID uuid);
+		void CreateAssetUniformBuffers(UUID uuid);
 
 		void CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format,
 			VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties,
@@ -180,14 +183,13 @@ namespace TANG
 
 		void CleanupSwapChain();
 
-		// Updates the uniform buffers and descriptor sets that need to be update very infrequently. In this case, the view/proj uniform buffers and descriptor sets.
-		// Note that this should also be called when the swap chain resizes!
-		void UpdateInfrequentUniformBuffers(UUID uuid);
-		void UpdateInfrequentDescriptorSets(UUID uuid);
+		void UpdateTransformDescriptorSets(UUID uuid);
+		void UpdateCameraDataDescriptorSets(UUID uuid, uint32_t frameIndex);
+		void UpdateProjectionDescriptorSets(UUID uuid, uint32_t frameIndex);
 
-		// Updates the uniform buffers and descriptor sets for all frames in flight
-		void UpdatePerFrameUniformBuffers(const Transform& transform, UUID uuid);
-		void UpdatePerFrameDescriptorSets(UUID uuid);
+		void UpdateTransformUniformBuffer(const Transform& transform, UUID uuid);
+		void UpdateCameraDataUniformBuffers(UUID uuid, uint32_t frameIndex, glm::vec3 position, glm::vec3 focus);
+		void UpdateProjectionUniformBuffer(UUID uuid, uint32_t frameIndex);
 
 		VkCommandBuffer BeginSingleTimeCommands(VkCommandPool pool);
 
@@ -232,12 +234,16 @@ namespace TANG
 		VkFormat swapChainImageFormat;
 		VkExtent2D swapChainExtent;
 
-		// Stores all the data we need to describe an asset with regards to the graphics pipeline
+		// Stores all the data we need to describe an asset. We need to have a vector of descriptor sets per asset
+		// because each asset has a unique transform
 		struct AssetDescriptorData
 		{
 			std::vector<DescriptorSet> descriptorSets;
-			UniformBuffer viewProjUBO;
+
 			UniformBuffer transformUBO;
+			UniformBuffer viewUBO;
+			UniformBuffer projUBO;
+			UniformBuffer cameraDataUBO;
 		};
 
 
@@ -251,8 +257,6 @@ namespace TANG
 		struct FrameDependentData
 		{
 			std::unordered_map<UUID, AssetDescriptorData> assetDescriptorDataMap;
-
-			UniformBuffer cameraDataUBO;
 
 			VkSemaphore imageAvailableSemaphore;
 			VkSemaphore renderFinishedSemaphore;
@@ -305,8 +309,6 @@ namespace TANG
 		std::unordered_map<QueueType, VkCommandPool> commandPools;
 
 		uint32_t currentFrame = 0;
-
-		glm::vec3 cameraPos = { 0.0f, 5.0f, 10.0f };
 
 		// The assetResources vector contains all the vital information that we need for every asset in order to render it
 		// The resourcesMap maps an asset's UUID to a location within the assetResources vector

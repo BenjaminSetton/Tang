@@ -17,9 +17,12 @@ namespace TANG
 		FreeflyCamera(FreeflyCamera&& other) noexcept;
 		FreeflyCamera& operator=(const FreeflyCamera& other);
 
-		void Initialize();
+		void Initialize(const glm::vec3& _position, const glm::vec3& _focus);
 		void Update(float deltaTime) override;
 		void Shutdown();
+
+		void SetVelocity(float velocity);
+		float GetVelocity() const;
 
 	private:
 

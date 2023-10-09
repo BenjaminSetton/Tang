@@ -69,6 +69,10 @@ namespace TANG
 	// load the TASSET file directly
 	UUID LoadAsset(const char* filepath);
 
+	// Sets the velocity of the primary camera. The velocity is a single value which is used
+	// to move at the same velocity in all axes.
+	void SetCameraVelocity(float velocity);
+
 	///////////////////////////////////////////////////////////
 	//
 	//		UPDATE

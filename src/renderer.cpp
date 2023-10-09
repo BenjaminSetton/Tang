@@ -224,9 +224,13 @@ namespace TANG
 		glm::mat4 transform;
 	};
 
-	struct ViewProjUBO
+	struct ViewUBO
 	{
 		glm::mat4 view;
+	};
+
+	struct ProjUBO
+	{
 		glm::mat4 proj;
 	};
 
@@ -330,11 +334,25 @@ namespace TANG
 		resources.uuid = asset->uuid;
 
 		// Create uniform buffers for this asset
-		CreateUniformBuffers(resources.uuid);
-		UpdateInfrequentUniformBuffers(resources.uuid);
+		CreateAssetUniformBuffers(resources.uuid);
 
 		CreateDescriptorSets(resources.uuid);
-		UpdateInfrequentDescriptorSets(resources.uuid);
+
+		// Initialize the view + projection matrix UBOs to some values, so when new assets are created they get sensible defaults
+		// for their descriptor sets. 
+		// Note that we're operating under the assumption that assets will only be created before
+		// we hit the update loop, simply because we're updating all frames in flight here. If this changes in the future, another
+		// solution must be implemented
+		for (uint32_t i = 0; i < GetFDDSize(); i++)
+		{
+			UpdateCameraDataUniformBuffers(resources.uuid, i, { 0.0f, 5.0f, 15.0f }, { 0.0f, 0.0f, 0.0f });
+			UpdateProjectionUniformBuffer(resources.uuid, i);
+
+			// Initialize the descriptor sets as well
+			UpdateCameraDataDescriptorSets(resources.uuid, i);
+			UpdateProjectionDescriptorSets(resources.uuid, i);
+		}
+
 
 		return &resources;
 	}
@@ -429,6 +447,19 @@ namespace TANG
 		framebufferHeight = newHeight;
 	}
 
+	void Renderer::UpdateCameraData(const glm::vec3& position, const glm::vec3& focus)
+	{
+		FrameDependentData* currentFDD = GetCurrentFDD();
+		auto& assetDescriptorMap = currentFDD->assetDescriptorDataMap;
+
+		// Update the view matrix and camera position UBOs for all assets, as well as the descriptor sets
+		for (auto& assetData : assetDescriptorMap)
+		{
+			UpdateCameraDataUniformBuffers(assetData.first, currentFrame, position, focus);
+			UpdateCameraDataDescriptorSets(assetData.first, currentFrame);
+		}
+	}
+
 	void Renderer::RecreateSwapChain()
 	{
 		vkDeviceWaitIdle(logicalDevice);
@@ -470,15 +501,6 @@ namespace TANG
 		CreateFramebuffers();
 		CreatePrimaryCommandBuffers(GRAPHICS_QUEUE);
 		CreateSyncObjects();
-
-		// Create the CameraDataUBO
-		VkDeviceSize cameraUBOSize = sizeof(CameraDataUBO);
-		for (uint32_t i = 0; i < GetFDDSize(); i++)
-		{
-			UniformBuffer& cameraUBO = GetFDDAtIndex(i)->cameraDataUBO;
-			cameraUBO.Create(physicalDevice, logicalDevice, cameraUBOSize);
-			cameraUBO.MapMemory(logicalDevice, cameraUBOSize);
-		}
 	}
 
 	void Renderer::Shutdown()
@@ -502,10 +524,12 @@ namespace TANG
 			auto frameData = GetFDDAtIndex(i);
 			for (auto& iter : frameData->assetDescriptorDataMap)
 			{
-				iter.second.viewProjUBO.Destroy(logicalDevice);
 				iter.second.transformUBO.Destroy(logicalDevice);
+				iter.second.projUBO.Destroy(logicalDevice);
+				iter.second.viewUBO.Destroy(logicalDevice);
+				iter.second.cameraDataUBO.Destroy(logicalDevice);
 			}
-			frameData->cameraDataUBO.Destroy(logicalDevice);
+
 		}
 
 		descriptorPool.Destroy(logicalDevice);
@@ -1568,27 +1592,37 @@ namespace TANG
 		vkBindBufferMemory(logicalDevice, buffer, bufferMemory, 0);
 	}
 
-	void Renderer::CreateUniformBuffers(UUID uuid)
+	void Renderer::CreateAssetUniformBuffers(UUID uuid)
 	{
 		VkDeviceSize transformUBOSize = sizeof(TransformUBO);
-		VkDeviceSize viewProjUBOSize = sizeof(ViewProjUBO);
+		VkDeviceSize viewUBOSize = sizeof(ViewUBO);
+		VkDeviceSize projUBOSize = sizeof(ProjUBO);
+		VkDeviceSize cameraDataSize = sizeof(CameraDataUBO);
 
 		for (uint32_t i = 0; i < GetFDDSize(); i++)
 		{
 			FrameDependentData* currentFDD = GetFDDAtIndex(i);
 			AssetDescriptorData& assetDescriptorData = currentFDD->assetDescriptorDataMap[uuid];
 
-			UniformBuffer& transUBO = assetDescriptorData.transformUBO;
-
 			// Create the TransformUBO
+			UniformBuffer& transUBO = assetDescriptorData.transformUBO;
 			transUBO.Create(physicalDevice, logicalDevice, transformUBOSize);
 			transUBO.MapMemory(logicalDevice, transformUBOSize);
+				
+			// Create the ViewUBO
+			UniformBuffer& vpUBO = assetDescriptorData.viewUBO;
+			vpUBO.Create(physicalDevice, logicalDevice, viewUBOSize);
+			vpUBO.MapMemory(logicalDevice, viewUBOSize);
 
-			// Create the ViewProjUBO
-			UniformBuffer& vpUBO = assetDescriptorData.viewProjUBO;
+			// Create the ProjUBO
+			UniformBuffer& projUBO = assetDescriptorData.projUBO;
+			projUBO.Create(physicalDevice, logicalDevice, projUBOSize);
+			projUBO.MapMemory(logicalDevice, projUBOSize);
 
-			vpUBO.Create(physicalDevice, logicalDevice, viewProjUBOSize);
-			vpUBO.MapMemory(logicalDevice, viewProjUBOSize);
+			// Create the camera data UBO
+			UniformBuffer& cameraDataUBO = assetDescriptorData.cameraDataUBO;
+			cameraDataUBO.Create(physicalDevice, logicalDevice, cameraDataSize);
+			cameraDataUBO.MapMemory(logicalDevice, cameraDataSize);
 		}
 	}
 
@@ -1670,17 +1704,17 @@ namespace TANG
 
 	void Renderer::CreateDescriptorSetLayouts()
 	{
-		// Holds ViewProjUBO + ImageSampler
-		// TODO - Switch ViewProjUBO to volatile set layout in preparation for camera movement
+		// Holds ProjUBO + ImageSampler
 		SetLayoutSummary persistentLayout;
-		persistentLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
-		persistentLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
+		persistentLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);           // Projection matrix
+		persistentLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Texture
 		setLayoutCache.CreateSetLayout(logicalDevice, persistentLayout, 0);
 
-		// Holds TransformUBO + CameraDataUBO
+		// Holds TransformUBO + ViewUBO + CameraDataUBO
 		SetLayoutSummary volatileLayout;
-		volatileLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
-		volatileLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT);
+		volatileLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);   // Camera data
+		volatileLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT); // Transform matrix
+		volatileLayout.AddBinding(2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);   // View matrix
 		setLayoutCache.CreateSetLayout(logicalDevice, volatileLayout, 0);
 	}
 
@@ -1828,8 +1862,8 @@ namespace TANG
 			{
 				SecondaryCommandBuffer* secondaryCmdBuffer = GetSecondaryCommandBufferAtIndex(frameBufferIndex, uuid);
 
-				UpdatePerFrameUniformBuffers(assetResources[resourcesMap[uuid]].transform, uuid);
-				UpdatePerFrameDescriptorSets(uuid);
+				UpdateTransformUniformBuffer(assetResources[resourcesMap[uuid]].transform, uuid);
+				UpdateTransformDescriptorSets(uuid);
 
 				secondaryCmdBuffer->Reset();
 				RecordSecondaryCommandBuffer(*secondaryCmdBuffer, &iter, frameBufferIndex);
@@ -1924,46 +1958,49 @@ namespace TANG
 		vkDestroySwapchainKHR(logicalDevice, swapChain, nullptr);
 	}
 
-	void Renderer::UpdateInfrequentUniformBuffers(UUID uuid)
+	void Renderer::UpdateProjectionUniformBuffer(UUID uuid, uint32_t frameIndex)
 	{
 		using namespace glm;
 
 		float aspectRatio = swapChainExtent.width / static_cast<float>(swapChainExtent.height);
 
-		// Construct the ViewProj UBO
-		ViewProjUBO vpUBO;
-		vpUBO.view = lookAt(cameraPos, vec3(0.0f, 0.0f, 0.0f), vec3(0.0f, 1.0f, 0.0f));
-		vpUBO.proj = perspective(radians(45.0f), aspectRatio, 0.1f, 1000.0f);
+		// Construct the ProjUBO
+		ProjUBO projUBO;
+		projUBO.proj = perspective(radians(45.0f), aspectRatio, 0.1f, 1000.0f);
 
 		// NOTE - GLM was originally designed for OpenGL, where the Y coordinate of the clip coordinates is inverted
-		vpUBO.proj[1][1] *= -1;
+		projUBO.proj[1][1] *= -1;
 
-		uint32_t fddSize = GetFDDSize();
-		for (uint32 i = 0; i < fddSize; i++)
-		{
-			FrameDependentData* currentFDD = GetFDDAtIndex(i);
-			auto& currentAssetDataMap = currentFDD->assetDescriptorDataMap[uuid];
+		FrameDependentData* currentFDD = GetFDDAtIndex(frameIndex);
+		auto& currentAssetDataMap = currentFDD->assetDescriptorDataMap[uuid];
 
-			currentAssetDataMap.viewProjUBO.UpdateData(&vpUBO, sizeof(ViewProjUBO));
-		}
+		currentAssetDataMap.projUBO.UpdateData(&projUBO, sizeof(ProjUBO));
 	}
 
-	void Renderer::UpdateInfrequentDescriptorSets(UUID uuid)
+	void Renderer::UpdateProjectionDescriptorSets(UUID uuid, uint32_t frameIndex)
 	{
-		uint32_t fddSize = GetFDDSize();
-		for (uint32_t i = 0; i < fddSize; i++)
-		{
-			FrameDependentData* currentFDD = GetFDDAtIndex(i);
-			auto& currentAssetDataMap = currentFDD->assetDescriptorDataMap[uuid];
+		FrameDependentData* currentFDD = GetFDDAtIndex(frameIndex);
+		auto& currentAssetDataMap = currentFDD->assetDescriptorDataMap[uuid];
 
-			// Update ViewProj / image sampler descriptor sets
-			WriteDescriptorSets writeDescSets(1, 0);
-			writeDescSets.AddUniformBuffer(currentAssetDataMap.descriptorSets[0].GetDescriptorSet(), 0, currentAssetDataMap.viewProjUBO.GetBuffer(), currentAssetDataMap.viewProjUBO.GetBufferSize(), 0);
-			currentAssetDataMap.descriptorSets[0].Update(logicalDevice, writeDescSets);
-		}
+		// Update ViewProj / image sampler descriptor sets
+		WriteDescriptorSets writeDescSets(1, 0);
+		writeDescSets.AddUniformBuffer(currentAssetDataMap.descriptorSets[0].GetDescriptorSet(), 0, currentAssetDataMap.projUBO.GetBuffer(), currentAssetDataMap.projUBO.GetBufferSize(), 0);
+		currentAssetDataMap.descriptorSets[0].Update(logicalDevice, writeDescSets);
 	}
 
-	void Renderer::UpdatePerFrameUniformBuffers(const Transform& transform, UUID uuid)
+	void Renderer::UpdateCameraDataDescriptorSets(UUID uuid, uint32_t frameIndex)
+	{
+		FrameDependentData* currentFDD = GetFDDAtIndex(frameIndex);
+		auto& currentAssetDataMap = currentFDD->assetDescriptorDataMap[uuid];
+
+		// Update view matrix + camera data descriptor set
+		WriteDescriptorSets writeDescSets(2, 0);
+		writeDescSets.AddUniformBuffer(currentAssetDataMap.descriptorSets[1].GetDescriptorSet(), 2, currentAssetDataMap.viewUBO.GetBuffer(), currentAssetDataMap.viewUBO.GetBufferSize(), 0);
+		writeDescSets.AddUniformBuffer(currentAssetDataMap.descriptorSets[1].GetDescriptorSet(), 0, currentAssetDataMap.cameraDataUBO.GetBuffer(), currentAssetDataMap.cameraDataUBO.GetBufferSize(), 0);
+		currentAssetDataMap.descriptorSets[1].Update(logicalDevice, writeDescSets);
+	}
+
+	void Renderer::UpdateTransformUniformBuffer(const Transform& transform, UUID uuid)
 	{
 		// Construct and update the transform UBO
 		TransformUBO tempUBO{};
@@ -1976,15 +2013,26 @@ namespace TANG
 
 		tempUBO.transform = translation * rotation * scale;
 		GetCurrentFDD()->assetDescriptorDataMap[uuid].transformUBO.UpdateData(&tempUBO, sizeof(TransformUBO));
-
-		// Update the CameraDataUBO
-		CameraDataUBO cameraUBO{};
-		cameraUBO.cameraPos = glm::vec4(cameraPos, 1.0f);
-
-		GetCurrentFDD()->cameraDataUBO.UpdateData(&cameraUBO, sizeof(CameraDataUBO));
 	}
 
-	void Renderer::UpdatePerFrameDescriptorSets(UUID uuid)
+	void Renderer::UpdateCameraDataUniformBuffers(UUID uuid, uint32_t frameIndex, glm::vec3 position, glm::vec3 focus)
+	{
+		FrameDependentData* currentFDD = GetFDDAtIndex(frameIndex);
+		auto& assetDescriptorData = currentFDD->assetDescriptorDataMap[uuid];
+
+		ViewUBO viewUBO{};
+		// NOTE - The "center" parameter is thought of as a unit sphere around the camera's current position. The focus describes
+		//        the direction of where the camera is looking, but in order to calculate the correct view matrix we must make it relative
+		//        to the camera's position
+		viewUBO.view = glm::lookAt(position, position + glm::normalize(focus), { 0.0f, 1.0f, 0.0f });
+		assetDescriptorData.viewUBO.UpdateData(&viewUBO, sizeof(ViewUBO));
+
+		CameraDataUBO cameraDataUBO{};
+		cameraDataUBO.cameraPos = glm::vec4(position, 1.0f);
+		assetDescriptorData.cameraDataUBO.UpdateData(&cameraDataUBO, sizeof(CameraDataUBO));
+	}
+
+	void Renderer::UpdateTransformDescriptorSets(UUID uuid)
 	{
 		FrameDependentData* currentFDD = GetCurrentFDD();
 		auto& currentAssetDataMap = currentFDD->assetDescriptorDataMap[uuid];
@@ -1992,7 +2040,7 @@ namespace TANG
 		// Update transform + cameraData descriptor sets
 		WriteDescriptorSets writeDescSets(2, 0);
 		writeDescSets.AddUniformBuffer(currentAssetDataMap.descriptorSets[1].GetDescriptorSet(), 0, currentAssetDataMap.transformUBO.GetBuffer(), currentAssetDataMap.transformUBO.GetBufferSize(), 0);
-		writeDescSets.AddUniformBuffer(currentAssetDataMap.descriptorSets[1].GetDescriptorSet(), 1, currentFDD->cameraDataUBO.GetBuffer(), currentFDD->cameraDataUBO.GetBufferSize(), 0);
+		writeDescSets.AddUniformBuffer(currentAssetDataMap.descriptorSets[1].GetDescriptorSet(), 1, currentAssetDataMap.cameraDataUBO.GetBuffer(), currentAssetDataMap.cameraDataUBO.GetBufferSize(), 0);
 		currentAssetDataMap.descriptorSets[1].Update(logicalDevice, writeDescSets);
 	}
 
