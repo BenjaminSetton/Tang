@@ -47,9 +47,8 @@ namespace TANG
 
 	void FreeflyCamera::Update(float deltaTime)
 	{
-		UNUSED(deltaTime);
-
-		// Should we remove this?? We're no longer updating the view matrix here
+		// Cache this frame's deltaTime so that we can use it next frame to dampen the camera's velocity
+		dtCache = deltaTime;
 	}
 
 	void FreeflyCamera::Shutdown()
@@ -91,7 +90,7 @@ namespace TANG
 	{
 		if (state == KeyState::PRESSED || state == KeyState::HELD)
 		{
-			position.y += velocity;
+			position.y += velocity * dtCache;
 		}
 	}
 
@@ -99,7 +98,7 @@ namespace TANG
 	{
 		if (state == KeyState::PRESSED || state == KeyState::HELD)
 		{
-			position.y -= velocity;
+			position.y -= velocity * dtCache;
 		}
 	}
 
@@ -107,7 +106,7 @@ namespace TANG
 	{
 		if (state == KeyState::PRESSED || state == KeyState::HELD)
 		{
-			position.x -= velocity;
+			position.x -= velocity * dtCache;
 		}
 	}
 
@@ -115,7 +114,7 @@ namespace TANG
 	{
 		if (state == KeyState::PRESSED || state == KeyState::HELD)
 		{
-			position.x += velocity;
+			position.x += velocity * dtCache;
 		}
 	}
 
@@ -123,7 +122,7 @@ namespace TANG
 	{
 		if (state == KeyState::PRESSED || state == KeyState::HELD)
 		{
-			position.z -= velocity;
+			position.z -= velocity * dtCache;
 		}
 	}
 
@@ -131,7 +130,7 @@ namespace TANG
 	{
 		if (state == KeyState::PRESSED || state == KeyState::HELD)
 		{
-			position.z += velocity;
+			position.z += velocity * dtCache;
 		}
 	}
 

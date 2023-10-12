@@ -102,7 +102,10 @@ namespace TANG
 		KEY_F9,
 		KEY_F10,
 		KEY_F11,
-		KEY_F12
+		KEY_F12,
+
+		// COUNT - THIS MUST ALWAYS BE LAST
+		COUNT
 	};
 }
 

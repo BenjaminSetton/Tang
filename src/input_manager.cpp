@@ -41,39 +41,25 @@ namespace TANG
 
 	InputManager::InputManager() : windowHandle(nullptr), keyCallbacks()
 	{
-		// Nothing to do here yet
+		// Initialize the key states vector to have as many entries as there are key types
+		keyStates.resize(static_cast<size_t>(KeyType::COUNT));
 	}
 
 	InputManager::~InputManager()
 	{
 		windowHandle = nullptr;
 		keyCallbacks.clear();
+		keyStates.clear();
 	}
 
-	//InputManager::InputManager(const InputManager& other) : windowHandle(other.windowHandle)
-	//{
-	//	// Nothing to do here yet
-	//}
-
-	InputManager::InputManager(InputManager&& other) noexcept : keyCallbacks(std::move(other.keyCallbacks))
+	InputManager::InputManager(InputManager&& other) noexcept : keyCallbacks(std::move(other.keyCallbacks)), keyStates(std::move(other.keyStates))
 	{
 		windowHandle = other.windowHandle;
 
 		other.windowHandle = nullptr;
 		other.keyCallbacks.clear();
+		other.keyStates.clear();
 	}
-
-	//InputManager& InputManager::operator=(const InputManager& other)
-	//{
-	//	if (this == &other)
-	//	{
-	//		return *this;
-	//	}
-
-	//	windowHandle = other.windowHandle;
-
-	//	return *this;
-	//}
 
 	void InputManager::Initialize(GLFWwindow* window)
 	{
@@ -90,6 +76,24 @@ namespace TANG
 	void InputManager::Update()
 	{
 		glfwPollEvents();
+
+		// Call the callbacks for all keys
+		for (uint32_t i = 0; i < keyStates.size(); i++)
+		{
+			KeyState state = keyStates[i];
+			KeyType type = (KeyType)(i);
+
+			auto keyCallbackIter = keyCallbacks.find(type);
+			if (keyCallbackIter == keyCallbacks.end())
+			{
+				continue;
+			}
+
+			for (auto callback : keyCallbackIter->second)
+			{
+				callback(state);
+			}
+		}
 	}
 
 	void InputManager::Shutdown()
@@ -186,16 +190,11 @@ namespace TANG
 
 	void InputManager::KeyCallbackEvent_Impl(KeyType type, KeyState state)
 	{
-		auto keyCallbackIter = keyCallbacks.find(type);
-		if (keyCallbackIter == keyCallbacks.end())
-		{
-			return;
-		}
+		// Store the key events
+		// NOTE - We follow the way the OS handles key events, where when you first hold down a key it'll send a PRESSED
+		//        event once, and after a second it will repeatedly send HELD events for that key
+		keyStates[static_cast<uint32_t>(type)] = state;
 
-		for (auto callback : keyCallbackIter->second)
-		{
-			callback(state);
-		}
 	}
 
 }

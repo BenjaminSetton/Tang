@@ -50,6 +50,7 @@ set(HEADERS
 	src/utils/uuid.h
 	src/utils/key_declarations.h
 	src/utils/key_mappings.h
+	src/utils/file_utils.h
 )
 
 # Source files
@@ -129,8 +130,13 @@ target_include_directories(${PROJECT_NAME} PRIVATE ${ASSIMP_INCLUDE_DIR})
 
 # Copy the assimp DLL into the exe's directory
 set(ASSIMP_DLL "${CMAKE_SOURCE_DIR}/src/dependencies/assimp/dll/Debug/assimp-vc143-mtd.dll")
-
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${ASSIMP_DLL}"
         $<TARGET_FILE_DIR:${PROJECT_NAME}>)
+		
+# Compile shaders
+set(SHADER_BUILD_BAT "${CMAKE_SOURCE_DIR}/utils/compile_shaders.bat")
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+	COMMAND ${SHADER_BUILD_BAT})
+

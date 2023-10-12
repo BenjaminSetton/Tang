@@ -54,6 +54,10 @@ namespace TANG
 		// for that particular key
 		std::unordered_map<KeyType, std::vector<KeyCallback>> keyCallbacks;
 
+		// Stores the state of all keys. This is used during the update loop to determine wheter we want to send events to
+		// the callbacks or not, rather than relying on GLFW events directly for this purpose.
+		std::vector<KeyState> keyStates;
+
 		GLFWwindow* windowHandle;
 
 	};

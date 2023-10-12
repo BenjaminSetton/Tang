@@ -25,7 +25,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <cstdint>
-#include <fstream>
+#include <filesystem>
 
 // Unfortunately the renderer has to know about GLFW in order to create the surface, since the vulkan call itself
 // takes in a GLFWwindow pointer >:(. This also means we have to pass it into the renderer's Initialize() call,
@@ -44,6 +44,7 @@
 #include "data_buffer/vertex_buffer.h"
 #include "data_buffer/index_buffer.h"
 #include "descriptors/write_descriptor_set.h"
+#include "utils/file_utils.h"
 
 static constexpr uint32_t WINDOW_WIDTH = 1920;
 static constexpr uint32_t WINDOW_HEIGHT = 1080;
@@ -64,25 +65,8 @@ static const bool enableValidationLayers = false;
 static const bool enableValidationLayers = true;
 #endif
 
-static std::vector<char> readFile(const std::string& fileName)
-{
-	std::ifstream file(fileName, std::ios::ate | std::ios::binary);
-
-	if (!file.is_open())
-	{
-		throw std::runtime_error("Failed to open file!");
-	}
-
-	size_t fileSize = (size_t)file.tellg();
-	std::vector<char> buffer(fileSize);
-
-	file.seekg(0);
-	file.read(buffer.data(), fileSize);
-
-	file.close();
-
-	return buffer;
-}
+static const std::string shaderChecksumOutputPath = "../out/shaders/checksum/";
+static const std::string compiledShaderOutputPath = "../out/shaders/compiled/";
 
 static VkVertexInputBindingDescription GetVertexBindingDescription()
 {
@@ -1178,12 +1162,12 @@ namespace TANG
 
 	// This is a helper function for creating the "VkShaderModule" wrappers around
 	// the shader code, read from CreateGraphicsPipeline() below
-	VkShaderModule Renderer::CreateShaderModule(std::vector<char>& code)
+	VkShaderModule Renderer::CreateShaderModule(const char* shaderCode, uint32_t numBytes)
 	{
 		VkShaderModuleCreateInfo createInfo{};
 		createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-		createInfo.codeSize = code.size();
-		createInfo.pCode = reinterpret_cast<uint32_t*>(code.data());
+		createInfo.codeSize = numBytes;
+		createInfo.pCode = reinterpret_cast<const uint32_t*>(shaderCode);
 
 		VkShaderModule shaderModule;
 		if (vkCreateShaderModule(logicalDevice, &createInfo, nullptr, &shaderModule) != VK_SUCCESS)
@@ -1197,11 +1181,8 @@ namespace TANG
 	void Renderer::CreateGraphicsPipeline()
 	{
 		// Read the compiled shaders
-		auto vertShaderCode = readFile("../out/shaders/vert.spv");
-		auto fragShaderCode = readFile("../out/shaders/frag.spv");
-
-		VkShaderModule vertShaderModule = CreateShaderModule(vertShaderCode);
-		VkShaderModule fragShaderModule = CreateShaderModule(fragShaderCode);
+		VkShaderModule vertShaderModule = LoadShader("vert.spv");
+		VkShaderModule fragShaderModule = LoadShader("frag.spv");
 
 		VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
 		vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -1881,6 +1862,17 @@ namespace TANG
 		commandBuffer->CMD_EndRenderPass();
 
 		commandBuffer->EndRecording();
+	}
+
+	VkShaderModule Renderer::LoadShader(const std::string& fileName)
+	{
+		namespace fs = std::filesystem;
+		const std::string defaultVertexShaderCompiledPath = (fs::path(compiledShaderOutputPath) / fs::path(fileName)).generic_string();
+		const std::string defaultVertexShaderChecksumPath = (fs::path(shaderChecksumOutputPath) / fs::path(fileName)).generic_string();
+
+		auto vertShaderCode = ReadFile(defaultVertexShaderCompiledPath);
+
+		return CreateShaderModule(vertShaderCode.data(), static_cast<uint32_t>(vertShaderCode.size()));
 	}
 
 	void Renderer::RecordSecondaryCommandBuffer(SecondaryCommandBuffer& commandBuffer, AssetResources* resources, uint32_t frameBufferIndex)

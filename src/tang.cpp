@@ -13,8 +13,8 @@ namespace TANG
 	TNG_ASSERT_COMPILE(sizeof(glm::vec3) == 3 * sizeof(float));
 
 	// TODO - Maybe move this to a config?
-	static constexpr uint32_t WINDOW_WIDTH = 1920;
-	static constexpr uint32_t WINDOW_HEIGHT = 1080;
+	static constexpr uint32_t WINDOW_WIDTH = 1280;
+	static constexpr uint32_t WINDOW_HEIGHT = 720;
 
 	// Static global handles
 	static Renderer rendererHandle;

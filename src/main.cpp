@@ -82,7 +82,7 @@ int main(uint32_t argc, const char** argv)
     }
 
     // Set the camera's velocity
-    TANG::SetCameraVelocity(1.0f);
+    TANG::SetCameraVelocity(10.0f);
 
     float elapsedTime = 0;
     auto startTime = std::chrono::high_resolution_clock::now();

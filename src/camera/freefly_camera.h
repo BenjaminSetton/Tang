@@ -27,6 +27,7 @@ namespace TANG
 	private:
 
 		float velocity;
+		float dtCache;
 
 		void RegisterKeyCallbacks() override;
 		void DeregisterKeyCallbacks() override;
