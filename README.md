@@ -35,7 +35,9 @@ NOTES:
 
 [X] Abstract away all the GLFW window calls into their own Window or Surface class
 [X] Come up with a better abstraction for descriptor sets, pools, set layouts and uniform buffers. At the moment it's really tedious to add/remove or update data we're sending to the shaders because it must be changed it too many places
-[ ] Write a basic Camera class that allows us to move around the scene
+[X] Write a basic Camera class that allows us to move around the scene
+[X] Gather keyboard input using GLFW
+[ ] Gather mouse input using GLFW
+[ ] Hash shader code so we can detect when it's outdated and produce a warning in that case
 [ ] Organize the renderer data so it's easier to conceptualize. Currently it's a mess...
-[ ] Gather user input using GLFW
 [ ] Create an abstraction for textures. These must be imported, loaded, and uploaded to the shaders
