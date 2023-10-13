@@ -15,10 +15,14 @@ namespace TANG
 	{
 	public:
 
-		#define REGISTER_KEY_CALLBACK(keyType, funcPtr) InputManager::GetInstance().RegisterKeyCallback(keyType, std::bind(&funcPtr, this, std::placeholders::_1));
-		#define DEREGISTER_KEY_CALLBACK(keyType, funcPtr) InputManager::GetInstance().DeregisterKeyCallback(keyType, std::bind(&funcPtr, this, std::placeholders::_1));
-
 		using KeyCallback = std::function<void(KeyState)>;
+#define REGISTER_KEY_CALLBACK(keyType, funcPtr) InputManager::GetInstance().RegisterKeyCallback(keyType, std::bind(&funcPtr, this, std::placeholders::_1));
+#define DEREGISTER_KEY_CALLBACK(keyType, funcPtr) InputManager::GetInstance().DeregisterKeyCallback(keyType, std::bind(&funcPtr, this, std::placeholders::_1));
+
+		using MouseCallback = std::function<void(double, double)>;
+#define REGISTER_MOUSE_CALLBACK(funcPtr) InputManager::GetInstance().RegisterMouseCallback(std::bind(&funcPtr, this, std::placeholders::_1, std::placeholders::_2));
+#define DEREGISTER_MOUSE_CALLBACK(funcPtr) InputManager::GetInstance().DeregisterMouseCallback(std::bind(&funcPtr, this, std::placeholders::_1, std::placeholders::_2));
+
 
 		~InputManager();
 		InputManager(const InputManager& other) = delete;
@@ -42,8 +46,12 @@ namespace TANG
 		void RegisterKeyCallback(KeyType type, KeyCallback callback);
 		void DeregisterKeyCallback(KeyType type, KeyCallback callback);
 
+		void RegisterMouseCallback(MouseCallback callback);
+		void DeregisterMouseCallback(MouseCallback callback);
+
 		// Private callback implementations - DO NOT CALL
 		void KeyCallbackEvent_Impl(KeyType type, KeyState state);
+		void MouseCallbackEvent_Impl(double xPosition, double yPosition);
 
 	private:
 
@@ -57,6 +65,12 @@ namespace TANG
 		// Stores the state of all keys. This is used during the update loop to determine wheter we want to send events to
 		// the callbacks or not, rather than relying on GLFW events directly for this purpose.
 		std::vector<KeyState> keyStates;
+
+		// Stores a list of all callbacks for mouse coordinates.
+		std::vector<MouseCallback> mouseCallbacks;
+
+		// Stores the latest mouse coordinates. The mouse coordinates callbacks are called every frame
+		std::pair<double, double> currentMouseCoordinates;
 
 		GLFWwindow* windowHandle;
 

@@ -43,6 +43,7 @@ namespace TANG
 		focus = _focus;
 
 		RegisterKeyCallbacks();
+		RegisterMouseCallbacks();
 	}
 
 	void FreeflyCamera::Update(float deltaTime)
@@ -53,6 +54,7 @@ namespace TANG
 
 	void FreeflyCamera::Shutdown()
 	{
+		DeregisterMouseCallbacks();
 		DeregisterKeyCallbacks();
 	}
 
@@ -84,6 +86,16 @@ namespace TANG
 		DEREGISTER_KEY_CALLBACK(KeyType::KEY_SEMICOLON, FreeflyCamera::MoveRight);
 		DEREGISTER_KEY_CALLBACK(KeyType::KEY_O        , FreeflyCamera::MoveForward);
 		DEREGISTER_KEY_CALLBACK(KeyType::KEY_L        , FreeflyCamera::MoveBackward);
+	}
+
+	void FreeflyCamera::RegisterMouseCallbacks()
+	{
+		REGISTER_MOUSE_CALLBACK(FreeflyCamera::RotateCamera);
+	}
+
+	void FreeflyCamera::DeregisterMouseCallbacks()
+	{
+		DEREGISTER_MOUSE_CALLBACK(FreeflyCamera::RotateCamera);
 	}
 
 	void FreeflyCamera::MoveUp(KeyState state)
@@ -132,6 +144,15 @@ namespace TANG
 		{
 			position.z += velocity * dtCache;
 		}
+	}
+
+	void FreeflyCamera::RotateCamera(double xPosition, double yPosition)
+	{
+		UNUSED(xPosition);
+		UNUSED(yPosition);
+		TNG_TODO();
+
+		//LogInfo("Mouse position: (%f, %f)", xPosition, yPosition);
 	}
 
 }

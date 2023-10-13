@@ -28,6 +28,9 @@ namespace TANG
 
 		virtual void RegisterKeyCallbacks() = 0;
 		virtual void DeregisterKeyCallbacks() = 0;
+		
+		virtual void RegisterMouseCallbacks() = 0;
+		virtual void DeregisterMouseCallbacks() = 0;
 
 		glm::vec3 position;
 		glm::vec3 focus;

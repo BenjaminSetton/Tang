@@ -84,7 +84,20 @@ namespace TANG
 
 		glfwWinHandle = glfwCreateWindow(width, height, "TANG", nullptr, nullptr);
 		glfwSetWindowUserPointer(glfwWinHandle, this);
+		glfwSetInputMode(glfwWinHandle, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 		glfwSetFramebufferSizeCallback(glfwWinHandle, FramebufferResizeCallback);
+
+		// Use raw mouse motion if available, meaning we won't consider any acceleration or other features that
+		// are applied to a desktop mouse to make it "feel" better. Raw mouse motion is better for controlling 3D cameras
+		if (glfwRawMouseMotionSupported())
+		{
+			glfwSetInputMode(glfwWinHandle, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
+		}
+		else
+		{
+			// Let's print a message saying raw mouse motion is not supported
+			LogInfo("Raw mouse motion is not supported!");
+		}
 	}
 
 	void MainWindow::Update(float deltaTime)

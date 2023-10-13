@@ -32,13 +32,19 @@ namespace TANG
 		void RegisterKeyCallbacks() override;
 		void DeregisterKeyCallbacks() override;
 
-		// Define the key callback functions below
+		void RegisterMouseCallbacks() override;
+		void DeregisterMouseCallbacks() override;
+
+		// Key callback functions
 		void MoveUp(KeyState state);
 		void MoveDown(KeyState state);
 		void MoveLeft(KeyState state);
 		void MoveRight(KeyState state);
 		void MoveForward(KeyState state);
 		void MoveBackward(KeyState state);
+
+		// Mouse callback functions
+		void RotateCamera(double xPosition, double yPosition);
 
 	};
 }

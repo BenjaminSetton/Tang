@@ -35,8 +35,15 @@ namespace TANG
 		}
 
 		// Call the implementation
-		InputManager::GetInstance().KeyCallbackEvent_Impl(keyTypeMappingsIter->second, keyStateMappingsIter->second);
-		
+		InputManager::GetInstance().KeyCallbackEvent_Impl(keyTypeMappingsIter->second, keyStateMappingsIter->second);	
+	}
+
+	static void GLFW_MOUSE_CALLBACK(GLFWwindow* window, double xPos, double yPos)
+	{
+		UNUSED(window);
+
+		// Call the implementation
+		InputManager::GetInstance().MouseCallbackEvent_Impl(xPos, yPos);
 	}
 
 	InputManager::InputManager() : windowHandle(nullptr), keyCallbacks()
@@ -71,13 +78,14 @@ namespace TANG
 
 		windowHandle = window;
 		glfwSetKeyCallback(window, GLFW_KEY_CALLBACK);
+		glfwSetCursorPosCallback(window, GLFW_MOUSE_CALLBACK);
 	}
 
 	void InputManager::Update()
 	{
 		glfwPollEvents();
 
-		// Call the callbacks for all keys
+		// Call the key callbacks for all keys
 		for (uint32_t i = 0; i < keyStates.size(); i++)
 		{
 			KeyState state = keyStates[i];
@@ -93,6 +101,12 @@ namespace TANG
 			{
 				callback(state);
 			}
+		}
+
+		// Call the mouse callbacks
+		for (auto& callback : mouseCallbacks)
+		{
+			callback(currentMouseCoordinates.first, currentMouseCoordinates.second);
 		}
 	}
 
@@ -185,7 +199,7 @@ namespace TANG
 			}
 		}
 
-		LogError("Failed to deregister key callback, the provided callback was not found!");
+		LogWarning("Failed to deregister key callback, the provided callback was not found!");
 	}
 
 	void InputManager::KeyCallbackEvent_Impl(KeyType type, KeyState state)
@@ -194,7 +208,32 @@ namespace TANG
 		// NOTE - We follow the way the OS handles key events, where when you first hold down a key it'll send a PRESSED
 		//        event once, and after a second it will repeatedly send HELD events for that key
 		keyStates[static_cast<uint32_t>(type)] = state;
+	}
 
+	void InputManager::RegisterMouseCallback(MouseCallback callback)
+	{
+		mouseCallbacks.push_back(callback);
+	}
+
+	void InputManager::DeregisterMouseCallback(MouseCallback callback)
+	{
+		for (auto callbackIter = mouseCallbacks.begin(); callbackIter < mouseCallbacks.end(); callbackIter++)
+		{
+			// We're using the target for the equality check. This might not work in all cases
+			if ((*callbackIter).target<void(*)(KeyState)>() == callback.target<void(*)(KeyState)>())
+			{
+				mouseCallbacks.erase(callbackIter);
+				return;
+			}
+		}
+
+		LogWarning("Failed to deregister key callback, the provided callback was not found!");
+	}
+
+	void InputManager::MouseCallbackEvent_Impl(double xPosition, double yPosition)
+	{
+		currentMouseCoordinates.first = xPosition;
+		currentMouseCoordinates.second = yPosition;
 	}
 
 }
