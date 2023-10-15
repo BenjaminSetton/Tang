@@ -21,8 +21,10 @@ namespace TANG
 		// Should this be removed?? We're no longer creating the view matrix here
 		virtual void Update(float deltaTime) = 0;
 
+		// Returns the inverted view matrix
+		glm::mat4 GetViewMatrix() const;
+
 		glm::vec3 GetPosition() const;
-		glm::vec3 GetFocus() const;
 
 	protected:
 
@@ -32,8 +34,8 @@ namespace TANG
 		virtual void RegisterMouseCallbacks() = 0;
 		virtual void DeregisterMouseCallbacks() = 0;
 
-		glm::vec3 position;
-		glm::vec3 focus;
+		// Stores a rotated and transformed view matrix, NOT YET INVERTED
+		glm::mat4 matrix;
 
 	};
 }

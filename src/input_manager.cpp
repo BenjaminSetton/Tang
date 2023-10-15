@@ -106,8 +106,14 @@ namespace TANG
 		// Call the mouse callbacks
 		for (auto& callback : mouseCallbacks)
 		{
-			callback(currentMouseCoordinates.first, currentMouseCoordinates.second);
+			double deltaX = currentMouseCoordinates.first - previousMouseCoordinates.first;
+			double deltaY = currentMouseCoordinates.second - previousMouseCoordinates.second;
+
+			callback(deltaX, deltaY);
 		}
+
+		// Update the previous mouse coordinates
+		previousMouseCoordinates = currentMouseCoordinates;
 	}
 
 	void InputManager::Shutdown()

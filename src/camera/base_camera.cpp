@@ -7,7 +7,7 @@
 namespace TANG
 {
 
-	BaseCamera::BaseCamera() : position(glm::vec3(0.0)), focus(glm::vec3(0.0))
+	BaseCamera::BaseCamera() : matrix(glm::identity<glm::mat4>())
 	{
 		// Nothing to do here
 	}
@@ -17,12 +17,12 @@ namespace TANG
 		// Nothing to do here
 	}
 
-	BaseCamera::BaseCamera(const BaseCamera& other) : position(other.position), focus(other.focus)
+	BaseCamera::BaseCamera(const BaseCamera& other) : matrix(other.matrix)
 	{
 		// Nothing to do here
 	}
 
-	BaseCamera::BaseCamera(BaseCamera&& other) noexcept : position(std::move(other.position)), focus(std::move(other.focus))
+	BaseCamera::BaseCamera(BaseCamera&& other) noexcept : matrix(std::move(other.matrix))
 	{
 		// Nothing to do here
 	}
@@ -35,20 +35,19 @@ namespace TANG
 			return *this;
 		}
 
-		position = other.position;
-		focus = other.focus;
+		matrix = other.matrix;
 
 		return *this;
 	}
 
-	glm::vec3 BaseCamera::GetPosition() const
+	glm::mat4 BaseCamera::GetViewMatrix() const
 	{
-		return position;
+		return glm::inverse(matrix);
 	}
 
-	glm::vec3 BaseCamera::GetFocus() const
+	glm::vec3 BaseCamera::GetPosition() const
 	{
-		return focus;
+		return glm::vec3(matrix[3]);
 	}
 
 }

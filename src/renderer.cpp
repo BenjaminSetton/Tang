@@ -329,7 +329,7 @@ namespace TANG
 		// solution must be implemented
 		for (uint32_t i = 0; i < GetFDDSize(); i++)
 		{
-			UpdateCameraDataUniformBuffers(resources.uuid, i, { 0.0f, 5.0f, 15.0f }, { 0.0f, 0.0f, 0.0f });
+			UpdateCameraDataUniformBuffers(resources.uuid, i, { 0.0f, 0.0f, 0.0f }, glm::identity<glm::mat4>());
 			UpdateProjectionUniformBuffer(resources.uuid, i);
 
 			// Initialize the descriptor sets as well
@@ -431,7 +431,7 @@ namespace TANG
 		framebufferHeight = newHeight;
 	}
 
-	void Renderer::UpdateCameraData(const glm::vec3& position, const glm::vec3& focus)
+	void Renderer::UpdateCameraData(const glm::vec3& position, const glm::mat4& viewMatrix)
 	{
 		FrameDependentData* currentFDD = GetCurrentFDD();
 		auto& assetDescriptorMap = currentFDD->assetDescriptorDataMap;
@@ -439,7 +439,7 @@ namespace TANG
 		// Update the view matrix and camera position UBOs for all assets, as well as the descriptor sets
 		for (auto& assetData : assetDescriptorMap)
 		{
-			UpdateCameraDataUniformBuffers(assetData.first, currentFrame, position, focus);
+			UpdateCameraDataUniformBuffers(assetData.first, currentFrame, position, viewMatrix);
 			UpdateCameraDataDescriptorSets(assetData.first, currentFrame);
 		}
 	}
@@ -669,7 +669,7 @@ namespace TANG
 		// Check that we support all requested validation layers
 		if (enableValidationLayers && !CheckValidationLayerSupport())
 		{
-			throw std::runtime_error("Validation layers were requested, but one or more is not supported!");
+			LogError("Validation layers were requested, but one or more is not supported!");
 		}
 
 		VkApplicationInfo appInfo{};
@@ -715,7 +715,7 @@ namespace TANG
 	{
 		createInfo = {};
 		createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-		createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+		createInfo.messageSeverity = /*VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | */VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
 		createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_DEVICE_ADDRESS_BINDING_BIT_EXT;
 		createInfo.pfnUserCallback = debugCallback;
 		createInfo.pUserData = nullptr; // Optional
@@ -2007,16 +2007,13 @@ namespace TANG
 		GetCurrentFDD()->assetDescriptorDataMap[uuid].transformUBO.UpdateData(&tempUBO, sizeof(TransformUBO));
 	}
 
-	void Renderer::UpdateCameraDataUniformBuffers(UUID uuid, uint32_t frameIndex, glm::vec3 position, glm::vec3 focus)
+	void Renderer::UpdateCameraDataUniformBuffers(UUID uuid, uint32_t frameIndex, const glm::vec3& position, const glm::mat4& viewMatrix)
 	{
 		FrameDependentData* currentFDD = GetFDDAtIndex(frameIndex);
 		auto& assetDescriptorData = currentFDD->assetDescriptorDataMap[uuid];
 
 		ViewUBO viewUBO{};
-		// NOTE - The "center" parameter is thought of as a unit sphere around the camera's current position. The focus describes
-		//        the direction of where the camera is looking, but in order to calculate the correct view matrix we must make it relative
-		//        to the camera's position
-		viewUBO.view = glm::lookAt(position, position + glm::normalize(focus), { 0.0f, 1.0f, 0.0f });
+		viewUBO.view = viewMatrix;
 		assetDescriptorData.viewUBO.UpdateData(&viewUBO, sizeof(ViewUBO));
 
 		CameraDataUBO cameraDataUBO{};

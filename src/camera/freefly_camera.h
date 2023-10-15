@@ -21,13 +21,21 @@ namespace TANG
 		void Update(float deltaTime) override;
 		void Shutdown();
 
-		void SetVelocity(float velocity);
-		float GetVelocity() const;
+		void SetSpeed(float speed);
+		float GetSpeed() const;
+
+		void SetSensitivity(float sensitivity);
+		float GetSensitivity() const;
 
 	private:
 
-		float velocity;
-		float dtCache;
+		float speed;
+		float sensitivity;
+
+		glm::vec3 position;
+		glm::vec3 rotation;
+
+		glm::vec3 displacement;
 
 		void RegisterKeyCallbacks() override;
 		void DeregisterKeyCallbacks() override;
@@ -44,7 +52,7 @@ namespace TANG
 		void MoveBackward(KeyState state);
 
 		// Mouse callback functions
-		void RotateCamera(double xPosition, double yPosition);
+		void RotateCamera(double xDelta, double yDelta);
 
 	};
 }

@@ -53,7 +53,7 @@ namespace TANG
 		}
 
 		// Update the camera data that the renderer is holding with the most up-to-date info
-		rendererHandle.UpdateCameraData(camera.GetPosition(), camera.GetFocus());
+		rendererHandle.UpdateCameraData(camera.GetPosition(), camera.GetViewMatrix());
 
 		rendererHandle.Update(deltaTime);
 	}
@@ -104,9 +104,14 @@ namespace TANG
 		return asset->uuid;
 	}
 
-	void SetCameraVelocity(float velocity)
+	void SetCameraSpeed(float speed)
 	{
-		camera.SetVelocity(velocity);
+		camera.SetSpeed(speed);
+	}
+
+	void SetCameraSensitivity(float sensitivity)
+	{
+		camera.SetSensitivity(sensitivity);
 	}
 
 	///////////////////////////////////////////////////////////

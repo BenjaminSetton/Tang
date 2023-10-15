@@ -85,8 +85,8 @@ namespace TANG
 		// Sets the size that the next framebuffer should be. This function will only be called when the main window is resized
 		void SetNextFramebufferSize(uint32_t newWidth, uint32_t newHeight);
 
-		// Updates the view matrix using the provided position and focus. The caller usually gets this data from any derived BaseCamera object
-		void UpdateCameraData(const glm::vec3& position, const glm::vec3& focus);
+		// Updates the view matrix using the provided position and inverted view matrix. The caller can get this data from any derived BaseCamera object
+		void UpdateCameraData(const glm::vec3& position, const glm::mat4& viewMatrix);
 
 	private:
 
@@ -188,7 +188,7 @@ namespace TANG
 		void UpdateProjectionDescriptorSets(UUID uuid, uint32_t frameIndex);
 
 		void UpdateTransformUniformBuffer(const Transform& transform, UUID uuid);
-		void UpdateCameraDataUniformBuffers(UUID uuid, uint32_t frameIndex, glm::vec3 position, glm::vec3 focus);
+		void UpdateCameraDataUniformBuffers(UUID uuid, uint32_t frameIndex, const glm::vec3& position, const glm::mat4& viewMatrix);
 		void UpdateProjectionUniformBuffer(UUID uuid, uint32_t frameIndex);
 
 		VkCommandBuffer BeginSingleTimeCommands(VkCommandPool pool);

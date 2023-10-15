@@ -15,6 +15,12 @@ namespace TANG
 	{
 	public:
 
+		////////////////////////////////////////////////////////////
+		//
+		//	CALLBACKS
+		//
+		////////////////////////////////////////////////////////////
+
 		using KeyCallback = std::function<void(KeyState)>;
 #define REGISTER_KEY_CALLBACK(keyType, funcPtr) InputManager::GetInstance().RegisterKeyCallback(keyType, std::bind(&funcPtr, this, std::placeholders::_1));
 #define DEREGISTER_KEY_CALLBACK(keyType, funcPtr) InputManager::GetInstance().DeregisterKeyCallback(keyType, std::bind(&funcPtr, this, std::placeholders::_1));
@@ -69,7 +75,8 @@ namespace TANG
 		// Stores a list of all callbacks for mouse coordinates.
 		std::vector<MouseCallback> mouseCallbacks;
 
-		// Stores the latest mouse coordinates. The mouse coordinates callbacks are called every frame
+		// Stores the previous and current mouse coordinates. The mouse coordinates callbacks are called every frame
+		std::pair<double, double> previousMouseCoordinates;
 		std::pair<double, double> currentMouseCoordinates;
 
 		GLFWwindow* windowHandle;
