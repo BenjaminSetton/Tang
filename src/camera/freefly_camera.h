@@ -29,12 +29,17 @@ namespace TANG
 
 	private:
 
+		// Persistent data - describes how fast the camera translates (speed) and how sensitive it is to
+		//                   mouse input for rotation (sensitivity)
 		float speed;
 		float sensitivity;
 
+		// Persistent data - describes the position and rotation of the camera. This data is NOT reset every frame
 		glm::vec3 position;
 		glm::vec3 rotation;
 
+		// Per frame - the displacement is accumulated through the callbacks, and reset every frame after being used
+		//             to translate the camera
 		glm::vec3 displacement;
 
 		void RegisterKeyCallbacks() override;

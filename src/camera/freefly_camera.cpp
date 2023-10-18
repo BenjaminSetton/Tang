@@ -1,6 +1,7 @@
 
 #define GLM_FORCE_RADIANS
 #include <gtc/matrix_transform.hpp>
+#include <gtc/quaternion.hpp>
 
 #include <functional>
 
@@ -60,24 +61,38 @@ namespace TANG
 			displacement = glm::normalize(displacement);
 		}
 
-		// Reset the view matrix and re-calculate to avoid accumulating rotational errors
-		matrix = glm::identity<glm::mat4>();
+		// Start off with a fresh view matrix to avoid accumulating rotational errors
+		glm::mat4 newMatrix = glm::identity<glm::mat4>();
+
+		// Clamp the pitch
+		constexpr float minPitch = glm::radians(-90.0f);
+		constexpr float maxPitch = glm::radians(90.0f);
+		rotation.y = glm::clamp(glm::radians(rotation.y), minPitch, maxPitch);
+
+		LogInfo("%f, %f", rotation.x, rotation.y);
 
 		// Rotate the camera
-		glm::mat4 xRotationMatrix = glm::rotate(glm::identity<glm::mat4>(), glm::radians(-rotation.x), glm::vec3(0.0f, 1.0f, 0.0f));
-		glm::mat4 yRotationMatrix = glm::rotate(glm::identity<glm::mat4>(), glm::radians(-rotation.y), glm::vec3(1.0f, 0.0f, 0.0f));
-		matrix = yRotationMatrix * matrix * xRotationMatrix;
+		glm::quat cameraOrientation = glm::quat(glm::vec3(-rotation.y, glm::radians(rotation.x), 0.0f));
+		glm::mat4 rotationMatrix = glm::mat4_cast(cameraOrientation);
+		newMatrix = rotationMatrix * newMatrix;
 
-		// TODO - Prevent camera roll on rotation
+		// Translate it in local coordinates, except for up/down which translate in global coordinates
+		glm::vec3 adjustedDisplacement = displacement * deltaTime * speed;
+		float verticalDisplacement = adjustedDisplacement.y;
+		adjustedDisplacement.y = 0;
 
-		// Translate it in local coordinates
-		matrix[3] = glm::vec4(position, 1.0f);
-		glm::mat4 newTranslation = glm::translate(glm::identity<glm::mat4>(), displacement * deltaTime * speed);
-		matrix = matrix * newTranslation;
+		newMatrix[3] = glm::vec4(position, 1.0f);
+		glm::mat4 newTranslation = glm::translate(glm::identity<glm::mat4>(), adjustedDisplacement);
+
+		newMatrix = newMatrix * newTranslation;
+		newMatrix[3].y += verticalDisplacement;
 
 		// Store the new camera position and wipe the displacement
-		position = glm::vec3(matrix[3]);
+		position = glm::vec3(newMatrix[3]);
 		displacement = { 0.0f, 0.0f, 0.0f };
+
+		// Set the new matrix
+		matrix = newMatrix;
 	}
 
 	void FreeflyCamera::Shutdown()

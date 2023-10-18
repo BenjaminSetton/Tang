@@ -327,9 +327,13 @@ namespace TANG
 		// Note that we're operating under the assumption that assets will only be created before
 		// we hit the update loop, simply because we're updating all frames in flight here. If this changes in the future, another
 		// solution must be implemented
+		glm::vec3 pos = { 0.0f, 5.0f, 15.0f };
+		glm::vec3 eye = { 1.0f, 0.0f, 0.0f };
+		glm::mat4 viewMat = glm::inverse(glm::lookAt(pos, pos + eye, { 0.0f, 1.0f, 0.0f }));  // TODO - Remove this hard-coded stuff
 		for (uint32_t i = 0; i < GetFDDSize(); i++)
 		{
-			UpdateCameraDataUniformBuffers(resources.uuid, i, { 0.0f, 0.0f, 0.0f }, glm::identity<glm::mat4>());
+
+			UpdateCameraDataUniformBuffers(resources.uuid, i, pos, viewMat);
 			UpdateProjectionUniformBuffer(resources.uuid, i);
 
 			// Initialize the descriptor sets as well

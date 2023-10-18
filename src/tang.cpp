@@ -31,7 +31,7 @@ namespace TANG
 		windowHandle.Create(WINDOW_WIDTH, WINDOW_HEIGHT);
 		InputManager::GetInstance().Initialize(windowHandle.GetHandle());
 		rendererHandle.Initialize(windowHandle.GetHandle(), WINDOW_WIDTH, WINDOW_HEIGHT);
-		camera.Initialize({ 0.0f, 5.0f, 15.0f }, { 0.0f, 0.0f, -1.0f });
+		camera.Initialize({ 0.0f, 5.0f, 15.0f }, { 0.0f, 0.0f, 0.0f });
 	}
 
 	void Update(float deltaTime)
