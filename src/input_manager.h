@@ -79,6 +79,9 @@ namespace TANG
 		std::pair<double, double> previousMouseCoordinates;
 		std::pair<double, double> currentMouseCoordinates;
 
+		// Stores true as long as the mouse has NOT been moved. This is so we can prevent huge deltas when the mouse is initially moved
+		bool isFirstMouseMovement;
+
 		GLFWwindow* windowHandle;
 
 	};

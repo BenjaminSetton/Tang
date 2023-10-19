@@ -46,7 +46,7 @@ namespace TANG
 		InputManager::GetInstance().MouseCallbackEvent_Impl(xPos, yPos);
 	}
 
-	InputManager::InputManager() : windowHandle(nullptr), keyCallbacks()
+	InputManager::InputManager() : windowHandle(nullptr), keyCallbacks(), isFirstMouseMovement(true)
 	{
 		// Initialize the key states vector to have as many entries as there are key types
 		keyStates.resize(static_cast<size_t>(KeyType::COUNT));
@@ -62,6 +62,7 @@ namespace TANG
 	InputManager::InputManager(InputManager&& other) noexcept : keyCallbacks(std::move(other.keyCallbacks)), keyStates(std::move(other.keyStates))
 	{
 		windowHandle = other.windowHandle;
+		isFirstMouseMovement = other.isFirstMouseMovement;
 
 		other.windowHandle = nullptr;
 		other.keyCallbacks.clear();
@@ -240,6 +241,13 @@ namespace TANG
 	{
 		currentMouseCoordinates.first = xPosition;
 		currentMouseCoordinates.second = yPosition;
+
+		// Prevent huge deltas when we receive the first mouse callback
+		if (isFirstMouseMovement)
+		{
+			previousMouseCoordinates = currentMouseCoordinates;
+			isFirstMouseMovement = false;
+		}
 	}
 
 }

@@ -1,7 +1,14 @@
 
 #define GLM_FORCE_RADIANS
 #include <gtc/matrix_transform.hpp>
+
+// DISABLE WARNING FROM "type_quat.hpp": nonstandard extension used: nameless struct/union
+#pragma warning(push)
+#pragma warning(disable : 4201)
+
 #include <gtc/quaternion.hpp>
+
+#pragma warning(pop)
 
 #include <functional>
 
@@ -13,7 +20,8 @@
 namespace TANG
 {
 
-	FreeflyCamera::FreeflyCamera() : BaseCamera(), speed(5.0f), sensitivity(5.0f)
+	FreeflyCamera::FreeflyCamera() : BaseCamera(), speed(5.0f), sensitivity(5.0f), 
+		position(glm::vec3(0.0f)), rotation(glm::vec3(0.0f)), displacement(glm::vec3(0.0f))
 	{
 		// Nothing to do here
 	}
@@ -24,29 +32,44 @@ namespace TANG
 	}
 
 	FreeflyCamera::FreeflyCamera(const FreeflyCamera& other) : BaseCamera(other), 
-		speed(other.speed), sensitivity(other.sensitivity)
+		speed(other.speed), sensitivity(other.sensitivity), position(other.position), 
+		rotation(other.rotation)
 	{
-		// Nothing to do here
+		// NOTE - Don't copy the displacement, since that's wiped every frame anyway
 	}
 
 	FreeflyCamera::FreeflyCamera(FreeflyCamera&& other) noexcept : BaseCamera(std::move(other)), 
-		speed(std::move(other.speed)), sensitivity(std::move(other.sensitivity))
+		speed(std::move(other.speed)), sensitivity(std::move(other.sensitivity)), position(std::move(other.position)),
+		rotation(std::move(other.rotation))
 	{
-		// Nothing to do here
+		// NOTE - Don't copy the displacement, since that's wiped every frame anyway
+
+		// Deregister the callbacks from the other camera object, since it will become invalid
+		other.DeregisterKeyCallbacks();
+		other.DeregisterMouseCallbacks();
 	}
 
 	FreeflyCamera& FreeflyCamera::operator=(const FreeflyCamera& other)
 	{
-		UNUSED(other);
-		TNG_TODO();
+		// Protect against self-assignment
+		if (this == &other)
+		{
+			return *this;
+		}
+
+		BaseCamera::operator=(other);
+		speed = other.speed;
+		sensitivity = other.sensitivity;
+		position = other.position;
+		rotation = other.rotation;
 
 		return *this;
 	}
 
-	void FreeflyCamera::Initialize(const glm::vec3& _position, const glm::vec3& _focus)
+	void FreeflyCamera::Initialize(const glm::vec3& _position, const glm::vec3& _rotationDegrees)
 	{
 		position = _position;
-		rotation = _focus;
+		rotation = _rotationDegrees;
 
 		RegisterKeyCallbacks();
 		RegisterMouseCallbacks();
@@ -65,14 +88,16 @@ namespace TANG
 		glm::mat4 newMatrix = glm::identity<glm::mat4>();
 
 		// Clamp the pitch
-		constexpr float minPitch = glm::radians(-90.0f);
-		constexpr float maxPitch = glm::radians(90.0f);
-		rotation.y = glm::clamp(glm::radians(rotation.y), minPitch, maxPitch);
+		constexpr float minPitch = -90.0f;
+		constexpr float maxPitch = 90.0f;
+		rotation.y = glm::clamp(rotation.y, minPitch, maxPitch);
 
-		LogInfo("%f, %f", rotation.x, rotation.y);
+		// Mod the yaw to wrap around to 0 every 360 degrees
+		float yawFractional = rotation.x - static_cast<int>(rotation.x);
+		rotation.x = static_cast<float>((static_cast<int>(rotation.x) % 360)) + yawFractional;
 
 		// Rotate the camera
-		glm::quat cameraOrientation = glm::quat(glm::vec3(-rotation.y, glm::radians(rotation.x), 0.0f));
+		glm::quat cameraOrientation = glm::quat(glm::vec3(glm::radians(-rotation.y), glm::radians(-rotation.x), 0.0f));
 		glm::mat4 rotationMatrix = glm::mat4_cast(cameraOrientation);
 		newMatrix = rotationMatrix * newMatrix;
 
