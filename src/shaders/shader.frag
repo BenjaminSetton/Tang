@@ -24,11 +24,11 @@ void main() {
     vec3 ambientColor = vec3(0.01, 0.01, 0.01);
     vec3 cameraPos = cameraData.position.xyz;
     vec3 surfaceNormal = normalize(inNormal);
+    float lightContribution = clamp(dot(surfaceNormal, -lightDir), 0.0, 1.0);
 
 
     // Calculate direct light contribution
-    float diffuseFactor = clamp(dot(surfaceNormal, -lightDir), 0.0, 1.0);
-    vec3 diffuseColor = surfaceColor * diffuseFactor;
+    vec3 diffuseColor = surfaceColor * lightContribution;
 
     // Reflect the light along the pixel normal
     // Calculate pixel pos - camera pos to get a vector looking at the pixel
@@ -39,7 +39,7 @@ void main() {
     vec3 cameraToFragment = normalize(inPosition - cameraPos);
     vec3 reflectedLight = normalize(reflect(-lightDir, surfaceNormal));
     float specularIntensity = clamp(dot(cameraToFragment, reflectedLight), 0.0, 1.0);
-    vec3 specularColor = vec3(1.0) * pow(specularIntensity, specularPower);
+    vec3 specularColor = vec3(1.0) * pow(specularIntensity, specularPower) * lightContribution;
 
     //vec4 sampleColor = texture(texSampler, inUV);
 
