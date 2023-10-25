@@ -15,9 +15,6 @@
 #include <gtx/hash.hpp>
 #include <gtx/euler_angles.hpp>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
-
 #pragma warning( pop ) 
 
 #include <array>
@@ -481,8 +478,8 @@ namespace TANG
 		CreateRenderPass();
 		CreateGraphicsPipeline();
 		CreateCommandPools();
-		CreateTextureImage();
-		CreateTextureImageView();
+		//CreateTextureImage();
+		//CreateTextureImageView();
 		CreateTextureSampler();
 		CreateColorResources();
 		CreateDepthResources();
@@ -1653,38 +1650,38 @@ namespace TANG
 
 	void Renderer::CreateTextureImage()
 	{
-		int width, height, channels;
-		stbi_uc* pixels = stbi_load("../src/data/textures/sample/texture.jpg", &width, &height, &channels, STBI_rgb_alpha);
-		if (pixels == nullptr)
-		{
-			TNG_ASSERT_MSG(false, "Failed to load texture!");
-		}
+		//int width, height, channels;
+		//stbi_uc* pixels = stbi_load("../src/data/textures/sample/texture.jpg", &width, &height, &channels, STBI_rgb_alpha);
+		//if (pixels == nullptr)
+		//{
+		//	TNG_ASSERT_MSG(false, "Failed to load texture!");
+		//}
 
-		textureMipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1;
+		//textureMipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1;
 
-		VkDeviceSize imageSize = width * height * 4;
-		VkBuffer stagingBuffer;
-		VkDeviceMemory stagingBufferMemory;
-		CreateBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+		//VkDeviceSize imageSize = width * height * 4;
+		//VkBuffer stagingBuffer;
+		//VkDeviceMemory stagingBufferMemory;
+		//CreateBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
 
-		void* data;
-		vkMapMemory(logicalDevice, stagingBufferMemory, 0, imageSize, 0, &data);
-		memcpy(data, pixels, static_cast<size_t>(imageSize));
-		vkUnmapMemory(logicalDevice, stagingBufferMemory);
+		//void* data;
+		//vkMapMemory(logicalDevice, stagingBufferMemory, 0, imageSize, 0, &data);
+		//memcpy(data, pixels, static_cast<size_t>(imageSize));
+		//vkUnmapMemory(logicalDevice, stagingBufferMemory);
 
-		// Now that we've copied over the texture data to the staging buffer, we don't need the original pixels array anymore
-		stbi_image_free(pixels);
+		//// Now that we've copied over the texture data to the staging buffer, we don't need the original pixels array anymore
+		//stbi_image_free(pixels);
 
-		CreateImage(width, height, textureMipLevels, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,
-			VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			textureImage, textureImageMemory);
+		//CreateImage(width, height, textureMipLevels, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,
+		//	VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		//	textureImage, textureImageMemory);
 
-		TransitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, textureMipLevels);
-		CopyBufferToImage(stagingBuffer, textureImage, static_cast<uint32_t>(width), static_cast<uint32_t>(height));
-		GenerateMipmaps(textureImage, VK_FORMAT_R8G8B8A8_SRGB, width, height, textureMipLevels);
+		//TransitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, textureMipLevels);
+		//CopyBufferToImage(stagingBuffer, textureImage, static_cast<uint32_t>(width), static_cast<uint32_t>(height));
+		//GenerateMipmaps(textureImage, VK_FORMAT_R8G8B8A8_SRGB, width, height, textureMipLevels);
 
-		vkDestroyBuffer(logicalDevice, stagingBuffer, nullptr);
-		vkFreeMemory(logicalDevice, stagingBufferMemory, nullptr);
+		//vkDestroyBuffer(logicalDevice, stagingBuffer, nullptr);
+		//vkFreeMemory(logicalDevice, stagingBufferMemory, nullptr);
 	}
 
 	void Renderer::CreateDescriptorSetLayouts()

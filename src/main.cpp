@@ -29,9 +29,7 @@ struct MyAsset
 
 static std::vector<std::string> assetNames =
 {
-    "../src/data/assets/sample/suzanne.fbx",
-    "../src/data/assets/sample/torus.fbx",
-    "../src/data/assets/sample/sphere_smooth.fbx",
+    "../src/data/assets/sample/axe/scene.gltf",
 };
 
 int RandomRangeInt(int min, int max)
@@ -64,16 +62,10 @@ int main(uint32_t argc, const char** argv)
         {
             MyAsset asset(assetName, id);
 
-            // Give every asset some random transforms for testing
-            asset.pos[0] = RandomRangeFloat(-6.0f, 6.0f);
-            asset.pos[2] = RandomRangeFloat(-3.0f, 3.0f);
-
-            asset.rot[0] = RandomRangeFloat(-90.0f, 90.0f);
-
-            float randScale = RandomRangeFloat(0.5f, 1.5f);
-            asset.scale[0] = randScale;
-            asset.scale[1] = randScale;
-            asset.scale[2] = randScale;
+            float scale = 0.005f;
+            asset.scale[0] = scale;
+            asset.scale[1] = scale;
+            asset.scale[2] = scale;
 
             TANG::UpdateAssetTransform(id, asset.pos, asset.rot, asset.scale);
 
@@ -96,7 +88,7 @@ int main(uint32_t argc, const char** argv)
 
 		for (auto& asset : assets)
 		{
-            float rot[3] = {asset.rot[0], 90.0f * elapsedTime, asset.rot[2]};
+            float rot[3] = {asset.rot[0], 33.0f * elapsedTime, asset.rot[2]};
 
             TANG::UUID id = asset.uuid;
 

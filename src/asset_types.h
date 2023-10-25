@@ -57,7 +57,11 @@ namespace TANG
 		glm::vec3 scale;
 	};
 
-	// Maybe this has to be moved somewhere else, specifically more texture-related?
+	// TODO - Create a texture registry which holds all the texture data. The interface will only expose the texture UUIDs
+	//        that refer to the internal registry. This implies that anything outside the registry MUST NOT hold any type of
+	//        pointer to a Texture instance, but will rather store a UUID. It is much safer to do it this way because we cannot
+	//        have dangling pointers, but the drawback is that we must query the texture registry for the texture data potentially
+	//        very often, so best-case scenario is that it has a look-up complexity closest to O(1)
 	struct Texture
 	{
 		Texture() : data(nullptr), size(0, 0), bytesPerPixel(0)
@@ -111,11 +115,115 @@ namespace TANG
 		uint32_t bytesPerPixel; // Guaranteed to be 4 by assimp loader
 	};
 
+	class Material
+	{
+	public:
+
+		// NOTE - We depend on the numbering of this enum being consecutive
+		enum class TEXTURE_TYPE
+		{
+			DIFFUSE = 0,
+			SPECULAR,
+			NORMAL,
+			AMBIENT_OCCLUSION,
+			METALLIC,
+			ROUGHNESS,
+			LIGHTMAP,
+			_COUNT      // DO NOT USE. THIS MUST COME LAST
+		};
+
+
+		Material() : name("None")
+		{
+			// Guarantee that the internal textures vector will have exactly _COUNT entries
+			textures.resize(static_cast<size_t>(TEXTURE_TYPE::_COUNT));
+			std::fill(textures.begin(), textures.end(), nullptr);
+		}
+
+		~Material()
+		{
+			textures.clear();
+			name.clear();
+		}
+
+		Material(const Material& other) : name(other.name), textures(other.textures)
+		{
+			// Nothing to do here
+		}
+
+		Material(Material&& other) : name(std::move(other.name)), textures(std::move(other.textures))
+		{
+			// Do I have to clear the other things?
+		}
+
+		Material& operator=(const Material& other)
+		{
+			// Protect against self-assignment
+			if (this == &other)
+			{
+				return *this;
+			}
+
+			name = other.name;
+			textures = other.textures;
+
+			return *this;
+		}
+
+		void AddTextureOfType(const TEXTURE_TYPE type, Texture* texture)
+		{
+			uint32_t typeIndex = static_cast<uint32_t>(type);
+
+			if (type == TEXTURE_TYPE::_COUNT)
+			{
+				LogWarning("Cannot add texture of type _COUNT!");
+				return;
+			}
+
+			if (textures[typeIndex] != nullptr)
+			{
+				LogError("Failed to add texture of type '%u' to material: '%s'. This slot already contained a texture!", typeIndex, name);
+				return;
+			}
+
+			textures[typeIndex] = texture;
+		}
+
+		bool HasTextureOfType(const TEXTURE_TYPE type)
+		{
+			for (uint32_t i = 0; i < static_cast<uint32_t>(TEXTURE_TYPE::_COUNT); i++)
+			{
+				if (static_cast<TEXTURE_TYPE>(i) == type) return textures[i] != nullptr;
+			}
+
+			return false;
+		}
+
+		Texture* GetTextureOfType(const TEXTURE_TYPE type)
+		{
+			return textures[static_cast<size_t>(type)];
+		}
+
+		std::string_view GetName() const 
+		{
+			return name;
+		}
+
+		void SetName(const std::string_view& _name)
+		{
+			name = _name;
+		}
+
+	private:
+
+		std::string name;
+		std::vector<Texture*> textures;
+	};
+
 	struct Mesh
 	{
 		std::vector<VertexType> vertices;
 		std::vector<IndexType> indices;
-		//std::vector<Material> materials;
 	};
 
 	// The asset pipeline can be represented as follows: 
@@ -138,6 +246,7 @@ namespace TANG
 		std::string name;
 		std::vector<Mesh> meshes;
 		std::vector<Texture> textures;
+		std::vector<Material> materials;
 	};
 
 	// TODO - Convert AssetResources into a structure of arrays, rather than an array of structs.
