@@ -15,7 +15,7 @@
 #include <gtx/hash.hpp>
 #include <gtx/euler_angles.hpp>
 
-#pragma warning( pop ) 
+#pragma warning(pop) 
 
 #include <array>
 #include <algorithm>

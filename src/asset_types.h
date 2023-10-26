@@ -133,7 +133,7 @@ namespace TANG
 		};
 
 
-		Material() : name("None")
+		Material() : name("None"), textureCount(0)
 		{
 			// Guarantee that the internal textures vector will have exactly _COUNT entries
 			textures.resize(static_cast<size_t>(TEXTURE_TYPE::_COUNT));
@@ -144,14 +144,15 @@ namespace TANG
 		{
 			textures.clear();
 			name.clear();
+			textureCount = 0;
 		}
 
-		Material(const Material& other) : name(other.name), textures(other.textures)
+		Material(const Material& other) : name(other.name), textures(other.textures), textureCount(other.textureCount)
 		{
 			// Nothing to do here
 		}
 
-		Material(Material&& other) : name(std::move(other.name)), textures(std::move(other.textures))
+		Material(Material&& other) : name(std::move(other.name)), textures(std::move(other.textures)), textureCount(std::move(other.textureCount))
 		{
 			// Do I have to clear the other things?
 		}
@@ -166,6 +167,7 @@ namespace TANG
 
 			name = other.name;
 			textures = other.textures;
+			textureCount = other.textureCount;
 
 			return *this;
 		}
@@ -182,11 +184,12 @@ namespace TANG
 
 			if (textures[typeIndex] != nullptr)
 			{
-				LogError("Failed to add texture of type '%u' to material: '%s'. This slot already contained a texture!", typeIndex, name);
+				LogError("Failed to add texture of type '%u' to material: '%s'. This slot already contained a texture!", typeIndex, name.c_str());
 				return;
 			}
 
 			textures[typeIndex] = texture;
+			textureCount++;
 		}
 
 		bool HasTextureOfType(const TEXTURE_TYPE type)
@@ -214,10 +217,16 @@ namespace TANG
 			name = _name;
 		}
 
+		uint32_t GetTextureCount() const
+		{
+			return textureCount;
+		}
+
 	private:
 
 		std::string name;
 		std::vector<Texture*> textures;
+		uint32_t textureCount;
 	};
 
 	struct Mesh

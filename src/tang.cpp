@@ -65,10 +65,8 @@ namespace TANG
 
 	void Shutdown()
 	{
-		LoaderUtils lu;
-
 		camera.Shutdown();
-		lu.UnloadAll();
+		LoaderUtils::UnloadAll();
 		rendererHandle.Shutdown();
 		InputManager::GetInstance().Shutdown();
 		windowHandle.Destroy();
@@ -86,9 +84,7 @@ namespace TANG
 
 	UUID LoadAsset(const char* filepath)
 	{
-		LoaderUtils lu;
-
-		AssetDisk* asset = lu.Load(filepath);
+		AssetDisk* asset = LoaderUtils::Load(filepath);
 		// If Load() returns nullptr, we know it didn't allocate memory on the heap, so no need to de-allocate anything here
 		if (asset == nullptr)
 		{

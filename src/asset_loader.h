@@ -12,9 +12,6 @@
 
 namespace TANG
 {
-	// Forward declaration
-	class LoaderUtils;
-
 	// Stores the material textures file path, relative to the working directory.
 	// TODO - Move this to a global config, along with the other project-relative paths
 	static const std::string materialTexturesFilePath = "../src/data/textures/sample/";
@@ -47,8 +44,6 @@ namespace TANG
 	class AssetContainer
 	{
 	private:
-
-		friend class LoaderUtils;
 
 		AssetContainer();
 		~AssetContainer();
@@ -93,10 +88,8 @@ namespace TANG
 	// Defines utilities for loading assets from file.
 	// Uses assimp for FBX loading, there is currently no plan for supporting multiple
 	// asset-loading libraries which is why the library code is not abstracted away
-	class LoaderUtils
+	namespace LoaderUtils
 	{
-	public:
-
 		// Takes in the filePath to an FBX file, and upon success returns a pointer
 		// to the loaded Asset object. Note that this object is also stored in the
 		// AssetContainer, so it may also be retrieved again later through it's filePath
