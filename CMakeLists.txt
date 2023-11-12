@@ -24,6 +24,7 @@ set(HEADERS
 	src/vertex_type.h
 	src/main_window.h
 	src/input_manager.h
+	src/texture_resource.h
 	
 	src/camera/base_camera.h
 	src/camera/freefly_camera.h
@@ -32,6 +33,7 @@ set(HEADERS
 	src/data_buffer/vertex_buffer.h
 	src/data_buffer/index_buffer.h
 	src/data_buffer/uniform_buffer.h
+	src/data_buffer/staging_buffer.h
 	
 	src/cmd_buffer/command_buffer.h
 	src/cmd_buffer/primary_command_buffer.h
@@ -61,6 +63,7 @@ set(SOURCES
 	src/renderer.cpp
 	src/main_window.cpp
 	src/input_manager.cpp
+	src/texture_resource.cpp
 	
 	src/camera/base_camera.cpp
 	src/camera/freefly_camera.cpp
@@ -69,6 +72,7 @@ set(SOURCES
 	src/data_buffer/vertex_buffer.cpp
 	src/data_buffer/index_buffer.cpp
 	src/data_buffer/uniform_buffer.cpp
+	src/data_buffer/staging_buffer.cpp
 	
 	src/cmd_buffer/command_buffer.cpp
 	src/cmd_buffer/primary_command_buffer.cpp

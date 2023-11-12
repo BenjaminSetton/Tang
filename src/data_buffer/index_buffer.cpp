@@ -1,35 +1,33 @@
 
 #include "../asset_types.h"
 #include "index_buffer.h"
+#include "staging_buffer.h"
 #include "../utils/sanity_check.h"
 
 #include "vulkan/vulkan.h"
 
 namespace TANG
 {
-	IndexBuffer::IndexBuffer() : stagingBuffer(VK_NULL_HANDLE), stagingBufferMemory(VK_NULL_HANDLE)
+	IndexBuffer::IndexBuffer() : stagingBuffer(nullptr)
 	{
-		// Nothing to do here
 	}
 
 	IndexBuffer::~IndexBuffer()
 	{
-		// Nothing to do here
+		if (stagingBuffer != nullptr)
+		{
+			LogWarning("Attempting to destroy index buffer while staging buffer is still in use!");
+		}
+
+		stagingBuffer = nullptr;
 	}
 
 	IndexBuffer::IndexBuffer(const IndexBuffer& other) : Buffer(other)
 	{
-		stagingBuffer = other.stagingBuffer;
-		stagingBufferMemory = other.stagingBufferMemory;
 	}
 
-	IndexBuffer::IndexBuffer(IndexBuffer&& other) noexcept : Buffer(std::move(other))
+	IndexBuffer::IndexBuffer(IndexBuffer&& other) noexcept : Buffer(std::move(other)), stagingBuffer(std::move(other.stagingBuffer))
 	{
-		stagingBuffer = other.stagingBuffer;
-		stagingBufferMemory = other.stagingBufferMemory;
-
-		other.stagingBuffer = VK_NULL_HANDLE;
-		other.stagingBufferMemory = VK_NULL_HANDLE;
 	}
 
 	IndexBuffer& IndexBuffer::operator=(const IndexBuffer& other)
@@ -41,8 +39,6 @@ namespace TANG
 		}
 
 		Buffer::operator=(other);
-		stagingBuffer = other.stagingBuffer;
-		stagingBufferMemory = other.stagingBufferMemory;
 
 		return *this;
 	}
@@ -53,7 +49,8 @@ namespace TANG
 		CreateBase(physicalDevice, logicalDevice, size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		
 		// Create the staging buffer
-		CreateBase(physicalDevice, logicalDevice, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &stagingBuffer, &stagingBufferMemory);
+		if (stagingBuffer == nullptr) stagingBuffer = new StagingBuffer();
+		stagingBuffer->Create(physicalDevice, logicalDevice, size);
 	}
 
 	void IndexBuffer::Destroy(VkDevice& logicalDevice)
@@ -65,41 +62,37 @@ namespace TANG
 		buffer = VK_NULL_HANDLE;
 		bufferMemory = VK_NULL_HANDLE;
 
-		// Destroy staging buffer
-		if (stagingBuffer) 
-		{
-			vkDestroyBuffer(logicalDevice, stagingBuffer, nullptr);
-			stagingBuffer = VK_NULL_HANDLE;
-		}
-		if (stagingBufferMemory)
-		{
-			vkFreeMemory(logicalDevice, stagingBufferMemory, nullptr);
-			stagingBufferMemory = VK_NULL_HANDLE;
-		}
+		DestroyIntermediateBuffers(logicalDevice);
 
 		bufferState = BUFFER_STATE::DESTROYED;
 	}
 
 	void IndexBuffer::DestroyIntermediateBuffers(VkDevice logicalDevice)
 	{
-		// Destroy staging buffer
-		vkDestroyBuffer(logicalDevice, stagingBuffer, nullptr);
-		vkFreeMemory(logicalDevice, stagingBufferMemory, nullptr);
-
-		stagingBuffer = VK_NULL_HANDLE;
-		stagingBufferMemory = VK_NULL_HANDLE;
+		if (stagingBuffer != nullptr)
+		{
+			stagingBuffer->Destroy(logicalDevice);
+			delete stagingBuffer;
+			stagingBuffer = nullptr;
+		}
 	}
 
 	void IndexBuffer::CopyData(VkDevice& logicalDevice, VkCommandBuffer& commandBuffer, void* data, VkDeviceSize size)
 	{
+		if (stagingBuffer == nullptr)
+		{
+			LogWarning("Attempting to copy data into index buffer, but staging buffer has not been created!");
+			return;
+		}
+
 		// Map the memory
 		void* bufferPtr;
-		vkMapMemory(logicalDevice, stagingBufferMemory, 0, size, 0, &bufferPtr);
+		vkMapMemory(logicalDevice, stagingBuffer->GetBufferMemory(), 0, size, 0, &bufferPtr);
 		memcpy(bufferPtr, data, size);
-		vkUnmapMemory(logicalDevice, stagingBufferMemory);
+		vkUnmapMemory(logicalDevice, stagingBuffer->GetBufferMemory());
 
 		// Copy the data from the staging buffer into the vertex buffer
-		CopyFromBuffer(commandBuffer, stagingBuffer, buffer, size);
+		CopyFromBuffer(commandBuffer, stagingBuffer->GetBuffer(), buffer, size);
 
 		bufferState = BUFFER_STATE::MAPPED;
 	}

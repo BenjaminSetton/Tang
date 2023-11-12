@@ -5,6 +5,8 @@
 
 namespace TANG
 {
+	class StagingBuffer;
+
 	class VertexBuffer : public Buffer
 	{
 	public:
@@ -26,8 +28,7 @@ namespace TANG
 	private:
 
 		// Store the staging buffer so that we can delete it properly after ending and submitting the command buffer
-		VkBuffer stagingBuffer;
-		VkDeviceMemory stagingBufferMemory;
+		StagingBuffer* stagingBuffer;
 	};
 }
 

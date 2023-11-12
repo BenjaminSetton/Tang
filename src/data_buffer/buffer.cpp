@@ -27,9 +27,9 @@ namespace TANG
 
 	Buffer::Buffer(const Buffer& other)
 	{
-		if (bufferState == BUFFER_STATE::DESTROYED)
+		if (other.bufferState == BUFFER_STATE::DESTROYED)
 		{
-			LogWarning("Why are we attempting to copy a destroyed buffer? Bailing...");
+			LogWarning("Why are we attempting to copy from a destroyed buffer? Bailing...");
 			return;
 		}
 
@@ -43,7 +43,7 @@ namespace TANG
 
 	Buffer::Buffer(Buffer&& other) noexcept
 	{
-		if (bufferState == BUFFER_STATE::DESTROYED)
+		if (other.bufferState == BUFFER_STATE::DESTROYED)
 		{
 			LogWarning("Why are we attempting to move a destroyed buffer? Bailing...");
 			return;
@@ -62,15 +62,14 @@ namespace TANG
 
 	Buffer& Buffer::operator=(const Buffer& other)
 	{
-		if (bufferState == BUFFER_STATE::DESTROYED)
+		if (this == &other)
 		{
-			LogWarning("Why are we attempting to copy a destroyed buffer? Bailing...");
 			return *this;
 		}
 
-		// Protect against self-assignment
-		if (this == &other)
+		if (other.bufferState == BUFFER_STATE::DESTROYED)
 		{
+			LogWarning("Why are we attempting to copy from a destroyed buffer? Bailing...");
 			return *this;
 		}
 
@@ -108,39 +107,35 @@ namespace TANG
 		vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
 	}
 
-	void Buffer::CreateBase(VkPhysicalDevice& physicalDevice, VkDevice& logicalDevice, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer* outBuffer, VkDeviceMemory* outBufferMemory)
+	void Buffer::CreateBase(VkPhysicalDevice& physicalDevice, VkDevice& logicalDevice, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties)
 	{
-		// Determine the output VkBuffer and VkDeviceMemory
-		VkBuffer* endBuffer = outBuffer == nullptr ? &buffer : outBuffer;
-		VkDeviceMemory* endBufferMemory = outBufferMemory == nullptr ? &bufferMemory : outBufferMemory;
-
 		VkBufferCreateInfo bufferInfo{};
 		bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 		bufferInfo.size = size;
 		bufferInfo.usage = usage;
 		bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-		if (vkCreateBuffer(logicalDevice, &bufferInfo, nullptr, endBuffer) != VK_SUCCESS)
+		if (vkCreateBuffer(logicalDevice, &bufferInfo, nullptr, &buffer) != VK_SUCCESS)
 		{
 			LogError("Failed to create buffer!");
 			return;
 		}
 
 		VkMemoryRequirements memRequirements;
-		vkGetBufferMemoryRequirements(logicalDevice, *endBuffer, &memRequirements);
+		vkGetBufferMemoryRequirements(logicalDevice, buffer, &memRequirements);
 
 		VkMemoryAllocateInfo allocInfo{};
 		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 		allocInfo.allocationSize = memRequirements.size;
 		allocInfo.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, properties, physicalDevice);
 
-		if (vkAllocateMemory(logicalDevice, &allocInfo, nullptr, endBufferMemory) != VK_SUCCESS)
+		if (vkAllocateMemory(logicalDevice, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS)
 		{
 			LogError("Failed to allocate memory for the buffer!");
 			return;
 		}
 
-		vkBindBufferMemory(logicalDevice, *endBuffer, *endBufferMemory, 0);
+		vkBindBufferMemory(logicalDevice, buffer, bufferMemory, 0);
 
 		bufferSize = size;
 

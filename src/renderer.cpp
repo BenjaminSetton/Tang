@@ -18,7 +18,6 @@
 #pragma warning(pop) 
 
 #include <array>
-#include <algorithm>
 #include <chrono>
 #include <cstdlib>
 #include <cstdint>
@@ -478,8 +477,8 @@ namespace TANG
 		CreateRenderPass();
 		CreateGraphicsPipeline();
 		CreateCommandPools();
-		//CreateTextureImage();
-		//CreateTextureImageView();
+		CreateTextureImage();
+		CreateTextureImageView();
 		CreateTextureSampler();
 		CreateColorResources();
 		CreateDepthResources();
@@ -498,7 +497,6 @@ namespace TANG
 
 		vkDestroySampler(logicalDevice, textureSampler, nullptr);
 		vkDestroyImageView(logicalDevice, textureImageView, nullptr);
-
 		vkDestroyImage(logicalDevice, textureImage, nullptr);
 		vkFreeMemory(logicalDevice, textureImageMemory, nullptr);
 

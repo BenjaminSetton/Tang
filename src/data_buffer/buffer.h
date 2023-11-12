@@ -47,7 +47,7 @@ namespace TANG
 		// Notice the optional _buffer and _bufferMemory parameters. Derived classes may choose to create temporary buffers other
 		// than themselves (for example the vertex buffer creating a staging buffer) by filling out these parameters. If left as
 		// nullptr then the member variables will be filled out instead.
-		void CreateBase(VkPhysicalDevice& physicalDevice, VkDevice& logicalDevice, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer* outBuffer = nullptr, VkDeviceMemory* outBufferMemory = nullptr);
+		void CreateBase(VkPhysicalDevice& physicalDevice, VkDevice& logicalDevice, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties);
 
 		// Finds a suitable index considering the physical device's memory properties
 		// TODO: Replace the function in renderer.cpp in favor of this one after porting all buffers to their own files
