@@ -1,12 +1,10 @@
 #ifndef VERTEX_BUFFER_H
 #define VERTEX_BUFFER_H
 
-#include "buffer.h"
+#include "staging_buffer.h"
 
 namespace TANG
 {
-	class StagingBuffer;
-
 	class VertexBuffer : public Buffer
 	{
 	public:
@@ -17,18 +15,18 @@ namespace TANG
 		VertexBuffer(VertexBuffer&& other);
 		VertexBuffer& operator=(const VertexBuffer& other);
 
-		void Create(VkPhysicalDevice& physicalDevice, VkDevice& logicalDevice, VkDeviceSize size) override;
+		void Create(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkDeviceSize size) override;
 
-		void Destroy(VkDevice& logicalDevice) override;
+		void Destroy(VkDevice logicalDevice) override;
 
 		void DestroyIntermediateBuffers(VkDevice logicalDevice);
 
-		void CopyData(VkDevice& logicalDevice, VkCommandBuffer& commandBuffer, void* data, VkDeviceSize size);
+		void CopyIntoBuffer(VkDevice logicalDevice, VkCommandBuffer commandBuffer, void* sourceData, VkDeviceSize size);
 
 	private:
 
 		// Store the staging buffer so that we can delete it properly after ending and submitting the command buffer
-		StagingBuffer* stagingBuffer;
+		StagingBuffer stagingBuffer;
 	};
 }
 

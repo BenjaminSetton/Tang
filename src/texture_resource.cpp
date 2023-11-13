@@ -1,9 +1,10 @@
 
 #include <cmath>
 
+#include "data_buffer/staging_buffer.h"
+#include "texture_resource.h"
 #include "utils/logger.h"
 #include "utils/sanity_check.h"
-#include "texture_resource.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -26,14 +27,17 @@ namespace TANG
 
 	TextureResource::TextureResource(const TextureResource& other) : name(other.name), width(other.width),
 		height(other.height), mipLevels(other.mipLevels), baseImage(other.baseImage),
-		imageMemory(other.imageMemory), imageView(other.imageView), sampler(other.sampler), format(other.format)
+		imageMemory(other.imageMemory), imageView(other.imageView), sampler(other.sampler), format(other.format),
+		layout(other.layout)
 	{
+		// TODO - Deep copy??
+		LogInfo("Texture resource shallow-copied (copy-constructor)");
 	}
 
 	TextureResource::TextureResource(TextureResource&& other) : name(std::move(other.name)), width(std::move(other.width)),
 		height(std::move(other.height)), mipLevels(std::move(other.mipLevels)), baseImage(std::move(other.baseImage)),
 		imageMemory(std::move(other.imageMemory)), imageView(std::move(other.imageView)), sampler(std::move(other.sampler)),
-		format(std::move(other.format))
+		format(std::move(other.format)), layout(std::move(other.layout))
 	{
 		other.ResetMembers();
 	}
@@ -54,11 +58,15 @@ namespace TANG
 		imageView = other.imageView;
 		sampler = other.sampler;
 		format = other.format;
+		layout = other.layout;
+
+		// TODO - Deep copy??
+		LogInfo("Texture resource shallow-copied (copy-assignment)");
 
 		return *this;
 	}
 
-	void TextureResource::Create(std::string_view fileName, VkDevice logicalDevice)
+	void TextureResource::Create(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, std::string_view fileName)
 	{
 		int _width, _height, _channels;
 		stbi_uc* pixels = stbi_load(fileName.data(), &_width, &_height, &_channels, STBI_rgb_alpha);
@@ -72,27 +80,31 @@ namespace TANG
 		mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1;
 
 		VkDeviceSize imageSize = width * height * 4;
-		VkBuffer stagingBuffer;
+		/*VkBuffer stagingBuffer;
 		VkDeviceMemory stagingBufferMemory;
-		CreateBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+		CreateBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);*/
+		StagingBuffer stagingBuffer;
+		stagingBuffer.Create(physicalDevice, logicalDevice, imageSize);
 
-		void* data;
-		vkMapMemory(logicalDevice, stagingBufferMemory, 0, imageSize, 0, &data);
-		memcpy(data, pixels, static_cast<size_t>(imageSize));
-		vkUnmapMemory(logicalDevice, stagingBufferMemory);
+		//void* data;
+		//vkMapMemory(logicalDevice, stagingBufferMemory, 0, imageSize, 0, &data);
+		//memcpy(data, pixels, static_cast<size_t>(imageSize));
+		//vkUnmapMemory(logicalDevice, stagingBufferMemory);
+		stagingBuffer.CopyIntoBuffer(logicalDevice, pixels, imageSize);
 
 		// Now that we've copied over the texture data to the staging buffer, we don't need the original pixels array anymore
 		stbi_image_free(pixels);
 
-		CreateBaseImage(VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,
+		CreateBaseImage(physicalDevice, logicalDevice, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,
 			VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
 		TransitionLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-		CopyFromBuffer(stagingBuffer);
+		CopyFromBuffer(stagingBuffer.GetBuffer());
 		GenerateMipmaps();
 
-		vkDestroyBuffer(logicalDevice, stagingBuffer, nullptr);
-		vkFreeMemory(logicalDevice, stagingBufferMemory, nullptr);
+		/*vkDestroyBuffer(logicalDevice, stagingBuffer, nullptr);
+		vkFreeMemory(logicalDevice, stagingBufferMemory, nullptr);*/
+		stagingBuffer.Destroy(logicalDevice);
 	}
 
 	void TextureResource::Destroy(VkDevice logicalDevice)
@@ -111,8 +123,8 @@ namespace TANG
 
 		VkImageMemoryBarrier barrier{};
 		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-		barrier.oldLayout = oldLayout;
-		barrier.newLayout = newLayout;
+		barrier.oldLayout = layout;
+		barrier.newLayout = destinationLayout;
 		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 		barrier.image = baseImage;
@@ -127,7 +139,7 @@ namespace TANG
 		VkPipelineStageFlags sourceStage = VK_PIPELINE_STAGE_NONE;
 		VkPipelineStageFlags destinationStage = VK_PIPELINE_STAGE_NONE;
 
-		if (newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+		if (destinationLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
 		{
 			barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
 
@@ -141,21 +153,21 @@ namespace TANG
 			barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 		}
 
-		if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+		if (layout == VK_IMAGE_LAYOUT_UNDEFINED && destinationLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
 			barrier.srcAccessMask = 0;
 			barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 
 			sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 			destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
 		}
-		else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+		else if (layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && destinationLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
 			barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 			barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
 			sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
 			destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 		}
-		else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+		else if (layout == VK_IMAGE_LAYOUT_UNDEFINED && destinationLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
 		{
 			barrier.srcAccessMask = 0;
 			barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
@@ -180,7 +192,7 @@ namespace TANG
 		EndSingleTimeCommands(commandBuffer, TRANSFER_QUEUE);
 	}
 
-	void TextureResource::CreateBaseImage(VkDevice logicalDevice, uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format,
+	void TextureResource::CreateBaseImage(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkSampleCountFlagBits numSamples, VkFormat format,
 		VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties)
 	{
 		VkImageCreateInfo imageInfo{};
@@ -209,7 +221,7 @@ namespace TANG
 		VkMemoryAllocateInfo allocInfo{};
 		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 		allocInfo.allocationSize = memRequirements.size;
-		allocInfo.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, properties);
+		allocInfo.memoryTypeIndex = FindMemoryType(physicalDevice, memRequirements.memoryTypeBits, properties);
 
 		if (vkAllocateMemory(logicalDevice, &allocInfo, nullptr, &imageMemory) != VK_SUCCESS)
 		{
@@ -268,7 +280,7 @@ namespace TANG
 		}
 	}
 
-	void TextureResource::CopyFromBuffer()
+	void TextureResource::CopyFromBuffer(VkBuffer buffer)
 	{
 		VkCommandBuffer commandBuffer = BeginSingleTimeCommands(commandPools[TRANSFER_QUEUE]);
 
@@ -285,7 +297,7 @@ namespace TANG
 		region.imageOffset = { 0, 0, 0 };
 		region.imageExtent = { width, height, 1 };
 
-		vkCmdCopyBufferToImage(commandBuffer, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+		vkCmdCopyBufferToImage(commandBuffer, buffer, baseImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
 		EndSingleTimeCommands(commandBuffer, TRANSFER_QUEUE);
 	}
@@ -306,6 +318,7 @@ namespace TANG
 		imageView = VK_NULL_HANDLE;
 		sampler = VK_NULL_HANDLE;
 		format = VK_FORMAT_UNDEFINED;
+		layout = VK_IMAGE_LAYOUT_UNDEFINED;
 	}
 
 	bool TextureResource::HasStencilComponent(VkFormat format)
@@ -313,7 +326,7 @@ namespace TANG
 		return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
 	}
 
-	uint32_t TextureResource::FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
+	uint32_t TextureResource::FindMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter, VkMemoryPropertyFlags properties)
 	{
 		VkPhysicalDeviceMemoryProperties memProperties;
 		vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);

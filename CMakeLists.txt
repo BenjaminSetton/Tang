@@ -25,6 +25,9 @@ set(HEADERS
 	src/main_window.h
 	src/input_manager.h
 	src/texture_resource.h
+	src/command_pool_registry.h
+	src/queue_types.h
+	src/queue_family_indices.h
 	
 	src/camera/base_camera.h
 	src/camera/freefly_camera.h
@@ -64,6 +67,8 @@ set(SOURCES
 	src/main_window.cpp
 	src/input_manager.cpp
 	src/texture_resource.cpp
+	src/command_pool_registry.cpp
+	src/queue_family_indices.cpp
 	
 	src/camera/base_camera.cpp
 	src/camera/freefly_camera.cpp

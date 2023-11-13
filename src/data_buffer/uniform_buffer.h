@@ -15,12 +15,12 @@ namespace TANG
 		UniformBuffer(UniformBuffer&& other) noexcept;
 		UniformBuffer& operator=(const UniformBuffer& other);
 
-		void Create(VkPhysicalDevice& physicalDevice, VkDevice& logicalDevice, VkDeviceSize size) override;
+		void Create(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkDeviceSize size) override;
 
-		void Destroy(VkDevice& logicalDevice) override;
+		void Destroy(VkDevice logicalDevice) override;
 
-		void MapMemory(VkDevice& logicalDevice, VkDeviceSize bufferSize);
-		void UnMapMemory(VkDevice& logicalDevice);
+		void MapMemory(VkDevice logicalDevice, VkDeviceSize bufferSize);
+		void UnMapMemory(VkDevice logicalDevice);
 
 		void UpdateData(void* data, uint32_t numBytes);
 

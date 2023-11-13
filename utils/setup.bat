@@ -1,7 +1,9 @@
 @echo off
 
-:: Generate a Visual Studio 2019 solution
-set IDE="Visual Studio 16 2019"
+:: Generate a Visual Studio solution
+:: Visual Studio 2019: "Visual Studio 16 2019"
+:: Visual Studio 2022: "Visual Studio 17 2022"
+set IDE="Visual Studio 17 2022"
 set BUILD_DIR="build"
 
 echo Building project for %IDE%, are you sure you want to proceed?

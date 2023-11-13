@@ -37,9 +37,11 @@
 #include <vector>
 
 #include "asset_loader.h"
+#include "command_pool_registry.h"
 #include "data_buffer/vertex_buffer.h"
 #include "data_buffer/index_buffer.h"
 #include "descriptors/write_descriptor_set.h"
+#include "queue_family_indices.h"
 #include "utils/file_utils.h"
 
 static constexpr uint32_t WINDOW_WIDTH = 1920;
@@ -141,47 +143,6 @@ void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT
 
 namespace TANG
 {
-	struct QueueFamilyIndices
-	{
-		typedef uint32_t QueueFamilyIndexType;
-
-		// If anything changes with the QueueType enum, make sure to change this struct as well!
-		static_assert(static_cast<uint32_t>(QUEUE_COUNT) == 3);
-
-		QueueFamilyIndices()
-		{
-			queueFamilies[GRAPHICS_QUEUE] = std::numeric_limits<QueueFamilyIndexType>::max();
-			queueFamilies[PRESENT_QUEUE] = std::numeric_limits<QueueFamilyIndexType>::max();
-			queueFamilies[TRANSFER_QUEUE] = std::numeric_limits<QueueFamilyIndexType>::max();
-		}
-
-		~QueueFamilyIndices()
-		{
-			// Nothing to do here
-		}
-
-		QueueFamilyIndices(const QueueFamilyIndices& other)
-		{
-			queueFamilies[GRAPHICS_QUEUE] = other.queueFamilies.at(GRAPHICS_QUEUE);
-			queueFamilies[PRESENT_QUEUE] = other.queueFamilies.at(PRESENT_QUEUE);
-			queueFamilies[TRANSFER_QUEUE] = other.queueFamilies.at(TRANSFER_QUEUE);
-		}
-
-		std::unordered_map<QueueType, QueueFamilyIndexType> queueFamilies;
-
-		bool IsValid(QueueFamilyIndexType index)
-		{
-			return index != std::numeric_limits<QueueFamilyIndexType>::max();
-		}
-
-		bool IsComplete()
-		{
-			return	IsValid(queueFamilies[GRAPHICS_QUEUE]) &&
-					IsValid(queueFamilies[PRESENT_QUEUE]) &&
-					IsValid(queueFamilies[TRANSFER_QUEUE]);
-		}
-	};
-
 	struct SwapChainSupportDetails
 	{
 		VkSurfaceCapabilitiesKHR capabilities;
@@ -281,9 +242,9 @@ namespace TANG
 			VertexBuffer& vb = resources.vertexBuffers[i];
 			vb.Create(physicalDevice, logicalDevice, numBytes);
 
-			VkCommandBuffer commandBuffer = BeginSingleTimeCommands(commandPools[TRANSFER_QUEUE]);
-			vb.CopyData(logicalDevice, commandBuffer, currMesh.vertices.data(), numBytes);
-			EndSingleTimeCommands(commandBuffer, TRANSFER_QUEUE);
+			VkCommandBuffer commandBuffer = BeginSingleTimeCommands(CommandPoolRegistry::GetInstance().GetCommandPool(QueueType::TRANSFER));
+			vb.CopyIntoBuffer(logicalDevice, commandBuffer, currMesh.vertices.data(), numBytes);
+			EndSingleTimeCommands(commandBuffer, QueueType::TRANSFER);
 
 			// Create the index buffer
 			numBytes = currMesh.indices.size() * sizeof(IndexType);
@@ -291,9 +252,9 @@ namespace TANG
 			IndexBuffer& ib = resources.indexBuffer;
 			ib.Create(physicalDevice, logicalDevice, numBytes);
 
-			commandBuffer = BeginSingleTimeCommands(commandPools[TRANSFER_QUEUE]);
-			ib.CopyData(logicalDevice, commandBuffer, currMesh.indices.data(), numBytes);
-			EndSingleTimeCommands(commandBuffer, TRANSFER_QUEUE);
+			commandBuffer = BeginSingleTimeCommands(CommandPoolRegistry::GetInstance().GetCommandPool(QueueType::TRANSFER));
+			ib.CopyIntoBuffer(logicalDevice, commandBuffer, currMesh.indices.data(), numBytes);
+			EndSingleTimeCommands(commandBuffer, QueueType::TRANSFER);
 
 			// Destroy the staging buffers
 			vb.DestroyIntermediateBuffers(logicalDevice);
@@ -358,7 +319,7 @@ namespace TANG
 
 			secondaryCmdBufferMap.emplace(assetID, SecondaryCommandBuffer());
 			SecondaryCommandBuffer& commandBuffer = secondaryCmdBufferMap[assetID];
-			commandBuffer.Create(logicalDevice, commandPools[GRAPHICS_QUEUE]);
+			commandBuffer.Create(logicalDevice, CommandPoolRegistry::GetInstance().GetCommandPool(QueueType::GRAPHICS));
 		}
 	}
 
@@ -483,7 +444,7 @@ namespace TANG
 		CreateColorResources();
 		CreateDepthResources();
 		CreateFramebuffers();
-		CreatePrimaryCommandBuffers(GRAPHICS_QUEUE);
+		CreatePrimaryCommandBuffers(QueueType::GRAPHICS);
 		CreateSyncObjects();
 	}
 
@@ -526,11 +487,11 @@ namespace TANG
 		}
 
 		// Destroy all command pools
-		for (const auto& iter : commandPools)
+		/*for (const auto& iter : commandPools)
 		{
 			vkDestroyCommandPool(logicalDevice, iter.second, nullptr);
 		}
-		commandPools.clear();
+		commandPools.clear();*/
 
 		vkDestroyPipeline(logicalDevice, graphicsPipeline, nullptr);
 		vkDestroyPipelineLayout(logicalDevice, pipelineLayout, nullptr);
@@ -629,7 +590,7 @@ namespace TANG
 		submitInfo.signalSemaphoreCount = 1;
 		submitInfo.pSignalSemaphores = signalSemaphores;
 
-		if (vkQueueSubmit(queues[GRAPHICS_QUEUE], 1, &submitInfo, currentFDD->inFlightFence) != VK_SUCCESS)
+		if (vkQueueSubmit(queues[QueueType::GRAPHICS], 1, &submitInfo, currentFDD->inFlightFence) != VK_SUCCESS)
 		{
 			TNG_ASSERT_MSG(false, "Failed to submit draw command buffer!");
 			return;
@@ -651,7 +612,7 @@ namespace TANG
 		presentInfo.pImageIndices = &imageIndex;
 		presentInfo.pResults = nullptr;
 
-		result = vkQueuePresentKHR(queues[PRESENT_QUEUE], &presentInfo);
+		result = vkQueuePresentKHR(queues[QueueType::PRESENT], &presentInfo);
 
 		if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
 		{
@@ -879,7 +840,7 @@ namespace TANG
 			// Check that the device supports a graphics queue
 			if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
 			{
-				indices.queueFamilies[GRAPHICS_QUEUE] = i;
+				indices.queueFamilies[QueueType::GRAPHICS] = i;
 			}
 
 			// Check that the device supports present queues
@@ -888,20 +849,20 @@ namespace TANG
 
 			if (presentSupport)
 			{
-				indices.queueFamilies[PRESENT_QUEUE] = i;
+				indices.queueFamilies[QueueType::PRESENT] = i;
 			}
 
 			// Check that the device supports a transfer queue
 			if (queueFamily.queueFlags & VK_QUEUE_TRANSFER_BIT)
 			{
 				// Choose a different queue from the graphics queue, if possible
-				if (indices.queueFamilies[GRAPHICS_QUEUE] == i)
+				if (indices.queueFamilies[QueueType::GRAPHICS] == i)
 				{
 					graphicsTransferQueue = i;
 				}
 				else
 				{
-					indices.queueFamilies[TRANSFER_QUEUE] = i;
+					indices.queueFamilies[QueueType::TRANSFER] = i;
 				}
 			}
 
@@ -912,9 +873,9 @@ namespace TANG
 
 		// If we couldn't find a different queue for the TRANSFER and GRAPHICS operations, then simply
 		// use the same queue for both (if it supports TRANSFER operations)
-		if (!indices.IsValid(TRANSFER_QUEUE) && graphicsTransferQueue != std::numeric_limits<uint32_t>::max())
+		if (!indices.IsValid(static_cast<QueueFamilyIndices::QueueFamilyIndexType>(QueueType::TRANSFER)) && graphicsTransferQueue != std::numeric_limits<uint32_t>::max())
 		{
-			indices.queueFamilies[TRANSFER_QUEUE] = graphicsTransferQueue;
+			indices.queueFamilies[QueueType::TRANSFER] = graphicsTransferQueue;
 		}
 
 		// Check that we filled in all of our queue families, otherwise log a warning
@@ -1032,9 +993,9 @@ namespace TANG
 
 		std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
 		std::set<uint32_t> uniqueQueueFamilies = {
-			indices.queueFamilies[GRAPHICS_QUEUE],
-			indices.queueFamilies[PRESENT_QUEUE],
-			indices.queueFamilies[TRANSFER_QUEUE]
+			indices.queueFamilies[QueueType::GRAPHICS],
+			indices.queueFamilies[QueueType::PRESENT],
+			indices.queueFamilies[QueueType::TRANSFER]
 		};
 
 		// TODO - Determine priority of the different queue types
@@ -1076,9 +1037,9 @@ namespace TANG
 		}
 
 		// Get the queues from the logical device
-		vkGetDeviceQueue(logicalDevice, indices.queueFamilies[GRAPHICS_QUEUE], 0, &queues[GRAPHICS_QUEUE]);
-		vkGetDeviceQueue(logicalDevice, indices.queueFamilies[PRESENT_QUEUE], 0, &queues[PRESENT_QUEUE]);
-		vkGetDeviceQueue(logicalDevice, indices.queueFamilies[TRANSFER_QUEUE], 0, &queues[TRANSFER_QUEUE]);
+		vkGetDeviceQueue(logicalDevice, indices.queueFamilies[QueueType::GRAPHICS], 0, &queues[QueueType::GRAPHICS]);
+		vkGetDeviceQueue(logicalDevice, indices.queueFamilies[QueueType::PRESENT], 0, &queues[QueueType::PRESENT]);
+		vkGetDeviceQueue(logicalDevice, indices.queueFamilies[QueueType::TRANSFER], 0, &queues[QueueType::TRANSFER]);
 
 	}
 
@@ -1106,7 +1067,7 @@ namespace TANG
 		createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
 		QueueFamilyIndices indices = FindQueueFamilies(physicalDevice);
-		uint32_t queueFamilyIndices[2] = { indices.queueFamilies[GRAPHICS_QUEUE], indices.queueFamilies[PRESENT_QUEUE]};
+		uint32_t queueFamilyIndices[2] = { indices.queueFamilies[QueueType::GRAPHICS], indices.queueFamilies[QueueType::PRESENT]};
 
 		if (queueFamilyIndices[0] != queueFamilyIndices[1])
 		{
@@ -1468,56 +1429,56 @@ namespace TANG
 
 	void Renderer::CreateCommandPools()
 	{
-		QueueFamilyIndices queueFamilyIndices = FindQueueFamilies(physicalDevice);
+		//QueueFamilyIndices queueFamilyIndices = FindQueueFamilies(physicalDevice);
 
-		// Allocate the graphics command pool
-		if (queueFamilyIndices.IsValid(GRAPHICS_QUEUE))
-		{
-			// Allocate the pool object in the map
-			commandPools[GRAPHICS_QUEUE] = VkCommandPool();
+		//// Allocate the graphics command pool
+		//if (queueFamilyIndices.IsValid(static_cast<QueueFamilyIndices::QueueFamilyIndexType>(QueueType::GRAPHICS)))
+		//{
+		//	// Allocate the pool object in the map
+		//	commandPools[QueueType::GRAPHICS] = VkCommandPool();
 
-			VkCommandPoolCreateInfo poolInfo{};
-			poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-			poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-			poolInfo.queueFamilyIndex = queueFamilyIndices.queueFamilies[GRAPHICS_QUEUE];
+		//	VkCommandPoolCreateInfo poolInfo{};
+		//	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+		//	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+		//	poolInfo.queueFamilyIndex = queueFamilyIndices.queueFamilies[QueueType::GRAPHICS];
 
-			if (vkCreateCommandPool(logicalDevice, &poolInfo, nullptr, &commandPools[GRAPHICS_QUEUE]) != VK_SUCCESS)
-			{
-				LogError("Failed to create a graphics command pool!");
-			}
-		}
-		else
-		{
-			TNG_ASSERT_MSG(false, "Failed to find a queue family supporting a graphics queue!");
-		}
+		//	if (vkCreateCommandPool(logicalDevice, &poolInfo, nullptr, &commandPools[QueueType::GRAPHICS]) != VK_SUCCESS)
+		//	{
+		//		LogError("Failed to create a graphics command pool!");
+		//	}
+		//}
+		//else
+		//{
+		//	TNG_ASSERT_MSG(false, "Failed to find a queue family supporting a graphics queue!");
+		//}
 
-		// Allocate the transfer command pool
-		if (queueFamilyIndices.IsValid(TRANSFER_QUEUE))
-		{
-			commandPools[TRANSFER_QUEUE] = VkCommandPool();
+		//// Allocate the transfer command pool
+		//if (queueFamilyIndices.IsValid(static_cast<QueueFamilyIndices::QueueFamilyIndexType>(QueueType::TRANSFER)))
+		//{
+		//	commandPools[QueueType::TRANSFER] = VkCommandPool();
 
-			VkCommandPoolCreateInfo poolInfo{};
-			poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-			// We support short-lived operations (transient bit) and we want to reset the command buffers after submissions
-			poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
-			poolInfo.queueFamilyIndex = queueFamilyIndices.queueFamilies[TRANSFER_QUEUE];
+		//	VkCommandPoolCreateInfo poolInfo{};
+		//	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+		//	// We support short-lived operations (transient bit) and we want to reset the command buffers after submissions
+		//	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+		//	poolInfo.queueFamilyIndex = queueFamilyIndices.queueFamilies[QueueType::TRANSFER];
 
-			if (vkCreateCommandPool(logicalDevice, &poolInfo, nullptr, &commandPools[TRANSFER_QUEUE]) != VK_SUCCESS)
-			{
-				TNG_ASSERT_MSG(false, "Failed to create a transfer command pool!");
-			}
-		}
-		else
-		{
-			TNG_ASSERT_MSG(false, "Failed to find a queue family supporting a transfer queue!");
-		}
+		//	if (vkCreateCommandPool(logicalDevice, &poolInfo, nullptr, &commandPools[QueueType::TRANSFER]) != VK_SUCCESS)
+		//	{
+		//		TNG_ASSERT_MSG(false, "Failed to create a transfer command pool!");
+		//	}
+		//}
+		//else
+		//{
+		//	TNG_ASSERT_MSG(false, "Failed to find a queue family supporting a transfer queue!");
+		//}
 	}
 
 	void Renderer::CreatePrimaryCommandBuffers(QueueType poolType)
 	{
 		for (uint32_t i = 0; i < GetFDDSize(); i++)
 		{
-			GetFDDAtIndex(i)->primaryCommandBuffer.Create(logicalDevice, commandPools[poolType]);
+			GetFDDAtIndex(i)->primaryCommandBuffer.Create(logicalDevice, CommandPoolRegistry::GetInstance().GetCommandPool(poolType));
 		}
 	}
 
@@ -1910,7 +1871,7 @@ namespace TANG
 			for (auto& resources : assetResources)
 			{
 				SecondaryCommandBuffer* commandBuffer = GetSecondaryCommandBufferAtIndex(i, resources.uuid);
-				commandBuffer->Create(logicalDevice, commandPools[GRAPHICS_QUEUE]);
+				commandBuffer->Create(logicalDevice, CommandPoolRegistry::GetInstance().GetCommandPool(QueueType::GRAPHICS));
 				RecordSecondaryCommandBuffer(*commandBuffer, &resources, i);
 			}
 		}
@@ -1942,7 +1903,7 @@ namespace TANG
 			auto& secondaryCmdBuffer = swapChainImageDependentData[i].secondaryCommandBuffer;
 			for (auto iter : secondaryCmdBuffer)
 			{
-				iter.second.Destroy(logicalDevice, commandPools[GRAPHICS_QUEUE]);
+				iter.second.Destroy(logicalDevice, CommandPoolRegistry::GetInstance().GetCommandPool(QueueType::GRAPHICS));
 			}
 		}
 
@@ -2085,12 +2046,12 @@ namespace TANG
 			TNG_ASSERT_MSG(false, "Failed to wait until queue was idle when submitting single-time command buffer");
 		}
 
-		vkFreeCommandBuffers(logicalDevice, commandPools[commandPoolType], 1, &commandBuffer);
+		vkFreeCommandBuffers(logicalDevice, CommandPoolRegistry::GetInstance().GetCommandPool(commandPoolType), 1, &commandBuffer);
 	}
 
 	void Renderer::TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels)
 	{
-		VkCommandBuffer commandBuffer = BeginSingleTimeCommands(commandPools[TRANSFER_QUEUE]);
+		VkCommandBuffer commandBuffer = BeginSingleTimeCommands(CommandPoolRegistry::GetInstance().GetCommandPool(QueueType::TRANSFER));
 
 		VkImageMemoryBarrier barrier{};
 		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -2160,12 +2121,12 @@ namespace TANG
 			1, &barrier
 		);
 
-		EndSingleTimeCommands(commandBuffer, TRANSFER_QUEUE);
+		EndSingleTimeCommands(commandBuffer, QueueType::TRANSFER);
 	}
 
 	void Renderer::CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)
 	{
-		VkCommandBuffer commandBuffer = BeginSingleTimeCommands(commandPools[TRANSFER_QUEUE]);
+		VkCommandBuffer commandBuffer = BeginSingleTimeCommands(CommandPoolRegistry::GetInstance().GetCommandPool(QueueType::TRANSFER));
 
 		VkBufferImageCopy region{};
 		region.bufferOffset = 0;
@@ -2182,7 +2143,7 @@ namespace TANG
 
 		vkCmdCopyBufferToImage(commandBuffer, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
-		EndSingleTimeCommands(commandBuffer, TRANSFER_QUEUE);
+		EndSingleTimeCommands(commandBuffer, QueueType::TRANSFER);
 	}
 
 	VkFormat Renderer::FindSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features)
@@ -2229,7 +2190,7 @@ namespace TANG
 			TNG_ASSERT_MSG(false, "Texture image does not support linear blitting!");
 		}
 
-		VkCommandBuffer commandBuffer = BeginSingleTimeCommands(commandPools[GRAPHICS_QUEUE]);
+		VkCommandBuffer commandBuffer = BeginSingleTimeCommands(CommandPoolRegistry::GetInstance().GetCommandPool(QueueType::GRAPHICS));
 
 		VkImageMemoryBarrier barrier{};
 		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -2310,7 +2271,7 @@ namespace TANG
 			0, nullptr,
 			1, &barrier);
 
-		EndSingleTimeCommands(commandBuffer, GRAPHICS_QUEUE);
+		EndSingleTimeCommands(commandBuffer, QueueType::GRAPHICS);
 	}
 
 	VkSampleCountFlagBits Renderer::GetMaxUsableSampleCount()

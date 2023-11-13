@@ -41,12 +41,12 @@ namespace TANG
 		return *this;
 	}
 
-	void UniformBuffer::Create(VkPhysicalDevice& physicalDevice, VkDevice& logicalDevice, VkDeviceSize size)
+	void UniformBuffer::Create(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkDeviceSize size)
 	{
 		CreateBase(physicalDevice, logicalDevice, size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 	}
 
-	void UniformBuffer::Destroy(VkDevice& logicalDevice)
+	void UniformBuffer::Destroy(VkDevice logicalDevice)
 	{
 		if (mappedData != nullptr)
 		{
@@ -64,13 +64,13 @@ namespace TANG
 		bufferState = BUFFER_STATE::DESTROYED;
 	}
 
-	void UniformBuffer::MapMemory(VkDevice& logicalDevice, VkDeviceSize size)
+	void UniformBuffer::MapMemory(VkDevice logicalDevice, VkDeviceSize size)
 	{
 		vkMapMemory(logicalDevice, bufferMemory, 0, size, 0, &mappedData);
 		bufferState = BUFFER_STATE::MAPPED;
 	}
 
-	void UniformBuffer::UnMapMemory(VkDevice& logicalDevice)
+	void UniformBuffer::UnMapMemory(VkDevice logicalDevice)
 	{
 		if (bufferState != BUFFER_STATE::MAPPED)
 		{

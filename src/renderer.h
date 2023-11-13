@@ -17,6 +17,7 @@
 #include "descriptors/descriptor_set.h"
 #include "descriptors/set_layout/set_layout_cache.h"
 #include "descriptors/set_layout/set_layout_summary.h"
+#include "queue_types.h"
 #include "utils/sanity_check.h"
 
 struct GLFWwindow;
@@ -25,14 +26,6 @@ namespace TANG
 {
 	struct QueueFamilyIndices;
 	struct SwapChainSupportDetails;
-
-	enum QueueType
-	{
-		GRAPHICS_QUEUE,
-		PRESENT_QUEUE,
-		TRANSFER_QUEUE,
-		QUEUE_COUNT			// NOTE! This value must come last at all times!! This is used to count the number of values inside this enum
-	};
 
 	class Renderer {
 
@@ -220,8 +213,6 @@ namespace TANG
 
 	private:
 
-		//GLFWwindow* windowHandle = nullptr;
-
 		VkInstance vkInstance;
 		VkDebugUtilsMessengerEXT debugMessenger;
 
@@ -308,7 +299,7 @@ namespace TANG
 
 		VkPipeline graphicsPipeline;
 
-		std::unordered_map<QueueType, VkCommandPool> commandPools;
+		//std::unordered_map<QueueType, VkCommandPool> commandPools;
 
 		uint32_t currentFrame = 0;
 

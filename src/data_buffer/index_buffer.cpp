@@ -8,18 +8,16 @@
 
 namespace TANG
 {
-	IndexBuffer::IndexBuffer() : stagingBuffer(nullptr)
+	IndexBuffer::IndexBuffer()
 	{
 	}
 
 	IndexBuffer::~IndexBuffer()
 	{
-		if (stagingBuffer != nullptr)
+		if (!stagingBuffer.IsInvalid())
 		{
 			LogWarning("Attempting to destroy index buffer while staging buffer is still in use!");
 		}
-
-		stagingBuffer = nullptr;
 	}
 
 	IndexBuffer::IndexBuffer(const IndexBuffer& other) : Buffer(other)
@@ -43,17 +41,16 @@ namespace TANG
 		return *this;
 	}
 
-	void IndexBuffer::Create(VkPhysicalDevice& physicalDevice, VkDevice& logicalDevice, VkDeviceSize size)
+	void IndexBuffer::Create(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkDeviceSize size)
 	{
 		// Create the index buffer
 		CreateBase(physicalDevice, logicalDevice, size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		
 		// Create the staging buffer
-		if (stagingBuffer == nullptr) stagingBuffer = new StagingBuffer();
-		stagingBuffer->Create(physicalDevice, logicalDevice, size);
+		stagingBuffer.Create(physicalDevice, logicalDevice, size);
 	}
 
-	void IndexBuffer::Destroy(VkDevice& logicalDevice)
+	void IndexBuffer::Destroy(VkDevice logicalDevice)
 	{
 		// Destroy index buffer
 		vkDestroyBuffer(logicalDevice, buffer, nullptr);
@@ -69,17 +66,12 @@ namespace TANG
 
 	void IndexBuffer::DestroyIntermediateBuffers(VkDevice logicalDevice)
 	{
-		if (stagingBuffer != nullptr)
-		{
-			stagingBuffer->Destroy(logicalDevice);
-			delete stagingBuffer;
-			stagingBuffer = nullptr;
-		}
+			stagingBuffer.Destroy(logicalDevice);
 	}
 
-	void IndexBuffer::CopyData(VkDevice& logicalDevice, VkCommandBuffer& commandBuffer, void* data, VkDeviceSize size)
+	void IndexBuffer::CopyIntoBuffer(VkDevice logicalDevice, VkCommandBuffer commandBuffer, void* sourceData, VkDeviceSize size)
 	{
-		if (stagingBuffer == nullptr)
+		if (stagingBuffer.IsInvalid())
 		{
 			LogWarning("Attempting to copy data into index buffer, but staging buffer has not been created!");
 			return;
@@ -87,12 +79,12 @@ namespace TANG
 
 		// Map the memory
 		void* bufferPtr;
-		vkMapMemory(logicalDevice, stagingBuffer->GetBufferMemory(), 0, size, 0, &bufferPtr);
-		memcpy(bufferPtr, data, size);
-		vkUnmapMemory(logicalDevice, stagingBuffer->GetBufferMemory());
+		vkMapMemory(logicalDevice, stagingBuffer.GetBufferMemory(), 0, size, 0, &bufferPtr);
+		memcpy(bufferPtr, sourceData, size);
+		vkUnmapMemory(logicalDevice, stagingBuffer.GetBufferMemory());
 
 		// Copy the data from the staging buffer into the vertex buffer
-		CopyFromBuffer(commandBuffer, stagingBuffer->GetBuffer(), buffer, size);
+		CopyFromBuffer(commandBuffer, stagingBuffer.GetBuffer(), buffer, size);
 
 		bufferState = BUFFER_STATE::MAPPED;
 	}

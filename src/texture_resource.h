@@ -16,19 +16,19 @@ namespace TANG
 		TextureResource(TextureResource&& other);
 		TextureResource& operator=(const TextureResource& other);
 
-		void Create(std::string_view fileName, VkDevice logicalDevice);
+		void Create(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, std::string_view fileName);
 		void Destroy(VkDevice logicalDevice);
 
 		void TransitionLayout(VkImageLayout destinationLayout);
 
 	private:
 
-		void CreateBaseImage(VkDevice logicalDevice, uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format,
+		void CreateBaseImage(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkSampleCountFlagBits numSamples, VkFormat format,
 			VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties);
 		void CreateImageView(VkDevice logicalDevice, VkImageAspectFlags aspectFlags);
 		void CreateSampler(VkDevice logicalDevice, float maxAnisotropy);
 
-		void CopyFromBuffer();
+		void CopyFromBuffer(VkBuffer buffer);
 		void GenerateMipmaps();
 
 		// NOTE - This function does NOT clean up the allocated memory!!
@@ -36,7 +36,7 @@ namespace TANG
 
 		bool HasStencilComponent(VkFormat format);
 
-		uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+		uint32_t FindMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter, VkMemoryPropertyFlags properties);
 
 	private:
 
@@ -50,7 +50,7 @@ namespace TANG
 		VkImageView imageView;
 		VkSampler sampler;
 		VkFormat format;
-
+		VkImageLayout layout;
 
 	};
 }
