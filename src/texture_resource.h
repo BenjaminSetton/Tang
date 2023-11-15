@@ -6,6 +6,25 @@
 
 namespace TANG
 {
+	// Holds all the information necessary to create an image view for a TextureResource object.
+	// This is similar to Vulkan's VkImageViewCreateInfo struct, but this separate struct exists
+	// for a few reasons:
+	// 1) Prevents the caller from setting/changing unsupported options
+	// 2) Saves the caller from filling out redundant fields, such as the base image or structure type in this case
+	struct ImageViewCreateInfo
+	{
+		VkImageAspectFlags aspect;
+	};
+
+	// Holds all the information necessary to create a sampler for a TextureResource object.
+	// This exists for the same reasons listed above.
+	struct SamplerCreateInfo
+	{
+		VkFilter minificationFilter, magnificationFilter;
+		VkSamplerAddressMode addressModeUVW;
+		float maxAnisotropy;
+	};
+
 	class TextureResource
 	{
 	public:
@@ -16,20 +35,25 @@ namespace TANG
 		TextureResource(TextureResource&& other);
 		TextureResource& operator=(const TextureResource& other);
 
-		void Create(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, std::string_view fileName);
+		void CreateBaseImage(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkFormat format, VkImageUsageFlags usage);
+		void CreateImageView(VkDevice logicalDevice, const ImageViewCreateInfo& viewInfo);
+		void CreateSampler(VkDevice logicalDevice, const SamplerCreateInfo& samplerInfo);
+
 		void Destroy(VkDevice logicalDevice);
 
-		void TransitionLayout(VkImageLayout destinationLayout);
+		void LoadFromFile(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, std::string_view fileName);
+		void TransitionLayout(VkDevice logicalDevice, VkImageLayout destinationLayout);
+
+		VkImageView GetImageView() const;
+		bool IsValid() const;
+
+		// Do not use unless it's a very specific case. This is used pretty much only for the swapchain images!
+		void SetBaseImage(VkImage image);
 
 	private:
 
-		void CreateBaseImage(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkSampleCountFlagBits numSamples, VkFormat format,
-			VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties);
-		void CreateImageView(VkDevice logicalDevice, VkImageAspectFlags aspectFlags);
-		void CreateSampler(VkDevice logicalDevice, float maxAnisotropy);
-
-		void CopyFromBuffer(VkBuffer buffer);
-		void GenerateMipmaps();
+		void CopyFromBuffer(VkDevice logicalDevice, VkBuffer buffer);
+		void GenerateMipmaps(VkPhysicalDevice physicalDevice, VkDevice logicalDevice);
 
 		// NOTE - This function does NOT clean up the allocated memory!!
 		void ResetMembers();
@@ -44,6 +68,7 @@ namespace TANG
 		uint32_t mipLevels;
 		uint32_t width;
 		uint32_t height;
+		bool isValid;
 
 		VkImage baseImage;
 		VkDeviceMemory imageMemory;

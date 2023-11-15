@@ -13,6 +13,8 @@ namespace TANG
 	private:
 
 		CommandPoolRegistry();
+		CommandPoolRegistry(const CommandPoolRegistry& other) = delete;
+		CommandPoolRegistry& operator=(const CommandPoolRegistry& other) = delete;
 
 	public:
 
@@ -22,7 +24,7 @@ namespace TANG
 			return instance;
 		}
 
-		void CreatePools(VkPhysicalDevice physicalDevice, VkDevice logicalDevice);
+		void CreatePools(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkSurfaceKHR surface);
 		void DestroyPools(VkDevice logicalDevice);
 
 		VkCommandPool GetCommandPool(QueueType type) const;

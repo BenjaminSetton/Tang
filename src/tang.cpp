@@ -17,8 +17,6 @@ namespace TANG
 	static constexpr uint32_t WINDOW_HEIGHT = 720;
 
 	// Static global handles
-	static Renderer rendererHandle;
-	static MainWindow windowHandle;
 	static FreeflyCamera camera;
 
 	///////////////////////////////////////////////////////////
@@ -28,48 +26,54 @@ namespace TANG
 	///////////////////////////////////////////////////////////
 	void Initialize()
 	{
-		windowHandle.Create(WINDOW_WIDTH, WINDOW_HEIGHT);
-		InputManager::GetInstance().Initialize(windowHandle.GetHandle());
-		rendererHandle.Initialize(windowHandle.GetHandle(), WINDOW_WIDTH, WINDOW_HEIGHT);
+		MainWindow& window = MainWindow::GetInstance();
+
+		window.Create(WINDOW_WIDTH, WINDOW_HEIGHT);
+		InputManager::GetInstance().Initialize(window.GetHandle());
+		Renderer::GetInstance().Initialize(window.GetHandle(), WINDOW_WIDTH, WINDOW_HEIGHT);
 		camera.Initialize({ 0.0f, 5.0f, 15.0f }, { 0.0f, 0.0f, 0.0f });
 	}
 
 	void Update(float deltaTime)
 	{
-		windowHandle.Update(deltaTime);
+		MainWindow& window = MainWindow::GetInstance();
+		Renderer& renderer = Renderer::GetInstance();
+		InputManager& inputManager = InputManager::GetInstance();
 
-		InputManager::GetInstance().Update();
+		window.Update(deltaTime);
+
+		inputManager.Update();
 
 		camera.Update(deltaTime);
 
 		// Poll the main window for resizes, rather than doing it through events
-		if (windowHandle.WasWindowResized())
+		if (window.WasWindowResized())
 		{
 			// Notify the renderer that the window was resized
 			uint32_t width, height;
-			windowHandle.GetFramebufferSize(&width, &height);
+			window.GetFramebufferSize(&width, &height);
 
-			rendererHandle.SetNextFramebufferSize(width, height);
+			renderer.SetNextFramebufferSize(width, height);
 		}
 
 		// Update the camera data that the renderer is holding with the most up-to-date info
-		rendererHandle.UpdateCameraData(camera.GetPosition(), camera.GetViewMatrix());
+		renderer.UpdateCameraData(camera.GetPosition(), camera.GetViewMatrix());
 
-		rendererHandle.Update(deltaTime);
+		renderer.Update(deltaTime);
 	}
 
 	void Draw()
 	{
-		rendererHandle.Draw();
+		Renderer::GetInstance().Draw();
 	}
 
 	void Shutdown()
 	{
 		camera.Shutdown();
 		LoaderUtils::UnloadAll();
-		rendererHandle.Shutdown();
+		Renderer::GetInstance().Shutdown();
 		InputManager::GetInstance().Shutdown();
-		windowHandle.Destroy();
+		MainWindow::GetInstance().Destroy();
 	}
 
 	///////////////////////////////////////////////////////////
@@ -79,11 +83,13 @@ namespace TANG
 	///////////////////////////////////////////////////////////
 	bool WindowShouldClose()
 	{
-		return windowHandle.ShouldClose();
+		return MainWindow::GetInstance().ShouldClose();
 	}
 
 	UUID LoadAsset(const char* filepath)
 	{
+		Renderer& renderer = Renderer::GetInstance();
+
 		AssetDisk* asset = LoaderUtils::Load(filepath);
 		// If Load() returns nullptr, we know it didn't allocate memory on the heap, so no need to de-allocate anything here
 		if (asset == nullptr)
@@ -92,14 +98,14 @@ namespace TANG
 			return INVALID_UUID;
 		}
 
-		AssetResources* resources = rendererHandle.CreateAssetResources(asset);
+		AssetResources* resources = renderer.CreateAssetResources(asset);
 		if (resources == nullptr)
 		{
 			LogError("Failed to create asset resources for asset '%s'", filepath);
 			return INVALID_UUID;
 		}
 
-		rendererHandle.CreateAssetCommandBuffer(resources);
+		renderer.CreateAssetCommandBuffer(resources);
 
 		return asset->uuid;
 	}
@@ -121,7 +127,7 @@ namespace TANG
 	///////////////////////////////////////////////////////////
 	void ShowAsset(UUID uuid)
 	{
-		rendererHandle.SetAssetDrawState(uuid);
+		Renderer::GetInstance().SetAssetDrawState(uuid);
 	}
 
 	void UpdateAssetTransform(UUID uuid, float* position, float* rotation, float* scale)
@@ -134,13 +140,13 @@ namespace TANG
 			*(reinterpret_cast<glm::vec3*>(position)),
 			*(reinterpret_cast<glm::vec3*>(rotation)),
 			*(reinterpret_cast<glm::vec3*>(scale)));
-		rendererHandle.SetAssetTransform(uuid, transform);
+		Renderer::GetInstance().SetAssetTransform(uuid, transform);
 	}
 
 	void UpdateAssetPosition(UUID uuid, float* position)
 	{
 		TNG_ASSERT_MSG(position != nullptr, "Position cannot be null!");
-		rendererHandle.SetAssetPosition(uuid, *(reinterpret_cast<glm::vec3*>(position)));
+		Renderer::GetInstance().SetAssetPosition(uuid, *(reinterpret_cast<glm::vec3*>(position)));
 	}
 
 	void UpdateAssetRotation(UUID uuid, float* rotation, bool isDegrees)
@@ -155,13 +161,13 @@ namespace TANG
 			rotVector = glm::radians(rotVector);
 		}
 
-		rendererHandle.SetAssetRotation(uuid, rotVector);
+		Renderer::GetInstance().SetAssetRotation(uuid, rotVector);
 	}
 
 	void UpdateAssetScale(UUID uuid, float* scale)
 	{
 		TNG_ASSERT_MSG(scale != nullptr, "Scale cannot be null!");
-		rendererHandle.SetAssetScale(uuid, *(reinterpret_cast<glm::vec3*>(scale)));
+		Renderer::GetInstance().SetAssetScale(uuid, *(reinterpret_cast<glm::vec3*>(scale)));
 	}
 
 	bool IsKeyPressed(int key)

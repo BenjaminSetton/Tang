@@ -41,6 +41,7 @@ set(HEADERS
 	src/cmd_buffer/command_buffer.h
 	src/cmd_buffer/primary_command_buffer.h
 	src/cmd_buffer/secondary_command_buffer.h
+	src/cmd_buffer/disposable_command.h
 	
 	src/descriptors/write_descriptor_set.h
 	src/descriptors/descriptor_pool.h
@@ -82,6 +83,7 @@ set(SOURCES
 	src/cmd_buffer/command_buffer.cpp
 	src/cmd_buffer/primary_command_buffer.cpp
 	src/cmd_buffer/secondary_command_buffer.cpp
+	src/cmd_buffer/disposable_command.cpp
 	
 	src/descriptors/write_descriptor_set.cpp
 	src/descriptors/descriptor_set.cpp

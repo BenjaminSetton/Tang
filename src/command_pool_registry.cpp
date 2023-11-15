@@ -1,13 +1,18 @@
 
 #include "command_pool_registry.h"
+#include "queue_family_indices.h"
 #include "utils/logger.h"
 #include "utils/sanity_check.h"
 
 namespace TANG
 {
-	void CommandPoolRegistry::CreatePools(VkPhysicalDevice physicalDevice, VkDevice logicalDevice)
+	CommandPoolRegistry::CommandPoolRegistry() : pools()
 	{
-		QueueFamilyIndices queueFamilyIndices = FindQueueFamilies(physicalDevice);
+	}
+
+	void CommandPoolRegistry::CreatePools(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkSurfaceKHR surface)
+	{
+		QueueFamilyIndices queueFamilyIndices = FindQueueFamilies(physicalDevice, surface);
 
 		// Allocate the graphics command pool
 		if (queueFamilyIndices.IsValid(static_cast<QueueFamilyIndices::QueueFamilyIndexType>(QueueType::GRAPHICS)))
@@ -18,7 +23,7 @@ namespace TANG
 			VkCommandPoolCreateInfo poolInfo{};
 			poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 			poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-			poolInfo.queueFamilyIndex = queueFamilyIndices.queueFamilies[QueueType::GRAPHICS];
+			poolInfo.queueFamilyIndex = queueFamilyIndices.GetIndex(QueueType::GRAPHICS);
 
 			if (vkCreateCommandPool(logicalDevice, &poolInfo, nullptr, &pools[QueueType::GRAPHICS]) != VK_SUCCESS)
 			{
@@ -27,7 +32,7 @@ namespace TANG
 		}
 		else
 		{
-			TNG_ASSERT_MSG(false, "Failed to find a queue family supporting a graphics queue!");
+			LogError(false, "Failed to find a queue family supporting a graphics queue!");
 		}
 
 		// Allocate the transfer command pool
@@ -39,16 +44,16 @@ namespace TANG
 			poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 			// We support short-lived operations (transient bit) and we want to reset the command buffers after submissions
 			poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
-			poolInfo.queueFamilyIndex = queueFamilyIndices.queueFamilies[QueueType::TRANSFER];
+			poolInfo.queueFamilyIndex = queueFamilyIndices.GetIndex(QueueType::TRANSFER);
 
 			if (vkCreateCommandPool(logicalDevice, &poolInfo, nullptr, &pools[QueueType::TRANSFER]) != VK_SUCCESS)
 			{
-				TNG_ASSERT_MSG(false, "Failed to create a transfer command pool!");
+				LogError(false, "Failed to create a transfer command pool!");
 			}
 		}
 		else
 		{
-			TNG_ASSERT_MSG(false, "Failed to find a queue family supporting a transfer queue!");
+			LogError(false, "Failed to find a queue family supporting a transfer queue!");
 		}
 	}
 
@@ -63,7 +68,12 @@ namespace TANG
 
 	VkCommandPool CommandPoolRegistry::GetCommandPool(QueueType type) const
 	{
-		return pools[type];
+		if (type == QueueType::COUNT) return VK_NULL_HANDLE;
+
+		auto iter = pools.find(type);
+		if (iter == pools.end()) return VK_NULL_HANDLE;
+
+		return iter->second;
 	}
 
 }

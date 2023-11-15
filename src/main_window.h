@@ -8,13 +8,23 @@ namespace TANG
 	// Main window class, we do not support multiple windows
 	class MainWindow
 	{
-	public:
+
+	private:
 
 		MainWindow();
+
+	public:
+
 		~MainWindow();
 		MainWindow(const MainWindow& other);
 		MainWindow(MainWindow&& other) noexcept;
 		MainWindow& operator=(const MainWindow& other);
+
+		static MainWindow& GetInstance()
+		{
+			static MainWindow instance;
+			return instance;
+		}
 
 		GLFWwindow* GetHandle() const;
 

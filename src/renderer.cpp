@@ -1,7 +1,7 @@
 
 #include "renderer.h"
 
-// DISABLE WARNINGS FROM GLM AND STB_IMAGE DEPENDENCIES
+// DISABLE WARNINGS FROM GLM
 #pragma warning(push)
 #pragma warning(disable : 4201 4244)
 
@@ -37,6 +37,7 @@
 #include <vector>
 
 #include "asset_loader.h"
+#include "cmd_buffer/disposable_command.h"
 #include "command_pool_registry.h"
 #include "data_buffer/vertex_buffer.h"
 #include "data_buffer/index_buffer.h"
@@ -63,8 +64,7 @@ static const bool enableValidationLayers = false;
 static const bool enableValidationLayers = true;
 #endif
 
-static const std::string shaderChecksumOutputPath = "../out/shaders/checksum/";
-static const std::string compiledShaderOutputPath = "../out/shaders/compiled/";
+static const std::string compiledShaderOutputPath = "../out/shaders/";
 
 static VkVertexInputBindingDescription GetVertexBindingDescription()
 {
@@ -79,7 +79,7 @@ static VkVertexInputBindingDescription GetVertexBindingDescription()
 // the attribute descriptions below are updated. Note in this case we won't
 // assert if the byte usage remains the same but we switch to a different format
 // (like switching the order of two attributes)
-static_assert(sizeof(TANG::VertexType) == 32);
+TNG_ASSERT_COMPILE(sizeof(TANG::VertexType) == 32);
 
 static std::array<VkVertexInputAttributeDescription, 3> GetVertexAttributeDescriptions()
 {
@@ -184,6 +184,14 @@ namespace TANG
 	};
 	TNG_ASSERT_COMPILE(sizeof(CameraDataUBO) == 64);
 
+	Renderer::Renderer() : 
+		vkInstance(VK_NULL_HANDLE), debugMessenger(VK_NULL_HANDLE), physicalDevice(VK_NULL_HANDLE), logicalDevice(VK_NULL_HANDLE), surface(VK_NULL_HANDLE),
+		queues(), swapChain(VK_NULL_HANDLE), swapChainImageFormat(VK_FORMAT_UNDEFINED), swapChainExtent({ 0, 0 }), frameDependentData(), swapChainImageDependentData(),
+		setLayoutCache(), layoutSummaries(), renderPass(VK_NULL_HANDLE), pipelineLayout(VK_NULL_HANDLE), graphicsPipeline(VK_NULL_HANDLE), currentFrame(0), resourcesMap(),
+		assetResources(), descriptorPool(), randomTexture(), depthBuffer(), colorAttachment(), msaaSamples(VK_SAMPLE_COUNT_1_BIT), framebufferWidth(0), framebufferHeight(0)
+	{
+	}
+
 	void Renderer::Update(float deltaTime)
 	{
 		UNUSED(deltaTime);
@@ -242,9 +250,10 @@ namespace TANG
 			VertexBuffer& vb = resources.vertexBuffers[i];
 			vb.Create(physicalDevice, logicalDevice, numBytes);
 
-			VkCommandBuffer commandBuffer = BeginSingleTimeCommands(CommandPoolRegistry::GetInstance().GetCommandPool(QueueType::TRANSFER));
-			vb.CopyIntoBuffer(logicalDevice, commandBuffer, currMesh.vertices.data(), numBytes);
-			EndSingleTimeCommands(commandBuffer, QueueType::TRANSFER);
+			{
+				DisposableCommand command(logicalDevice, QueueType::TRANSFER);
+				vb.CopyIntoBuffer(logicalDevice, command.GetBuffer(), currMesh.vertices.data(), numBytes);
+			}
 
 			// Create the index buffer
 			numBytes = currMesh.indices.size() * sizeof(IndexType);
@@ -252,9 +261,10 @@ namespace TANG
 			IndexBuffer& ib = resources.indexBuffer;
 			ib.Create(physicalDevice, logicalDevice, numBytes);
 
-			commandBuffer = BeginSingleTimeCommands(CommandPoolRegistry::GetInstance().GetCommandPool(QueueType::TRANSFER));
-			ib.CopyIntoBuffer(logicalDevice, commandBuffer, currMesh.indices.data(), numBytes);
-			EndSingleTimeCommands(commandBuffer, QueueType::TRANSFER);
+			{
+				DisposableCommand command(logicalDevice, QueueType::TRANSFER);
+				ib.CopyIntoBuffer(logicalDevice, command.GetBuffer(), currMesh.indices.data(), numBytes);
+			}
 
 			// Destroy the staging buffers
 			vb.DestroyIntermediateBuffers(logicalDevice);
@@ -413,8 +423,8 @@ namespace TANG
 
 		CreateSwapChain();
 		CreateImageViews();
-		CreateColorResources();
-		CreateDepthResources();
+		CreateColorTexture();
+		CreateDepthTexture();
 		CreateFramebuffers();
 		RecreateAllSecondaryCommandBuffers();
 	}
@@ -438,11 +448,9 @@ namespace TANG
 		CreateRenderPass();
 		CreateGraphicsPipeline();
 		CreateCommandPools();
-		CreateTextureImage();
-		CreateTextureImageView();
-		CreateTextureSampler();
-		CreateColorResources();
-		CreateDepthResources();
+		CreateRandomTexture();
+		CreateColorTexture();
+		CreateDepthTexture();
 		CreateFramebuffers();
 		CreatePrimaryCommandBuffers(QueueType::GRAPHICS);
 		CreateSyncObjects();
@@ -456,10 +464,8 @@ namespace TANG
 
 		CleanupSwapChain();
 
-		vkDestroySampler(logicalDevice, textureSampler, nullptr);
-		vkDestroyImageView(logicalDevice, textureImageView, nullptr);
-		vkDestroyImage(logicalDevice, textureImage, nullptr);
-		vkFreeMemory(logicalDevice, textureImageMemory, nullptr);
+		randomTexture.Destroy(logicalDevice);
+		depthBuffer.Destroy(logicalDevice);
 
 		setLayoutCache.DestroyLayouts(logicalDevice);
 
@@ -486,12 +492,7 @@ namespace TANG
 			vkDestroyFence(logicalDevice, frameData->inFlightFence, nullptr);
 		}
 
-		// Destroy all command pools
-		/*for (const auto& iter : commandPools)
-		{
-			vkDestroyCommandPool(logicalDevice, iter.second, nullptr);
-		}
-		commandPools.clear();*/
+		CommandPoolRegistry::GetInstance().DestroyPools(logicalDevice);
 
 		vkDestroyPipeline(logicalDevice, graphicsPipeline, nullptr);
 		vkDestroyPipelineLayout(logicalDevice, pipelineLayout, nullptr);
@@ -513,7 +514,7 @@ namespace TANG
 		if (resourcesMap.find(uuid) == resourcesMap.end())
 		{
 			// Undefined behavior. Maybe the asset resources were deleted but we somehow forgot to remove it from the assetDrawStates map?
-			TNG_ASSERT_MSG(false, "Attempted to set asset draw state, but draw state doesn't exist in the map!");
+			LogError(false, "Attempted to set asset draw state, but draw state doesn't exist in the map!");
 		}
 
 		assetResources[resourcesMap[uuid]].shouldDraw = true;
@@ -590,9 +591,8 @@ namespace TANG
 		submitInfo.signalSemaphoreCount = 1;
 		submitInfo.pSignalSemaphores = signalSemaphores;
 
-		if (vkQueueSubmit(queues[QueueType::GRAPHICS], 1, &submitInfo, currentFDD->inFlightFence) != VK_SUCCESS)
+		if (SubmitQueue(QueueType::GRAPHICS, &submitInfo, 1, currentFDD->inFlightFence) != VK_SUCCESS)
 		{
-			TNG_ASSERT_MSG(false, "Failed to submit draw command buffer!");
 			return;
 		}
 
@@ -793,7 +793,7 @@ namespace TANG
 
 	bool Renderer::IsDeviceSuitable(VkPhysicalDevice device)
 	{
-		QueueFamilyIndices indices = FindQueueFamilies(device);
+		QueueFamilyIndices indices = FindQueueFamilies(device, surface);
 		bool extensionsSupported = CheckDeviceExtensionSupport(device);
 		bool swapChainAdequate = false;
 		if (extensionsSupported)
@@ -822,71 +822,6 @@ namespace TANG
 		//// We're only going to say that dedicated GPUs are suitable, let's not deal with
 		//// integrated graphics for now
 		//return properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
-	}
-
-	QueueFamilyIndices Renderer::FindQueueFamilies(VkPhysicalDevice device)
-	{
-		QueueFamilyIndices indices;
-		uint32_t queueFamilyCount = 0;
-		vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
-
-		std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-		vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
-
-		uint32_t graphicsTransferQueue = std::numeric_limits<uint32_t>::max();
-		uint32_t i = 0;
-		for (const auto& queueFamily : queueFamilies)
-		{
-			// Check that the device supports a graphics queue
-			if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
-			{
-				indices.queueFamilies[QueueType::GRAPHICS] = i;
-			}
-
-			// Check that the device supports present queues
-			VkBool32 presentSupport = false;
-			vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
-
-			if (presentSupport)
-			{
-				indices.queueFamilies[QueueType::PRESENT] = i;
-			}
-
-			// Check that the device supports a transfer queue
-			if (queueFamily.queueFlags & VK_QUEUE_TRANSFER_BIT)
-			{
-				// Choose a different queue from the graphics queue, if possible
-				if (indices.queueFamilies[QueueType::GRAPHICS] == i)
-				{
-					graphicsTransferQueue = i;
-				}
-				else
-				{
-					indices.queueFamilies[QueueType::TRANSFER] = i;
-				}
-			}
-
-			if (indices.IsComplete()) break;
-
-			i++;
-		}
-
-		// If we couldn't find a different queue for the TRANSFER and GRAPHICS operations, then simply
-		// use the same queue for both (if it supports TRANSFER operations)
-		if (!indices.IsValid(static_cast<QueueFamilyIndices::QueueFamilyIndexType>(QueueType::TRANSFER)) && graphicsTransferQueue != std::numeric_limits<uint32_t>::max())
-		{
-			indices.queueFamilies[QueueType::TRANSFER] = graphicsTransferQueue;
-		}
-
-		// Check that we filled in all of our queue families, otherwise log a warning
-		// NOTE - I'm not sure if there's a problem with not finding queue families for
-		//        every queue type...
-		if (!indices.IsComplete())
-		{
-			LogWarning("Failed to find all queue families!");
-		}
-
-		return indices;
 	}
 
 	SwapChainSupportDetails Renderer::QuerySwapChainSupport(VkPhysicalDevice device)
@@ -985,7 +920,7 @@ namespace TANG
 
 	void Renderer::CreateLogicalDevice()
 	{
-		QueueFamilyIndices indices = FindQueueFamilies(physicalDevice);
+		QueueFamilyIndices indices = FindQueueFamilies(physicalDevice, surface);
 		if (!indices.IsComplete())
 		{
 			LogError("Failed to create logical device because the queue family indices are incomplete!");
@@ -993,9 +928,9 @@ namespace TANG
 
 		std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
 		std::set<uint32_t> uniqueQueueFamilies = {
-			indices.queueFamilies[QueueType::GRAPHICS],
-			indices.queueFamilies[QueueType::PRESENT],
-			indices.queueFamilies[QueueType::TRANSFER]
+			indices.GetIndex(QueueType::GRAPHICS),
+			indices.GetIndex(QueueType::PRESENT),
+			indices.GetIndex(QueueType::TRANSFER)
 		};
 
 		// TODO - Determine priority of the different queue types
@@ -1037,9 +972,9 @@ namespace TANG
 		}
 
 		// Get the queues from the logical device
-		vkGetDeviceQueue(logicalDevice, indices.queueFamilies[QueueType::GRAPHICS], 0, &queues[QueueType::GRAPHICS]);
-		vkGetDeviceQueue(logicalDevice, indices.queueFamilies[QueueType::PRESENT], 0, &queues[QueueType::PRESENT]);
-		vkGetDeviceQueue(logicalDevice, indices.queueFamilies[QueueType::TRANSFER], 0, &queues[QueueType::TRANSFER]);
+		vkGetDeviceQueue(logicalDevice, indices.GetIndex(QueueType::GRAPHICS), 0, &queues[QueueType::GRAPHICS]);
+		vkGetDeviceQueue(logicalDevice, indices.GetIndex(QueueType::PRESENT), 0, &queues[QueueType::PRESENT]);
+		vkGetDeviceQueue(logicalDevice, indices.GetIndex(QueueType::TRANSFER), 0, &queues[QueueType::TRANSFER]);
 
 	}
 
@@ -1066,8 +1001,8 @@ namespace TANG
 		createInfo.imageArrayLayers = 1;
 		createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-		QueueFamilyIndices indices = FindQueueFamilies(physicalDevice);
-		uint32_t queueFamilyIndices[2] = { indices.queueFamilies[QueueType::GRAPHICS], indices.queueFamilies[QueueType::PRESENT]};
+		QueueFamilyIndices indices = FindQueueFamilies(physicalDevice, surface);
+		uint32_t queueFamilyIndices[2] = { indices.GetIndex(QueueType::GRAPHICS), indices.GetIndex(QueueType::PRESENT)};
 
 		if (queueFamilyIndices[0] != queueFamilyIndices[1])
 		{
@@ -1102,7 +1037,10 @@ namespace TANG
 
 		for (uint32_t i = 0; i < GetSWIDDSize(); i++)
 		{
-			swapChainImageDependentData[i].swapChainImage = swapChainImages[i];
+			swapChainImageDependentData[i].swapChainImage.CreateBaseImage(physicalDevice, logicalDevice, surfaceFormat.format, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
+			// Overwrite the base image with the one retrieved from the swap chain. 
+			// We only call CreateBaseImage() above to set the format and usage, but I don't even know if it matters, honestly
+			swapChainImageDependentData[i].swapChainImage.SetBaseImage(swapChainImages[i]);
 		}
 		swapChainImages.clear();
 
@@ -1113,10 +1051,12 @@ namespace TANG
 	// Create image views for all images on the swap chain
 	void Renderer::CreateImageViews()
 	{
+		ImageViewCreateInfo imageViewInfo{ VK_IMAGE_ASPECT_COLOR_BIT };
+
 		auto& swidd = swapChainImageDependentData;
 		for (size_t i = 0; i < GetSWIDDSize(); i++)
 		{
-			swidd[i].swapChainImageView = CreateImageView(swidd[i].swapChainImage, swapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+			swidd[i].swapChainImage.CreateImageView(logicalDevice, imageViewInfo);
 		}
 	}
 
@@ -1136,6 +1076,11 @@ namespace TANG
 		}
 
 		return shaderModule;
+	}
+
+	void Renderer::CreateCommandPools()
+	{
+		CommandPoolRegistry::GetInstance().CreatePools(physicalDevice, logicalDevice, surface);
 	}
 
 	void Renderer::CreateGraphicsPipeline()
@@ -1324,29 +1269,29 @@ namespace TANG
 
 	void Renderer::CreateRenderPass()
 	{
-		VkAttachmentDescription colorAttachment{};
-		colorAttachment.format = swapChainImageFormat;
-		colorAttachment.samples = msaaSamples;
-		colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-		colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-		colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-		colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		colorAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		VkAttachmentDescription colorAttachmentDesc{};
+		colorAttachmentDesc.format = swapChainImageFormat;
+		colorAttachmentDesc.samples = msaaSamples;
+		colorAttachmentDesc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+		colorAttachmentDesc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+		colorAttachmentDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+		colorAttachmentDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+		colorAttachmentDesc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		colorAttachmentDesc.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
 		VkAttachmentReference colorAttachmentRef{};
 		colorAttachmentRef.attachment = 0;
 		colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-		VkAttachmentDescription depthAttachment{};
-		depthAttachment.format = FindDepthFormat();
-		depthAttachment.samples = msaaSamples;
-		depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-		depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-		depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+		VkAttachmentDescription depthAttachmentDesc{};
+		depthAttachmentDesc.format = FindDepthFormat();
+		depthAttachmentDesc.samples = msaaSamples;
+		depthAttachmentDesc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+		depthAttachmentDesc.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+		depthAttachmentDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+		depthAttachmentDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+		depthAttachmentDesc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		depthAttachmentDesc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
 		VkAttachmentReference depthAttachmentRef{};
 		depthAttachmentRef.attachment = 1;
@@ -1380,7 +1325,7 @@ namespace TANG
 		dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
 		dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
-		std::array<VkAttachmentDescription, 3> attachments = { colorAttachment, depthAttachment, colorAttachmentResolve };
+		std::array<VkAttachmentDescription, 3> attachments = { colorAttachmentDesc, depthAttachmentDesc, colorAttachmentResolve };
 		VkRenderPassCreateInfo renderPassInfo{};
 		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
 		renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
@@ -1406,9 +1351,9 @@ namespace TANG
 		{
 			std::array<VkImageView, 3> attachments =
 			{
-				colorImageView,
-				depthImageView,
-				swidd[i].swapChainImageView
+				colorAttachment.GetImageView(),
+				depthBuffer.GetImageView(),
+				swidd[i].swapChainImage.GetImageView()
 			};
 
 			VkFramebufferCreateInfo framebufferInfo{};
@@ -1425,53 +1370,6 @@ namespace TANG
 				TNG_ASSERT_MSG(false, "Failed to create framebuffer!");
 			}
 		}
-	}
-
-	void Renderer::CreateCommandPools()
-	{
-		//QueueFamilyIndices queueFamilyIndices = FindQueueFamilies(physicalDevice);
-
-		//// Allocate the graphics command pool
-		//if (queueFamilyIndices.IsValid(static_cast<QueueFamilyIndices::QueueFamilyIndexType>(QueueType::GRAPHICS)))
-		//{
-		//	// Allocate the pool object in the map
-		//	commandPools[QueueType::GRAPHICS] = VkCommandPool();
-
-		//	VkCommandPoolCreateInfo poolInfo{};
-		//	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-		//	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-		//	poolInfo.queueFamilyIndex = queueFamilyIndices.queueFamilies[QueueType::GRAPHICS];
-
-		//	if (vkCreateCommandPool(logicalDevice, &poolInfo, nullptr, &commandPools[QueueType::GRAPHICS]) != VK_SUCCESS)
-		//	{
-		//		LogError("Failed to create a graphics command pool!");
-		//	}
-		//}
-		//else
-		//{
-		//	TNG_ASSERT_MSG(false, "Failed to find a queue family supporting a graphics queue!");
-		//}
-
-		//// Allocate the transfer command pool
-		//if (queueFamilyIndices.IsValid(static_cast<QueueFamilyIndices::QueueFamilyIndexType>(QueueType::TRANSFER)))
-		//{
-		//	commandPools[QueueType::TRANSFER] = VkCommandPool();
-
-		//	VkCommandPoolCreateInfo poolInfo{};
-		//	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-		//	// We support short-lived operations (transient bit) and we want to reset the command buffers after submissions
-		//	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
-		//	poolInfo.queueFamilyIndex = queueFamilyIndices.queueFamilies[QueueType::TRANSFER];
-
-		//	if (vkCreateCommandPool(logicalDevice, &poolInfo, nullptr, &commandPools[QueueType::TRANSFER]) != VK_SUCCESS)
-		//	{
-		//		TNG_ASSERT_MSG(false, "Failed to create a transfer command pool!");
-		//	}
-		//}
-		//else
-		//{
-		//	TNG_ASSERT_MSG(false, "Failed to find a queue family supporting a transfer queue!");
-		//}
 	}
 
 	void Renderer::CreatePrimaryCommandBuffers(QueueType poolType)
@@ -1607,42 +1505,6 @@ namespace TANG
 		vkBindImageMemory(logicalDevice, image, imageMemory, 0);
 	}
 
-	void Renderer::CreateTextureImage()
-	{
-		//int width, height, channels;
-		//stbi_uc* pixels = stbi_load("../src/data/textures/sample/texture.jpg", &width, &height, &channels, STBI_rgb_alpha);
-		//if (pixels == nullptr)
-		//{
-		//	TNG_ASSERT_MSG(false, "Failed to load texture!");
-		//}
-
-		//textureMipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1;
-
-		//VkDeviceSize imageSize = width * height * 4;
-		//VkBuffer stagingBuffer;
-		//VkDeviceMemory stagingBufferMemory;
-		//CreateBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
-
-		//void* data;
-		//vkMapMemory(logicalDevice, stagingBufferMemory, 0, imageSize, 0, &data);
-		//memcpy(data, pixels, static_cast<size_t>(imageSize));
-		//vkUnmapMemory(logicalDevice, stagingBufferMemory);
-
-		//// Now that we've copied over the texture data to the staging buffer, we don't need the original pixels array anymore
-		//stbi_image_free(pixels);
-
-		//CreateImage(width, height, textureMipLevels, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,
-		//	VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-		//	textureImage, textureImageMemory);
-
-		//TransitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, textureMipLevels);
-		//CopyBufferToImage(stagingBuffer, textureImage, static_cast<uint32_t>(width), static_cast<uint32_t>(height));
-		//GenerateMipmaps(textureImage, VK_FORMAT_R8G8B8A8_SRGB, width, height, textureMipLevels);
-
-		//vkDestroyBuffer(logicalDevice, stagingBuffer, nullptr);
-		//vkFreeMemory(logicalDevice, stagingBufferMemory, nullptr);
-	}
-
 	void Renderer::CreateDescriptorSetLayouts()
 	{
 		// Holds ProjUBO + ImageSampler
@@ -1705,78 +1567,83 @@ namespace TANG
 
 	VkImageView Renderer::CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels)
 	{
-		VkImageViewCreateInfo createInfo{};
-		createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-		createInfo.image = image;
-		createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-		createInfo.format = format;
-		createInfo.subresourceRange.aspectMask = aspectFlags;
-		createInfo.subresourceRange.baseMipLevel = 0;
-		createInfo.subresourceRange.levelCount = mipLevels;
-		createInfo.subresourceRange.baseArrayLayer = 0;
-		createInfo.subresourceRange.layerCount = 1;
+		//VkImageViewCreateInfo createInfo{};
+		//createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		//createInfo.image = image;
+		//createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		//createInfo.format = format;
+		//createInfo.subresourceRange.aspectMask = aspectFlags;
+		//createInfo.subresourceRange.baseMipLevel = 0;
+		//createInfo.subresourceRange.levelCount = mipLevels;
+		//createInfo.subresourceRange.baseArrayLayer = 0;
+		//createInfo.subresourceRange.layerCount = 1;
 
-		VkImageView imageView;
-		if (vkCreateImageView(logicalDevice, &createInfo, nullptr, &imageView) != VK_SUCCESS)
-		{
-			throw std::runtime_error("Failed to create texture image view!");
-		}
+		//VkImageView imageView;
+		//if (vkCreateImageView(logicalDevice, &createInfo, nullptr, &imageView) != VK_SUCCESS)
+		//{
+		//	LogError("Failed to create texture image view!");
+		//}
 
-		return imageView;
+		//return imageView;
+		return {};
 	}
 
-	void Renderer::CreateTextureImageView()
+	void Renderer::CreateRandomTexture()
 	{
-		textureImageView = CreateImageView(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, textureMipLevels);
-	}
+		// Create base image
+		randomTexture.CreateBaseImage(physicalDevice, logicalDevice, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
 
-	void Renderer::CreateTextureSampler()
-	{
 		VkPhysicalDeviceProperties properties{};
 		vkGetPhysicalDeviceProperties(physicalDevice, &properties);
+		//textureImageView = CreateImageView(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, textureMipLevels);
 
-		VkSamplerCreateInfo samplerInfo{};
-		samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-		samplerInfo.magFilter = VK_FILTER_LINEAR;
-		samplerInfo.minFilter = VK_FILTER_LINEAR;
-		samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		samplerInfo.anisotropyEnable = VK_TRUE;
+		// Create image view
+		ImageViewCreateInfo viewInfo{ VK_IMAGE_ASPECT_COLOR_BIT };
+		randomTexture.CreateImageView(logicalDevice, viewInfo);
+
+		// Create sampler
+		SamplerCreateInfo samplerInfo{};
+		samplerInfo.magnificationFilter = VK_FILTER_LINEAR;
+		samplerInfo.minificationFilter = VK_FILTER_LINEAR;
+		samplerInfo.addressModeUVW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 		samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
-		samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-		samplerInfo.unnormalizedCoordinates = VK_FALSE;
-		samplerInfo.compareEnable = VK_FALSE;
-		samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-		samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-		samplerInfo.mipLodBias = 0.0f;
-		samplerInfo.minLod = 0.0f;
-		samplerInfo.maxLod = static_cast<float>(textureMipLevels);
+		randomTexture.CreateSampler(logicalDevice, samplerInfo);
 
-		if (vkCreateSampler(logicalDevice, &samplerInfo, nullptr, &textureSampler) != VK_SUCCESS)
-		{
-			TNG_ASSERT_MSG(false, "Failed to create texture sampler!");
-		}
+		// Load image from file
+		randomTexture.LoadFromFile(physicalDevice, logicalDevice, "../src/data/textures/sample/texture.jpg");
 	}
 
-	void Renderer::CreateDepthResources()
+	void Renderer::CreateDepthTexture()
 	{
+		// Create base image
 		VkFormat depthFormat = FindDepthFormat();
-		CreateImage(swapChainExtent.width, swapChainExtent.height, 1, msaaSamples, depthFormat, VK_IMAGE_TILING_OPTIMAL,
-			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			depthImage, depthImageMemory);
-		depthImageView = CreateImageView(depthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
-		//transitionImageLayout(depthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, mipLevels);
+		depthBuffer.CreateBaseImage(physicalDevice, logicalDevice, depthFormat, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
+
+		// Create image view
+		ImageViewCreateInfo imageViewInfo{ VK_IMAGE_ASPECT_DEPTH_BIT };
+		depthBuffer.CreateImageView(logicalDevice, imageViewInfo);
+
+
+		//CreateImage(swapChainExtent.width, swapChainExtent.height, 1, msaaSamples, depthFormat, VK_IMAGE_TILING_OPTIMAL,
+		//	VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		//	depthImage, depthImageMemory);
+		//depthImageView = CreateImageView(depthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
 	}
 
-	void Renderer::CreateColorResources()
+	void Renderer::CreateColorTexture()
 	{
-		VkFormat colorFormat = swapChainImageFormat;
+		// Create base image
+		colorAttachment.CreateBaseImage(physicalDevice, logicalDevice, swapChainImageFormat, VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
 
-		CreateImage(swapChainExtent.width, swapChainExtent.height, 1, msaaSamples, colorFormat,
-			VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, colorImage, colorImageMemory);
-		colorImageView = CreateImageView(colorImage, colorFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+		// Create image view
+		ImageViewCreateInfo imageViewInfo{ VK_IMAGE_ASPECT_COLOR_BIT };
+		colorAttachment.CreateImageView(logicalDevice, imageViewInfo);
+
+
+		//CreateImage(swapChainExtent.width, swapChainExtent.height, 1, msaaSamples, colorFormat,
+		//	VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+		//	VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, colorImage, colorImageMemory);
+		//colorImageView = CreateImageView(colorImage, colorFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
 	}
 
 	void Renderer::RecordPrimaryCommandBuffer(uint32_t frameBufferIndex)
@@ -1827,12 +1694,10 @@ namespace TANG
 	VkShaderModule Renderer::LoadShader(const std::string& fileName)
 	{
 		namespace fs = std::filesystem;
-		const std::string defaultVertexShaderCompiledPath = (fs::path(compiledShaderOutputPath) / fs::path(fileName)).generic_string();
-		const std::string defaultVertexShaderChecksumPath = (fs::path(shaderChecksumOutputPath) / fs::path(fileName)).generic_string();
+		const std::string defaultShaderCompiledPath = (fs::path(compiledShaderOutputPath) / fs::path(fileName)).generic_string();
 
-		auto vertShaderCode = ReadFile(defaultVertexShaderCompiledPath);
-
-		return CreateShaderModule(vertShaderCode.data(), static_cast<uint32_t>(vertShaderCode.size()));
+		auto shaderCode = ReadFile(defaultShaderCompiledPath);
+		return CreateShaderModule(shaderCode.data(), static_cast<uint32_t>(shaderCode.size()));
 	}
 
 	void Renderer::RecordSecondaryCommandBuffer(SecondaryCommandBuffer& commandBuffer, AssetResources* resources, uint32_t frameBufferIndex)
@@ -1879,13 +1744,8 @@ namespace TANG
 
 	void Renderer::CleanupSwapChain()
 	{
-		vkDestroyImageView(logicalDevice, colorImageView, nullptr);
-		vkDestroyImage(logicalDevice, colorImage, nullptr);
-		vkFreeMemory(logicalDevice, colorImageMemory, nullptr);
-
-		vkDestroyImageView(logicalDevice, depthImageView, nullptr);
-		vkDestroyImage(logicalDevice, depthImage, nullptr);
-		vkFreeMemory(logicalDevice, depthImageMemory, nullptr);
+		colorAttachment.Destroy(logicalDevice);
+		depthBuffer.Destroy(logicalDevice);
 
 		for (auto& swidd : swapChainImageDependentData)
 		{
@@ -1894,7 +1754,8 @@ namespace TANG
 
 		for (auto& swidd : swapChainImageDependentData)
 		{
-			vkDestroyImageView(logicalDevice, swidd.swapChainImageView, nullptr);
+			swidd.swapChainImage.Destroy(logicalDevice);
+			//vkDestroyImageView(logicalDevice, swidd.swapChainImageView, nullptr);
 		}
 
 		// Clean up the secondary commands buffers that reference the swap chain framebuffers
@@ -1993,140 +1854,32 @@ namespace TANG
 		currentAssetDataMap.descriptorSets[1].Update(logicalDevice, writeDescSets);
 	}
 
-	VkCommandBuffer Renderer::BeginSingleTimeCommands(VkCommandPool pool)
+	VkResult Renderer::SubmitQueue(QueueType type, VkSubmitInfo* info, uint32_t submitCount, VkFence fence, bool waitUntilIdle)
 	{
 		VkResult res;
+		VkQueue queue = queues[type];
 
-		VkCommandBufferAllocateInfo allocInfo{};
-		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-		allocInfo.commandPool = pool;
-		allocInfo.commandBufferCount = 1;
-
-		VkCommandBuffer commandBuffer;
-		res = vkAllocateCommandBuffers(logicalDevice, &allocInfo, &commandBuffer);
+		res = vkQueueSubmit(queue, submitCount, info, fence);
 		if (res != VK_SUCCESS)
 		{
-			TNG_ASSERT_MSG(false, "Failed to allocate single-time command buffer!");
+			TNG_ASSERT_MSG(false, "Failed to submit queue!");
 		}
 
-		VkCommandBufferBeginInfo beginInfo{};
-		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-		beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-		res = vkBeginCommandBuffer(commandBuffer, &beginInfo);
-		if (res != VK_SUCCESS)
+		if (waitUntilIdle)
 		{
-			TNG_ASSERT_MSG(false, "Failed to begin command buffer!");
-		}
-
-		return commandBuffer;
-	}
-
-	void Renderer::EndSingleTimeCommands(VkCommandBuffer commandBuffer, QueueType commandPoolType)
-	{
-		VkResult res;
-
-		vkEndCommandBuffer(commandBuffer);
-
-		VkSubmitInfo submitInfo{};
-		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		submitInfo.commandBufferCount = 1;
-		submitInfo.pCommandBuffers = &commandBuffer;
-
-		res = vkQueueSubmit(queues[commandPoolType], 1, &submitInfo, VK_NULL_HANDLE);
-		if (res != VK_SUCCESS)
-		{
-			TNG_ASSERT_MSG(false, "Failed to submit single-time command buffer!");
-		}
-
-		res = vkQueueWaitIdle(queues[commandPoolType]);
-		if (res != VK_SUCCESS)
-		{
-			TNG_ASSERT_MSG(false, "Failed to wait until queue was idle when submitting single-time command buffer");
-		}
-
-		vkFreeCommandBuffers(logicalDevice, CommandPoolRegistry::GetInstance().GetCommandPool(commandPoolType), 1, &commandBuffer);
-	}
-
-	void Renderer::TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels)
-	{
-		VkCommandBuffer commandBuffer = BeginSingleTimeCommands(CommandPoolRegistry::GetInstance().GetCommandPool(QueueType::TRANSFER));
-
-		VkImageMemoryBarrier barrier{};
-		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-		barrier.oldLayout = oldLayout;
-		barrier.newLayout = newLayout;
-		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		barrier.image = image;
-		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		barrier.subresourceRange.baseMipLevel = 0;
-		barrier.subresourceRange.levelCount = mipLevels;
-		barrier.subresourceRange.baseArrayLayer = 0;
-		barrier.subresourceRange.layerCount = 1;
-		barrier.srcAccessMask = 0; // TODO
-		barrier.dstAccessMask = 0; // TODO
-
-		VkPipelineStageFlags sourceStage = VK_PIPELINE_STAGE_NONE;
-		VkPipelineStageFlags destinationStage = VK_PIPELINE_STAGE_NONE;
-
-		if (newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-		{
-			barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-
-			if (HasStencilComponent(format))
+			res = vkQueueWaitIdle(queue);
+			if (res != VK_SUCCESS)
 			{
-				barrier.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+				TNG_ASSERT_MSG(false, "Failed to wait until queue was idle after submitting!");
 			}
 		}
-		else
-		{
-			barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		}
 
-		if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
-			barrier.srcAccessMask = 0;
-			barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-
-			sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-			destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-		}
-		else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-			barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-			barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-			sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-			destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-		}
-		else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-		{
-			barrier.srcAccessMask = 0;
-			barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-
-			sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-			destinationStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-		}
-		else
-		{
-			TNG_ASSERT_MSG(false, "Unsupported layout transition!");
-		}
-
-		vkCmdPipelineBarrier(
-			commandBuffer,
-			sourceStage, destinationStage,
-			0,
-			0, nullptr,
-			0, nullptr,
-			1, &barrier
-		);
-
-		EndSingleTimeCommands(commandBuffer, QueueType::TRANSFER);
+		return res;
 	}
 
 	void Renderer::CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)
 	{
-		VkCommandBuffer commandBuffer = BeginSingleTimeCommands(CommandPoolRegistry::GetInstance().GetCommandPool(QueueType::TRANSFER));
+		DisposableCommand command(logicalDevice, QueueType::TRANSFER);
 
 		VkBufferImageCopy region{};
 		region.bufferOffset = 0;
@@ -2141,9 +1894,7 @@ namespace TANG
 		region.imageOffset = { 0, 0, 0 };
 		region.imageExtent = { width, height, 1 };
 
-		vkCmdCopyBufferToImage(commandBuffer, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-
-		EndSingleTimeCommands(commandBuffer, QueueType::TRANSFER);
+		vkCmdCopyBufferToImage(command.GetBuffer(), buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 	}
 
 	VkFormat Renderer::FindSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features)
@@ -2163,7 +1914,8 @@ namespace TANG
 			}
 		}
 
-		throw std::runtime_error("Failed to find supported format!");
+		TNG_ASSERT_MSG(false, "Failed to find supported format!");
+		return VK_FORMAT_UNDEFINED;
 	}
 
 	VkFormat Renderer::FindDepthFormat()
@@ -2178,100 +1930,6 @@ namespace TANG
 	bool Renderer::HasStencilComponent(VkFormat format)
 	{
 		return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
-	}
-
-	void Renderer::GenerateMipmaps(VkImage image, VkFormat imageFormat, int32_t texWidth, int32_t texHeight, uint32_t mipLevels)
-	{
-		// Check if the texture format we want to use supports linear blitting
-		VkFormatProperties formatProperties;
-		vkGetPhysicalDeviceFormatProperties(physicalDevice, imageFormat, &formatProperties);
-		if (!(formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT))
-		{
-			TNG_ASSERT_MSG(false, "Texture image does not support linear blitting!");
-		}
-
-		VkCommandBuffer commandBuffer = BeginSingleTimeCommands(CommandPoolRegistry::GetInstance().GetCommandPool(QueueType::GRAPHICS));
-
-		VkImageMemoryBarrier barrier{};
-		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-		barrier.image = image;
-		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		barrier.subresourceRange.baseArrayLayer = 0;
-		barrier.subresourceRange.layerCount = 1;
-		barrier.subresourceRange.levelCount = 1;
-
-		int32_t mipWidth = texWidth;
-		int32_t mipHeight = texHeight;
-
-		for (uint32_t i = 1; i < mipLevels; i++)
-		{
-
-			// Transition image from transfer dst optimal to transfer src optimal, since we're reading from this image
-			barrier.subresourceRange.baseMipLevel = i - 1;
-			barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-			barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-			barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-			barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-
-			vkCmdPipelineBarrier(commandBuffer,
-				VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
-				0, nullptr,
-				0, nullptr,
-				1, &barrier);
-
-			VkImageBlit blit{};
-			blit.srcOffsets[0] = { 0, 0, 0 };
-			blit.srcOffsets[1] = { mipWidth, mipHeight, 1 };
-			blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			blit.srcSubresource.mipLevel = i - 1;
-			blit.srcSubresource.baseArrayLayer = 0;
-			blit.srcSubresource.layerCount = 1;
-			blit.dstOffsets[0] = { 0, 0, 0 };
-			blit.dstOffsets[1] = { mipWidth > 1 ? mipWidth / 2 : 1, mipHeight > 1 ? mipHeight / 2 : 1, 1 };
-			blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			blit.dstSubresource.mipLevel = i;
-			blit.dstSubresource.baseArrayLayer = 0;
-			blit.dstSubresource.layerCount = 1;
-
-			vkCmdBlitImage(commandBuffer,
-				image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-				image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-				1, &blit,
-				VK_FILTER_LINEAR);
-
-			// Transition image from src transfer optimal to shader read only
-			barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-			barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-			barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-			barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-			vkCmdPipelineBarrier(commandBuffer,
-				VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
-				0, nullptr,
-				0, nullptr,
-				1, &barrier);
-
-			if (mipWidth > 1) mipWidth /= 2;
-			if (mipHeight > 1) mipHeight /= 2;
-		}
-
-		// Transfer the last mip level to shader read-only because this wasn't handled by the loop above
-		// (since we didn't blit from the last image)
-		barrier.subresourceRange.baseMipLevel = mipLevels - 1;
-		barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-		barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-		vkCmdPipelineBarrier(commandBuffer,
-			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
-			0, nullptr,
-			0, nullptr,
-			1, &barrier);
-
-		EndSingleTimeCommands(commandBuffer, QueueType::GRAPHICS);
 	}
 
 	VkSampleCountFlagBits Renderer::GetMaxUsableSampleCount()

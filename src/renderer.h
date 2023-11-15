@@ -18,18 +18,34 @@
 #include "descriptors/set_layout/set_layout_cache.h"
 #include "descriptors/set_layout/set_layout_summary.h"
 #include "queue_types.h"
+#include "texture_resource.h"
 #include "utils/sanity_check.h"
 
 struct GLFWwindow;
 
 namespace TANG
 {
-	struct QueueFamilyIndices;
 	struct SwapChainSupportDetails;
+	class QueueFamilyIndices;
+	class DisposableCommand;
 
 	class Renderer {
 
+	private:
+
+		Renderer();
+		Renderer(const Renderer& other) = delete;
+		Renderer& operator=(const Renderer& other) = delete;
+
+		friend class DisposableCommand;
+
 	public:
+
+		static Renderer& GetInstance()
+		{
+			static Renderer instance;
+			return instance;
+		}
 
 		void Initialize(GLFWwindow* windowHandle, uint32_t windowWidth, uint32_t windowHeight);
 
@@ -73,19 +89,21 @@ namespace TANG
 		void DestroyAssetResources(UUID uuid);
 		void DestroyAllAssetResources();
 
-		void CreateSurface(GLFWwindow* windowHandle);
-
 		// Sets the size that the next framebuffer should be. This function will only be called when the main window is resized
 		void SetNextFramebufferSize(uint32_t newWidth, uint32_t newHeight);
 
 		// Updates the view matrix using the provided position and inverted view matrix. The caller can get this data from any derived BaseCamera object
 		void UpdateCameraData(const glm::vec3& position, const glm::mat4& viewMatrix);
 
+
+
 	private:
 
-		void DrawFrame();
+		void CreateSurface(GLFWwindow* windowHandle);
 
 		void CreateInstance();
+
+		void DrawFrame();
 
 		void PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo);
 
@@ -105,8 +123,6 @@ namespace TANG
 		void PickPhysicalDevice();
 
 		bool IsDeviceSuitable(VkPhysicalDevice device);
-
-		QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
 
 		SwapChainSupportDetails QuerySwapChainSupport(VkPhysicalDevice device);
 
@@ -129,13 +145,13 @@ namespace TANG
 		// the shader code, read from createGraphicsPipeline() below
 		VkShaderModule CreateShaderModule(const char* shaderCode, uint32_t numBytes);
 
+		void CreateCommandPools();
+
 		void CreateGraphicsPipeline();
 
 		void CreateRenderPass();
 
 		void CreateFramebuffers();
-
-		void CreateCommandPools();
 
 		void CreatePrimaryCommandBuffers(QueueType poolType);
 
@@ -149,8 +165,6 @@ namespace TANG
 			VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties,
 			VkImage& image, VkDeviceMemory& imageMemory);
 
-		void CreateTextureImage();
-
 		void CreateDescriptorSetLayouts();
 
 		void CreateDescriptorPool();
@@ -159,13 +173,9 @@ namespace TANG
 
 		VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels);
 
-		void CreateTextureImageView();
-
-		void CreateTextureSampler();
-
-		void CreateDepthResources();
-
-		void CreateColorResources();
+		void CreateRandomTexture();
+		void CreateDepthTexture();
+		void CreateColorTexture();
 
 		void RecordPrimaryCommandBuffer(uint32_t frameBufferIndex);
 		void RecordSecondaryCommandBuffer(SecondaryCommandBuffer& commandBuffer, AssetResources* resources, uint32_t frameBufferIndex);
@@ -184,12 +194,8 @@ namespace TANG
 		void UpdateCameraDataUniformBuffers(UUID uuid, uint32_t frameIndex, const glm::vec3& position, const glm::mat4& viewMatrix);
 		void UpdateProjectionUniformBuffer(UUID uuid, uint32_t frameIndex);
 
-		VkCommandBuffer BeginSingleTimeCommands(VkCommandPool pool);
-
-		// The commandPoolType parameter must match the pool type that was used to allocate the command buffer in the corresponding BeginSingleTimeCommands() function call!
-		void EndSingleTimeCommands(VkCommandBuffer commandBuffer, QueueType commandPoolType);
-
-		void TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels);
+		// Submits the provided queue type, along with the provided command buffer. Return value should _not_ be ignored
+		[[nodiscard]] VkResult SubmitQueue(QueueType type, VkSubmitInfo* info, uint32_t submitCount, VkFence fence, bool waitUntilIdle = false);
 
 		void CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
 
@@ -198,8 +204,6 @@ namespace TANG
 		VkFormat FindDepthFormat();
 
 		bool HasStencilComponent(VkFormat format);
-
-		void GenerateMipmaps(VkImage image, VkFormat imageFormat, int32_t texWidth, int32_t texHeight, uint32_t mipLevels);
 
 		VkSampleCountFlagBits GetMaxUsableSampleCount();
 
@@ -216,7 +220,7 @@ namespace TANG
 		VkInstance vkInstance;
 		VkDebugUtilsMessengerEXT debugMessenger;
 
-		VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+		VkPhysicalDevice physicalDevice;
 		VkDevice logicalDevice;
 
 		VkSurfaceKHR surface;
@@ -283,8 +287,7 @@ namespace TANG
 		////////////////////////////////////////////////////////////////////
 		struct SwapChainImageDependentData
 		{
-			VkImage swapChainImage;
-			VkImageView swapChainImageView;
+			TextureResource swapChainImage;
 			VkFramebuffer swapChainFramebuffer;
 
 			std::unordered_map<UUID, SecondaryCommandBuffer> secondaryCommandBuffer;
@@ -299,9 +302,7 @@ namespace TANG
 
 		VkPipeline graphicsPipeline;
 
-		//std::unordered_map<QueueType, VkCommandPool> commandPools;
-
-		uint32_t currentFrame = 0;
+		uint32_t currentFrame;
 
 		// The assetResources vector contains all the vital information that we need for every asset in order to render it
 		// The resourcesMap maps an asset's UUID to a location within the assetResources vector
@@ -310,21 +311,12 @@ namespace TANG
 
 		DescriptorPool descriptorPool;
 
-		uint32_t textureMipLevels;
-		VkImage textureImage;
-		VkDeviceMemory textureImageMemory;
-		VkImageView textureImageView;
-		VkSampler textureSampler;
-
-		VkImage depthImage;
-		VkDeviceMemory depthImageMemory;
-		VkImageView depthImageView;
+		TextureResource randomTexture;
+		TextureResource depthBuffer;
+		TextureResource colorAttachment;
 
 		// Multisampled anti-aliasing
-		VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
-		VkImage colorImage;
-		VkDeviceMemory colorImageMemory;
-		VkImageView colorImageView;
+		VkSampleCountFlagBits msaaSamples;
 
 		// Cached window sizes
 		uint32_t framebufferWidth, framebufferHeight;

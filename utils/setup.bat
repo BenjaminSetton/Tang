@@ -6,9 +6,7 @@
 set IDE="Visual Studio 17 2022"
 set BUILD_DIR="build"
 
-echo Building project for %IDE%, are you sure you want to proceed?
-
-pause
+echo Building project for %IDE%...
 
 pushd ..
 cmake -G %IDE% -S . -B %BUILD_DIR% .

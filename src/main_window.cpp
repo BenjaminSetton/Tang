@@ -36,7 +36,7 @@ namespace TANG
 	{
 		if (glfwWinHandle != nullptr)
 		{
-			LogError("Window destrutor called but window has not been destroyed");
+			LogError("Window destructor called but window has not been destroyed");
 		}
 
 		glfwWinHandle = nullptr;

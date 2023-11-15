@@ -8,7 +8,7 @@ IF "%VULKAN_SDK%"=="" (
 
 set SHADER_COMPILER=%VULKAN_SDK%/Bin/glslc.exe
 set SRC_SHADER_PATH=src/shaders
-set OUT_SHADER_PATH=out/shaders/compiled
+set OUT_SHADER_PATH=out/shaders
 
 echo Building shaders start...
 echo Compiling shaders using %SHADER_COMPILER%
