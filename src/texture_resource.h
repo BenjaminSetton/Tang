@@ -25,6 +25,14 @@ namespace TANG
 		float maxAnisotropy;
 	};
 
+	struct BaseImageCreateInfo
+	{
+		uint32_t width, height;
+		VkFormat format;
+		VkImageUsageFlags usage;
+		uint32_t mipLevels;
+	};
+
 	class TextureResource
 	{
 	public:
@@ -35,13 +43,14 @@ namespace TANG
 		TextureResource(TextureResource&& other);
 		TextureResource& operator=(const TextureResource& other);
 
-		void CreateBaseImage(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkFormat format, VkImageUsageFlags usage);
+		void CreateBaseImage(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, const BaseImageCreateInfo& baseImageInfo);
+		void CreateBaseImageFromFile(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, std::string_view fileName);
+
 		void CreateImageView(VkDevice logicalDevice, const ImageViewCreateInfo& viewInfo);
 		void CreateSampler(VkDevice logicalDevice, const SamplerCreateInfo& samplerInfo);
 
 		void Destroy(VkDevice logicalDevice);
 
-		void LoadFromFile(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, std::string_view fileName);
 		void TransitionLayout(VkDevice logicalDevice, VkImageLayout destinationLayout);
 
 		VkImageView GetImageView() const;
@@ -51,6 +60,8 @@ namespace TANG
 		void SetBaseImage(VkImage image);
 
 	private:
+
+		void CreateBaseImage_Helper(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, const BaseImageCreateInfo& baseImageInfo);
 
 		void CopyFromBuffer(VkDevice logicalDevice, VkBuffer buffer);
 		void GenerateMipmaps(VkPhysicalDevice physicalDevice, VkDevice logicalDevice);

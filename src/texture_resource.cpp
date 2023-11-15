@@ -75,47 +75,52 @@ namespace TANG
 		return *this;
 	}
 
-	void TextureResource::CreateBaseImage(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkFormat _format, VkImageUsageFlags _usage)
+	void TextureResource::CreateBaseImage(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, const BaseImageCreateInfo& baseImageInfo)
 	{
-		//CreateBaseImage_Helper(physicalDevice, logicalDevice, VK_SAMPLE_COUNT_1_BIT, _format, VK_IMAGE_TILING_OPTIMAL, _usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		CreateBaseImage_Helper(physicalDevice, logicalDevice, baseImageInfo);
+	}
 
-		VkImageCreateInfo imageInfo{};
-		imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-		imageInfo.imageType = VK_IMAGE_TYPE_2D;
-		imageInfo.extent.width = width;
-		imageInfo.extent.height = height;
-		imageInfo.extent.depth = 1;
-		imageInfo.mipLevels = mipLevels;
-		imageInfo.arrayLayers = 1;
-		imageInfo.format = _format;
-		imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-		imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		imageInfo.usage = _usage;
-		imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-		imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-
-		if (vkCreateImage(logicalDevice, &imageInfo, nullptr, &baseImage) != VK_SUCCESS)
+	void TextureResource::CreateBaseImageFromFile(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, std::string_view fileName)
+	{
+		int _width, _height, _channels;
+		stbi_uc* pixels = stbi_load(fileName.data(), &_width, &_height, &_channels, STBI_rgb_alpha);
+		if (pixels == nullptr)
 		{
-			TNG_ASSERT_MSG(false, "Failed to create image!");
+			LogError("Failed to create texture from file '%s'!", fileName.data());
 		}
 
-		VkMemoryRequirements memRequirements;
-		vkGetImageMemoryRequirements(logicalDevice, baseImage, &memRequirements);
+		width = static_cast<uint32_t>(_width);
+		height = static_cast<uint32_t>(_height);
+		mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1;
 
-		VkMemoryAllocateInfo allocInfo{};
-		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-		allocInfo.allocationSize = memRequirements.size;
-		allocInfo.memoryTypeIndex = FindMemoryType(physicalDevice, memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		VkDeviceSize imageSize = width * height * 4;
+		/*VkBuffer stagingBuffer;
+		VkDeviceMemory stagingBufferMemory;
+		CreateBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);*/
+		StagingBuffer stagingBuffer;
+		stagingBuffer.Create(physicalDevice, logicalDevice, imageSize);
 
-		if (vkAllocateMemory(logicalDevice, &allocInfo, nullptr, &imageMemory) != VK_SUCCESS)
-		{
-			TNG_ASSERT_MSG(false, "Failed to allocate image memory!");
-		}
+		//void* data;
+		//vkMapMemory(logicalDevice, stagingBufferMemory, 0, imageSize, 0, &data);
+		//memcpy(data, pixels, static_cast<size_t>(imageSize));
+		//vkUnmapMemory(logicalDevice, stagingBufferMemory);
+		stagingBuffer.CopyIntoBuffer(logicalDevice, pixels, imageSize);
 
-		vkBindImageMemory(logicalDevice, baseImage, imageMemory, 0);
+		// Now that we've copied over the texture data to the staging buffer, we don't need the original pixels array anymore
+		stbi_image_free(pixels);
 
-		format = _format;
-		isValid = true;
+		BaseImageCreateInfo baseImageInfo{};
+		// TODO - Fill out
+		TNG_TODO();
+		CreateBaseImage_Helper(physicalDevice, logicalDevice, baseImageInfo);
+
+		TransitionLayout(logicalDevice, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+		CopyFromBuffer(logicalDevice, stagingBuffer.GetBuffer());
+		GenerateMipmaps(physicalDevice, logicalDevice);
+
+		/*vkDestroyBuffer(logicalDevice, stagingBuffer, nullptr);
+		vkFreeMemory(logicalDevice, stagingBufferMemory, nullptr);*/
+		stagingBuffer.Destroy(logicalDevice);
 	}
 
 	void TextureResource::Destroy(VkDevice logicalDevice)
@@ -222,6 +227,47 @@ namespace TANG
 		baseImage = image;
 	}
 
+	void TextureResource::CreateBaseImage_Helper(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, const BaseImageCreateInfo& baseImageInfo)
+	{
+		VkImageCreateInfo imageInfo{};
+		imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+		imageInfo.imageType = VK_IMAGE_TYPE_2D;
+		imageInfo.extent.width = baseImageInfo.width;
+		imageInfo.extent.height = baseImageInfo.height;
+		imageInfo.extent.depth = 1;
+		imageInfo.mipLevels = baseImageInfo.mipLevels;
+		imageInfo.arrayLayers = 1;
+		imageInfo.format = baseImageInfo.format;
+		imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+		imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		imageInfo.usage = baseImageInfo.usage;
+		imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+		imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+
+		if (vkCreateImage(logicalDevice, &imageInfo, nullptr, &baseImage) != VK_SUCCESS)
+		{
+			TNG_ASSERT_MSG(false, "Failed to create image!");
+		}
+
+		VkMemoryRequirements memRequirements;
+		vkGetImageMemoryRequirements(logicalDevice, baseImage, &memRequirements);
+
+		VkMemoryAllocateInfo allocInfo{};
+		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+		allocInfo.allocationSize = memRequirements.size;
+		allocInfo.memoryTypeIndex = FindMemoryType(physicalDevice, memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+		if (vkAllocateMemory(logicalDevice, &allocInfo, nullptr, &imageMemory) != VK_SUCCESS)
+		{
+			TNG_ASSERT_MSG(false, "Failed to allocate image memory!");
+		}
+
+		vkBindImageMemory(logicalDevice, baseImage, imageMemory, 0);
+
+		format = baseImageInfo.format;
+		isValid = true;
+	}
+
 	void TextureResource::CreateImageView(VkDevice logicalDevice, const ImageViewCreateInfo& viewInfo)
 	{
 		if (!IsValid())
@@ -271,50 +317,6 @@ namespace TANG
 		{
 			LogError(false, "Failed to create texture sampler!");
 		}
-	}
-
-	void TextureResource::LoadFromFile(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, std::string_view fileName)
-	{
-		if (!IsValid())
-		{
-			LogError("Attempting to load image from file, but base image has not yet been created!");
-			return;
-		}
-
-		int _width, _height, _channels;
-		stbi_uc* pixels = stbi_load(fileName.data(), &_width, &_height, &_channels, STBI_rgb_alpha);
-		if (pixels == nullptr)
-		{
-			LogError("Failed to create texture from file '%s'!", fileName.data());
-		}
-
-		width = static_cast<uint32_t>(_width);
-		height = static_cast<uint32_t>(_height);
-		mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1;
-
-		VkDeviceSize imageSize = width * height * 4;
-		/*VkBuffer stagingBuffer;
-		VkDeviceMemory stagingBufferMemory;
-		CreateBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);*/
-		StagingBuffer stagingBuffer;
-		stagingBuffer.Create(physicalDevice, logicalDevice, imageSize);
-
-		//void* data;
-		//vkMapMemory(logicalDevice, stagingBufferMemory, 0, imageSize, 0, &data);
-		//memcpy(data, pixels, static_cast<size_t>(imageSize));
-		//vkUnmapMemory(logicalDevice, stagingBufferMemory);
-		stagingBuffer.CopyIntoBuffer(logicalDevice, pixels, imageSize);
-
-		// Now that we've copied over the texture data to the staging buffer, we don't need the original pixels array anymore
-		stbi_image_free(pixels);
-
-		TransitionLayout(logicalDevice, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-		CopyFromBuffer(logicalDevice, stagingBuffer.GetBuffer());
-		GenerateMipmaps(physicalDevice, logicalDevice);
-
-		/*vkDestroyBuffer(logicalDevice, stagingBuffer, nullptr);
-		vkFreeMemory(logicalDevice, stagingBufferMemory, nullptr);*/
-		stagingBuffer.Destroy(logicalDevice);
 	}
 
 	void TextureResource::CopyFromBuffer(VkDevice logicalDevice, VkBuffer buffer)
