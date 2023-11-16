@@ -45,8 +45,6 @@
 #include "queue_family_indices.h"
 #include "utils/file_utils.h"
 
-static constexpr uint32_t WINDOW_WIDTH = 1920;
-static constexpr uint32_t WINDOW_HEIGHT = 1080;
 static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
 static constexpr uint32_t MAX_ASSET_COUNT = 100;
 
@@ -1035,9 +1033,17 @@ namespace TANG
 
 		vkGetSwapchainImagesKHR(logicalDevice, swapChain, &imageCount, swapChainImages.data());
 
+		BaseImageCreateInfo imageInfo{};
+		imageInfo.width = framebufferWidth;
+		imageInfo.height = framebufferHeight;
+		imageInfo.format = surfaceFormat.format;
+		imageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+		imageInfo.mipLevels = 1;
+		imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+
 		for (uint32_t i = 0; i < GetSWIDDSize(); i++)
 		{
-			swapChainImageDependentData[i].swapChainImage.CreateBaseImage(physicalDevice, logicalDevice, surfaceFormat.format, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
+			swapChainImageDependentData[i].swapChainImage.CreateBaseImage(physicalDevice, logicalDevice, imageInfo);
 			// Overwrite the base image with the one retrieved from the swap chain. 
 			// We only call CreateBaseImage() above to set the format and usage, but I don't even know if it matters, honestly
 			swapChainImageDependentData[i].swapChainImage.SetBaseImage(swapChainImages[i]);
@@ -1591,7 +1597,7 @@ namespace TANG
 	void Renderer::CreateRandomTexture()
 	{
 		// Create base image
-		randomTexture.CreateBaseImage(physicalDevice, logicalDevice, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+		randomTexture.CreateBaseImageFromFile(physicalDevice, logicalDevice, "../src/data/textures/sample/texture.jpg");
 
 		VkPhysicalDeviceProperties properties{};
 		vkGetPhysicalDeviceProperties(physicalDevice, &properties);
@@ -1608,16 +1614,21 @@ namespace TANG
 		samplerInfo.addressModeUVW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 		samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
 		randomTexture.CreateSampler(logicalDevice, samplerInfo);
-
-		// Load image from file
-		randomTexture.LoadFromFile(physicalDevice, logicalDevice, "../src/data/textures/sample/texture.jpg");
 	}
 
 	void Renderer::CreateDepthTexture()
 	{
-		// Create base image
 		VkFormat depthFormat = FindDepthFormat();
-		depthBuffer.CreateBaseImage(physicalDevice, logicalDevice, depthFormat, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
+
+		// Create base image
+		BaseImageCreateInfo imageInfo{};
+		imageInfo.width = framebufferWidth;
+		imageInfo.height = framebufferHeight;
+		imageInfo.format = depthFormat;
+		imageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+		imageInfo.mipLevels = 1;
+		imageInfo.samples = msaaSamples;
+		depthBuffer.CreateBaseImage(physicalDevice, logicalDevice, imageInfo);
 
 		// Create image view
 		ImageViewCreateInfo imageViewInfo{ VK_IMAGE_ASPECT_DEPTH_BIT };
@@ -1633,7 +1644,14 @@ namespace TANG
 	void Renderer::CreateColorTexture()
 	{
 		// Create base image
-		colorAttachment.CreateBaseImage(physicalDevice, logicalDevice, swapChainImageFormat, VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
+		BaseImageCreateInfo imageInfo{};
+		imageInfo.width = framebufferWidth;
+		imageInfo.height = framebufferHeight;
+		imageInfo.format = swapChainImageFormat;
+		imageInfo.usage = VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+		imageInfo.mipLevels = 1;
+		imageInfo.samples = msaaSamples;
+		colorAttachment.CreateBaseImage(physicalDevice, logicalDevice, imageInfo);
 
 		// Create image view
 		ImageViewCreateInfo imageViewInfo{ VK_IMAGE_ASPECT_COLOR_BIT };
@@ -1811,6 +1829,7 @@ namespace TANG
 		writeDescSets.AddUniformBuffer(currentAssetDataMap.descriptorSets[1].GetDescriptorSet(), 2, currentAssetDataMap.viewUBO.GetBuffer(), currentAssetDataMap.viewUBO.GetBufferSize(), 0);
 		writeDescSets.AddUniformBuffer(currentAssetDataMap.descriptorSets[1].GetDescriptorSet(), 0, currentAssetDataMap.cameraDataUBO.GetBuffer(), currentAssetDataMap.cameraDataUBO.GetBufferSize(), 0);
 		currentAssetDataMap.descriptorSets[1].Update(logicalDevice, writeDescSets);
+		LogError("Validation error about updating uniform buffers is in here (camera uniforms)!");
 	}
 
 	void Renderer::UpdateTransformUniformBuffer(const Transform& transform, UUID uuid)

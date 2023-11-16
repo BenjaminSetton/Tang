@@ -89,11 +89,10 @@ namespace TANG
 			LogError("Failed to create texture from file '%s'!", fileName.data());
 		}
 
-		width = static_cast<uint32_t>(_width);
-		height = static_cast<uint32_t>(_height);
-		mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1;
+		//width = static_cast<uint32_t>(_width);
+		//height = static_cast<uint32_t>(_height);
 
-		VkDeviceSize imageSize = width * height * 4;
+		VkDeviceSize imageSize = _width * _height * 4;
 		/*VkBuffer stagingBuffer;
 		VkDeviceMemory stagingBufferMemory;
 		CreateBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);*/
@@ -109,9 +108,21 @@ namespace TANG
 		// Now that we've copied over the texture data to the staging buffer, we don't need the original pixels array anymore
 		stbi_image_free(pixels);
 
+		// Calculate amount of mipmaps
+		double exactMips = log2(std::min(_width, _height));
+		if ((exactMips - std::trunc(exactMips)) != 0)
+		{
+			LogWarning("Texture '%s' has dimensions which are not a power-of-two (%u, %u)! This will generate inefficient mip-maps", fileName.data(), _width, _height);
+		}
+		/*mipLevels = static_cast<uint32_t>(exactMips);*/
+
 		BaseImageCreateInfo baseImageInfo{};
-		// TODO - Fill out
-		TNG_TODO();
+		baseImageInfo.width = _width;
+		baseImageInfo.height = _height;
+		baseImageInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
+		baseImageInfo.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+		baseImageInfo.mipLevels = static_cast<uint32_t>(exactMips);
+		baseImageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 		CreateBaseImage_Helper(physicalDevice, logicalDevice, baseImageInfo);
 
 		TransitionLayout(logicalDevice, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
@@ -242,7 +253,7 @@ namespace TANG
 		imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 		imageInfo.usage = baseImageInfo.usage;
 		imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-		imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+		imageInfo.samples = baseImageInfo.samples;
 
 		if (vkCreateImage(logicalDevice, &imageInfo, nullptr, &baseImage) != VK_SUCCESS)
 		{
@@ -264,6 +275,9 @@ namespace TANG
 
 		vkBindImageMemory(logicalDevice, baseImage, imageMemory, 0);
 
+		width = baseImageInfo.width;
+		height = baseImageInfo.height;
+		mipLevels = baseImageInfo.mipLevels;
 		format = baseImageInfo.format;
 		isValid = true;
 	}

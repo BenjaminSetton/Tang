@@ -20,17 +20,20 @@ namespace TANG
 	// This exists for the same reasons listed above.
 	struct SamplerCreateInfo
 	{
-		VkFilter minificationFilter, magnificationFilter;
-		VkSamplerAddressMode addressModeUVW;
-		float maxAnisotropy;
+		VkFilter minificationFilter				= VK_FILTER_LINEAR;
+		VkFilter magnificationFilter			= VK_FILTER_LINEAR;
+		VkSamplerAddressMode addressModeUVW		= VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		float maxAnisotropy						= 1.0f;
 	};
 
 	struct BaseImageCreateInfo
 	{
-		uint32_t width, height;
-		VkFormat format;
-		VkImageUsageFlags usage;
-		uint32_t mipLevels;
+		uint32_t width					= 0;
+		uint32_t height					= 0;
+		VkFormat format					= VK_FORMAT_R8G8B8A8_SRGB;
+		VkImageUsageFlags usage			= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+		uint32_t mipLevels				= 1;
+		VkSampleCountFlagBits samples	= VK_SAMPLE_COUNT_1_BIT;
 	};
 
 	class TextureResource
