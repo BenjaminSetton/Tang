@@ -134,14 +134,23 @@ namespace TANG
 		stagingBuffer.Destroy(logicalDevice);
 	}
 
-	void TextureResource::Destroy(VkDevice logicalDevice)
+	void TextureResource::DestroyAll(VkDevice logicalDevice)
 	{
-		vkDestroySampler(logicalDevice, sampler, nullptr);
-		vkDestroyImageView(logicalDevice, imageView, nullptr);
-		vkDestroyImage(logicalDevice, baseImage, nullptr);
-		vkFreeMemory(logicalDevice, imageMemory, nullptr);
+		if (sampler != VK_NULL_HANDLE) vkDestroySampler(logicalDevice, sampler, nullptr);
+		if (imageView != VK_NULL_HANDLE) vkDestroyImageView(logicalDevice, imageView, nullptr);
+		if (baseImage != VK_NULL_HANDLE) vkDestroyImage(logicalDevice, baseImage, nullptr);
+		if (imageMemory != VK_NULL_HANDLE) vkFreeMemory(logicalDevice, imageMemory, nullptr);
 
 		ResetMembers();
+	}
+
+	void TextureResource::DestroyImageView(VkDevice logicalDevice)
+	{
+		if (imageView != VK_NULL_HANDLE)
+		{
+			vkDestroyImageView(logicalDevice, imageView, nullptr);
+			imageView = VK_NULL_HANDLE;
+		}
 	}
 
 	void TextureResource::TransitionLayout(VkDevice logicalDevice, VkImageLayout destinationLayout)
@@ -233,11 +242,6 @@ namespace TANG
 		return isValid;
 	}
 
-	void TextureResource::SetBaseImage(VkImage image)
-	{
-		baseImage = image;
-	}
-
 	void TextureResource::CreateBaseImage_Helper(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, const BaseImageCreateInfo& baseImageInfo)
 	{
 		VkImageCreateInfo imageInfo{};
@@ -298,6 +302,25 @@ namespace TANG
 		createInfo.subresourceRange.aspectMask = viewInfo.aspect;
 		createInfo.subresourceRange.baseMipLevel = 0;
 		createInfo.subresourceRange.levelCount = mipLevels;
+		createInfo.subresourceRange.baseArrayLayer = 0;
+		createInfo.subresourceRange.layerCount = 1;
+
+		if (vkCreateImageView(logicalDevice, &createInfo, nullptr, &imageView) != VK_SUCCESS)
+		{
+			LogError(false, "Failed to create texture image view!");
+		}
+	}
+
+	void TextureResource::CreateImageViewFromBase(VkDevice logicalDevice, VkImage _baseImage, VkFormat _format, uint32_t _mipLevels, VkImageAspectFlags _aspect)
+	{
+		VkImageViewCreateInfo createInfo{};
+		createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		createInfo.image = _baseImage;
+		createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		createInfo.format = _format;
+		createInfo.subresourceRange.aspectMask = _aspect;
+		createInfo.subresourceRange.baseMipLevel = 0;
+		createInfo.subresourceRange.levelCount = _mipLevels;
 		createInfo.subresourceRange.baseArrayLayer = 0;
 		createInfo.subresourceRange.layerCount = 1;
 

@@ -137,9 +137,7 @@ namespace TANG
 		void CreateLogicalDevice();
 
 		void CreateSwapChain();
-
-		// Create image views for all images on the swap chain
-		void CreateImageViews();
+		void CreateSwapChainImageViews(uint32_t imageCount);
 
 		// This is a helper function for creating the "VkShaderModule" wrappers around
 		// the shader code, read from createGraphicsPipeline() below
@@ -170,8 +168,6 @@ namespace TANG
 		void CreateDescriptorPool();
 
 		void CreateDescriptorSets(UUID uuid);
-
-		VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels);
 
 		void CreateRandomTexture();
 		void CreateDepthTexture();

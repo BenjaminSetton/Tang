@@ -49,18 +49,22 @@ namespace TANG
 		void CreateBaseImage(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, const BaseImageCreateInfo& baseImageInfo);
 		void CreateBaseImageFromFile(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, std::string_view fileName);
 
+		// Create image view from a previously-created base image (through CreateBaseImage or CreateBaseImageFromFile)
 		void CreateImageView(VkDevice logicalDevice, const ImageViewCreateInfo& viewInfo);
+
+		// Create image view from a provided base image. This is used to create an image into the swapchain's provided base images, since
+		// we don't want to create our own base images in this case
+		void CreateImageViewFromBase(VkDevice logicalDevice, VkImage baseImage, VkFormat format, uint32_t mipLevels, VkImageAspectFlags aspect);
+
 		void CreateSampler(VkDevice logicalDevice, const SamplerCreateInfo& samplerInfo);
 
-		void Destroy(VkDevice logicalDevice);
+		void DestroyAll(VkDevice logicalDevice);
+		void DestroyImageView(VkDevice logicalDevice);
 
 		void TransitionLayout(VkDevice logicalDevice, VkImageLayout destinationLayout);
 
 		VkImageView GetImageView() const;
 		bool IsValid() const;
-
-		// Do not use unless it's a very specific case. This is used pretty much only for the swapchain images!
-		void SetBaseImage(VkImage image);
 
 	private:
 

@@ -420,7 +420,6 @@ namespace TANG
 		CleanupSwapChain();
 
 		CreateSwapChain();
-		CreateImageViews();
 		CreateColorTexture();
 		CreateDepthTexture();
 		CreateFramebuffers();
@@ -440,7 +439,6 @@ namespace TANG
 		PickPhysicalDevice();
 		CreateLogicalDevice();
 		CreateSwapChain();
-		CreateImageViews();
 		CreateDescriptorSetLayouts();
 		CreateDescriptorPool();
 		CreateRenderPass();
@@ -462,8 +460,7 @@ namespace TANG
 
 		CleanupSwapChain();
 
-		randomTexture.Destroy(logicalDevice);
-		depthBuffer.Destroy(logicalDevice);
+		randomTexture.DestroyAll(logicalDevice);
 
 		setLayoutCache.DestroyLayouts(logicalDevice);
 
@@ -1026,44 +1023,28 @@ namespace TANG
 			TNG_ASSERT_MSG(false, "Failed to create swap chain!");
 		}
 
+		// Get the number of images, then we use the count to create the image views below
 		vkGetSwapchainImagesKHR(logicalDevice, swapChain, &imageCount, nullptr);
 
+		swapChainImageFormat = surfaceFormat.format;
+		swapChainExtent = extent;
+
+		CreateSwapChainImageViews(imageCount);
+	}
+
+	// Create image views for all images on the swap chain
+	void Renderer::CreateSwapChainImageViews(uint32_t imageCount)
+	{
 		swapChainImageDependentData.resize(imageCount);
 		std::vector<VkImage> swapChainImages(imageCount);
 
 		vkGetSwapchainImagesKHR(logicalDevice, swapChain, &imageCount, swapChainImages.data());
 
-		BaseImageCreateInfo imageInfo{};
-		imageInfo.width = framebufferWidth;
-		imageInfo.height = framebufferHeight;
-		imageInfo.format = surfaceFormat.format;
-		imageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-		imageInfo.mipLevels = 1;
-		imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-
-		for (uint32_t i = 0; i < GetSWIDDSize(); i++)
+		for (uint32_t i = 0; i < imageCount; i++)
 		{
-			swapChainImageDependentData[i].swapChainImage.CreateBaseImage(physicalDevice, logicalDevice, imageInfo);
-			// Overwrite the base image with the one retrieved from the swap chain. 
-			// We only call CreateBaseImage() above to set the format and usage, but I don't even know if it matters, honestly
-			swapChainImageDependentData[i].swapChainImage.SetBaseImage(swapChainImages[i]);
+			swapChainImageDependentData[i].swapChainImage.CreateImageViewFromBase(logicalDevice, swapChainImages[i], swapChainImageFormat, 1, VK_IMAGE_ASPECT_COLOR_BIT);
 		}
 		swapChainImages.clear();
-
-		swapChainImageFormat = surfaceFormat.format;
-		swapChainExtent = extent;
-	}
-
-	// Create image views for all images on the swap chain
-	void Renderer::CreateImageViews()
-	{
-		ImageViewCreateInfo imageViewInfo{ VK_IMAGE_ASPECT_COLOR_BIT };
-
-		auto& swidd = swapChainImageDependentData;
-		for (size_t i = 0; i < GetSWIDDSize(); i++)
-		{
-			swidd[i].swapChainImage.CreateImageView(logicalDevice, imageViewInfo);
-		}
 	}
 
 	// This is a helper function for creating the "VkShaderModule" wrappers around
@@ -1571,29 +1552,6 @@ namespace TANG
 
 	}
 
-	VkImageView Renderer::CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels)
-	{
-		//VkImageViewCreateInfo createInfo{};
-		//createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-		//createInfo.image = image;
-		//createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-		//createInfo.format = format;
-		//createInfo.subresourceRange.aspectMask = aspectFlags;
-		//createInfo.subresourceRange.baseMipLevel = 0;
-		//createInfo.subresourceRange.levelCount = mipLevels;
-		//createInfo.subresourceRange.baseArrayLayer = 0;
-		//createInfo.subresourceRange.layerCount = 1;
-
-		//VkImageView imageView;
-		//if (vkCreateImageView(logicalDevice, &createInfo, nullptr, &imageView) != VK_SUCCESS)
-		//{
-		//	LogError("Failed to create texture image view!");
-		//}
-
-		//return imageView;
-		return {};
-	}
-
 	void Renderer::CreateRandomTexture()
 	{
 		// Create base image
@@ -1762,8 +1720,8 @@ namespace TANG
 
 	void Renderer::CleanupSwapChain()
 	{
-		colorAttachment.Destroy(logicalDevice);
-		depthBuffer.Destroy(logicalDevice);
+		colorAttachment.DestroyAll(logicalDevice);
+		depthBuffer.DestroyAll(logicalDevice);
 
 		for (auto& swidd : swapChainImageDependentData)
 		{
@@ -1772,8 +1730,7 @@ namespace TANG
 
 		for (auto& swidd : swapChainImageDependentData)
 		{
-			swidd.swapChainImage.Destroy(logicalDevice);
-			//vkDestroyImageView(logicalDevice, swidd.swapChainImageView, nullptr);
+			swidd.swapChainImage.DestroyImageView(logicalDevice);
 		}
 
 		// Clean up the secondary commands buffers that reference the swap chain framebuffers
@@ -1829,7 +1786,7 @@ namespace TANG
 		writeDescSets.AddUniformBuffer(currentAssetDataMap.descriptorSets[1].GetDescriptorSet(), 2, currentAssetDataMap.viewUBO.GetBuffer(), currentAssetDataMap.viewUBO.GetBufferSize(), 0);
 		writeDescSets.AddUniformBuffer(currentAssetDataMap.descriptorSets[1].GetDescriptorSet(), 0, currentAssetDataMap.cameraDataUBO.GetBuffer(), currentAssetDataMap.cameraDataUBO.GetBufferSize(), 0);
 		currentAssetDataMap.descriptorSets[1].Update(logicalDevice, writeDescSets);
-		LogError("Validation error about updating uniform buffers is in here (camera uniforms)!");
+		//LogError("Validation error about updating uniform buffers is in here (camera uniforms)!");
 	}
 
 	void Renderer::UpdateTransformUniformBuffer(const Transform& transform, UUID uuid)
