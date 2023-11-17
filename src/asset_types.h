@@ -9,6 +9,7 @@
 
 #include "data_buffer/vertex_buffer.h"
 #include "data_buffer/index_buffer.h"
+#include "texture_resource.h"
 
 typedef uint32_t IndexType;
 
@@ -64,7 +65,7 @@ namespace TANG
 	//        very often, so best-case scenario is that it has a look-up complexity closest to O(1)
 	struct Texture
 	{
-		Texture() : data(nullptr), size(0, 0), bytesPerPixel(0)
+		Texture() : data(nullptr), size(0, 0), bytesPerPixel(0), fileName("")
 		{
 		}
 
@@ -73,28 +74,26 @@ namespace TANG
 			delete[] data;
 			size = { 0, 0 };
 			bytesPerPixel = 0;
+			fileName = "";
 		}
 
-		Texture(const Texture& other)
+		Texture(const Texture& other) : 
+			size(other.size), bytesPerPixel(other.bytesPerPixel), fileName(other.fileName)
 		{
 			// Temporary debug :)
 			LogWarning("Deep-copying texture!");
 
 			data = new char[static_cast<uint32_t>(other.size.x) * static_cast<uint32_t>(other.size.y) * bytesPerPixel];
-			size = other.size;
-			bytesPerPixel = other.bytesPerPixel;
 		}
 
-		Texture(Texture&& other)
+		Texture(Texture&& other) : 
+			data(std::move(other.data)), size(std::move(other.size)), bytesPerPixel(std::move(other.bytesPerPixel)),
+			fileName(std::move(other.fileName))
 		{
-			// Transfer ownership of the texture data
-			data = other.data;
-			size = other.size;
-			bytesPerPixel = other.bytesPerPixel;
-
 			other.data = nullptr;
 			other.size = { 0, 0 };
 			other.bytesPerPixel = 0;
+			other.fileName = "";
 		}
 
 		Texture& operator=(const Texture& other)
@@ -108,11 +107,13 @@ namespace TANG
 			data = new char[static_cast<uint32_t>(other.size.x) * static_cast<uint32_t>(other.size.y) * bytesPerPixel];
 			size = other.size;
 			bytesPerPixel = other.bytesPerPixel;
+			fileName = other.fileName;
 		}
 
 		void* data;
 		glm::vec2 size;
 		uint32_t bytesPerPixel; // Guaranteed to be 4 by assimp loader
+		std::string fileName;
 	};
 
 	class Material
@@ -194,12 +195,9 @@ namespace TANG
 
 		bool HasTextureOfType(const TEXTURE_TYPE type)
 		{
-			for (uint32_t i = 0; i < static_cast<uint32_t>(TEXTURE_TYPE::_COUNT); i++)
-			{
-				if (static_cast<TEXTURE_TYPE>(i) == type) return textures[i] != nullptr;
-			}
+			if (type == TEXTURE_TYPE::_COUNT) return false;
 
-			return false;
+			return textures[static_cast<uint32_t>(type)] != nullptr;
 		}
 
 		Texture* GetTextureOfType(const TEXTURE_TYPE type)
@@ -267,6 +265,7 @@ namespace TANG
 		std::vector<uint32_t> offsets;				// Describes the offsets into a single combined buffer of vertex buffers, and the length of the offsets vector must match that of the vertex buffer vector!
 		IndexBuffer indexBuffer;
 		uint64_t indexCount = 0;					// Used when calling vkCmdDrawIndexed
+		std::vector<TextureResource> material;		// Every entry in this vector corresponds to a type of texture, specifically from Material::TEXTURE_TYPE
 
 		// NOTE - The API user must update and keep track of the transform data for the assets,
 		//        and pass it to the renderer every frame for drawing. The design decision behind

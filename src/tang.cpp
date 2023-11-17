@@ -15,8 +15,6 @@ namespace TANG
 	// TODO - Maybe move this to a config?
 	static constexpr uint32_t WINDOW_WIDTH = 1920;
 	static constexpr uint32_t WINDOW_HEIGHT = 1080;
-
-	// Static global handles
 	static FreeflyCamera camera;
 
 	///////////////////////////////////////////////////////////

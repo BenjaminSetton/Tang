@@ -119,7 +119,7 @@ namespace TANG
 			// Check that we have at least one mesh
 			if (numMeshes < 1)
 			{
-				LogWarning("Failed to load asset! At least one mesh is required");
+				LogWarning("Failed to load asset from file '%s'! At least one mesh is required", filePath);
 				return nullptr;
 			}
 
@@ -233,6 +233,7 @@ namespace TANG
 							tex->data = pixels;
 							tex->size = { width, height }; // NOTE - We don't support 3D textures!
 							tex->bytesPerPixel = 32;
+							tex->fileName = textureSourceFilePathStr;
 
 							auto texTypeIter = aiTextureToInternal.find(aiType);
 							if (texTypeIter == aiTextureToInternal.end())

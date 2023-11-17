@@ -228,7 +228,6 @@ namespace TANG
 		AssetResources& resources = assetResources.back();
 
 		uint32_t meshCount = static_cast<uint32_t>(asset->meshes.size());
-
 		TNG_ASSERT_MSG(meshCount == 1, "Multiple meshes per asset is not currently supported!");
 
 		// Resize the vertex buffer and offset vector to the number of meshes
@@ -238,6 +237,11 @@ namespace TANG
 		uint64_t totalIndexCount = 0;
 		uint32_t vBufferOffset = 0;
 
+		//////////////////////////////
+		//
+		//	MESH
+		//
+		//////////////////////////////
 		for (uint32_t i = 0; i < meshCount; i++)
 		{
 			Mesh& currMesh = asset->meshes[i];
@@ -273,6 +277,44 @@ namespace TANG
 
 			// Set the current offset and then increment
 			resources.offsets[i] = vBufferOffset++;
+		}
+
+		//////////////////////////////
+		//
+		//	MATERIAL
+		//
+		//////////////////////////////
+		uint32_t numMaterials = static_cast<uint32_t>(asset->materials.size());
+		if (numMaterials > 0)
+		{
+			TNG_ASSERT_MSG(numMaterials == 1, "Multiple materials per asset are not currently supported!");
+			Material& material = asset->materials[0];
+
+			// Resize to the number of possible texture types
+			resources.material.resize(static_cast<uint32_t>(Material::TEXTURE_TYPE::_COUNT));
+
+			// Pre-emptively fill out the texture create info, so we can just pass it to all CreateFromFile() calls
+			SamplerCreateInfo samplerInfo{};
+			samplerInfo.minificationFilter = VK_FILTER_LINEAR;
+			samplerInfo.magnificationFilter = VK_FILTER_LINEAR;
+			samplerInfo.addressModeUVW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+			samplerInfo.maxAnisotropy = 1.0f; // Is this an appropriate value??
+
+			ImageViewCreateInfo viewCreateInfo{};
+			viewCreateInfo.aspect = VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
+
+			for (uint32_t i = 0; i < static_cast<uint32_t>(Material::TEXTURE_TYPE::_COUNT); i++)
+			{
+				Material::TEXTURE_TYPE texType = static_cast<Material::TEXTURE_TYPE>(i);
+				if (material.HasTextureOfType(texType))
+				{
+					Texture* matTexture = material.GetTextureOfType(texType);
+					TNG_ASSERT_MSG(matTexture != nullptr, "Why is this texture nullptr when we specifically checked against it?");
+
+					TextureResource& texResource = resources.material[i];
+					texResource.CreateFromFile(physicalDevice, logicalDevice, matTexture->fileName, &viewCreateInfo, &samplerInfo);
+				}
+			}
 		}
 
 		// Insert the asset's uuid into the assetDrawState map. We do not render it
@@ -341,6 +383,12 @@ namespace TANG
 
 		// Destroy the index buffer
 		resources.indexBuffer.Destroy(logicalDevice);
+
+		// Destroy textures
+		for (auto& tex : resources.material)
+		{
+			tex.Destroy(logicalDevice);
+		}
 	}
 
 	PrimaryCommandBuffer* Renderer::GetCurrentPrimaryBuffer()
@@ -460,7 +508,7 @@ namespace TANG
 
 		CleanupSwapChain();
 
-		randomTexture.DestroyAll(logicalDevice);
+		randomTexture.Destroy(logicalDevice);
 
 		setLayoutCache.DestroyLayouts(logicalDevice);
 
@@ -953,8 +1001,10 @@ namespace TANG
 
 		if (enableValidationLayers)
 		{
-			createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
-			createInfo.ppEnabledLayerNames = validationLayers.data();
+			// We get a warning about using deprecated and ignored 'ppEnabledLayerNames', so I've commented these out.
+			// It looks like validation layers work regardless...somehow...
+			//createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
+			//createInfo.ppEnabledLayerNames = validationLayers.data();
 		}
 		else
 		{
@@ -1554,31 +1604,27 @@ namespace TANG
 
 	void Renderer::CreateRandomTexture()
 	{
-		// Create base image
-		randomTexture.CreateBaseImageFromFile(physicalDevice, logicalDevice, "../src/data/textures/sample/texture.jpg");
-
 		VkPhysicalDeviceProperties properties{};
 		vkGetPhysicalDeviceProperties(physicalDevice, &properties);
-		//textureImageView = CreateImageView(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, textureMipLevels);
 
-		// Create image view
+		// Image view
 		ImageViewCreateInfo viewInfo{ VK_IMAGE_ASPECT_COLOR_BIT };
-		randomTexture.CreateImageView(logicalDevice, viewInfo);
 
-		// Create sampler
+		// Sampler
 		SamplerCreateInfo samplerInfo{};
 		samplerInfo.magnificationFilter = VK_FILTER_LINEAR;
 		samplerInfo.minificationFilter = VK_FILTER_LINEAR;
 		samplerInfo.addressModeUVW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 		samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
-		randomTexture.CreateSampler(logicalDevice, samplerInfo);
+
+		randomTexture.CreateFromFile(physicalDevice, logicalDevice, "../src/data/textures/sample/texture.jpg", &viewInfo, &samplerInfo);
 	}
 
 	void Renderer::CreateDepthTexture()
 	{
 		VkFormat depthFormat = FindDepthFormat();
 
-		// Create base image
+		// Base image
 		BaseImageCreateInfo imageInfo{};
 		imageInfo.width = framebufferWidth;
 		imageInfo.height = framebufferHeight;
@@ -1586,22 +1632,16 @@ namespace TANG
 		imageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 		imageInfo.mipLevels = 1;
 		imageInfo.samples = msaaSamples;
-		depthBuffer.CreateBaseImage(physicalDevice, logicalDevice, imageInfo);
 
-		// Create image view
+		// Image view
 		ImageViewCreateInfo imageViewInfo{ VK_IMAGE_ASPECT_DEPTH_BIT };
-		depthBuffer.CreateImageView(logicalDevice, imageViewInfo);
 
-
-		//CreateImage(swapChainExtent.width, swapChainExtent.height, 1, msaaSamples, depthFormat, VK_IMAGE_TILING_OPTIMAL,
-		//	VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-		//	depthImage, depthImageMemory);
-		//depthImageView = CreateImageView(depthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
+		depthBuffer.Create(physicalDevice, logicalDevice, &imageInfo, &imageViewInfo);
 	}
 
 	void Renderer::CreateColorTexture()
 	{
-		// Create base image
+		// Base image
 		BaseImageCreateInfo imageInfo{};
 		imageInfo.width = framebufferWidth;
 		imageInfo.height = framebufferHeight;
@@ -1609,17 +1649,11 @@ namespace TANG
 		imageInfo.usage = VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 		imageInfo.mipLevels = 1;
 		imageInfo.samples = msaaSamples;
-		colorAttachment.CreateBaseImage(physicalDevice, logicalDevice, imageInfo);
 
-		// Create image view
+		// Image view
 		ImageViewCreateInfo imageViewInfo{ VK_IMAGE_ASPECT_COLOR_BIT };
-		colorAttachment.CreateImageView(logicalDevice, imageViewInfo);
 
-
-		//CreateImage(swapChainExtent.width, swapChainExtent.height, 1, msaaSamples, colorFormat,
-		//	VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-		//	VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, colorImage, colorImageMemory);
-		//colorImageView = CreateImageView(colorImage, colorFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+		colorAttachment.Create(physicalDevice, logicalDevice, &imageInfo, &imageViewInfo);
 	}
 
 	void Renderer::RecordPrimaryCommandBuffer(uint32_t frameBufferIndex)
@@ -1720,8 +1754,8 @@ namespace TANG
 
 	void Renderer::CleanupSwapChain()
 	{
-		colorAttachment.DestroyAll(logicalDevice);
-		depthBuffer.DestroyAll(logicalDevice);
+		colorAttachment.Destroy(logicalDevice);
+		depthBuffer.Destroy(logicalDevice);
 
 		for (auto& swidd : swapChainImageDependentData)
 		{
@@ -1786,7 +1820,6 @@ namespace TANG
 		writeDescSets.AddUniformBuffer(currentAssetDataMap.descriptorSets[1].GetDescriptorSet(), 2, currentAssetDataMap.viewUBO.GetBuffer(), currentAssetDataMap.viewUBO.GetBufferSize(), 0);
 		writeDescSets.AddUniformBuffer(currentAssetDataMap.descriptorSets[1].GetDescriptorSet(), 0, currentAssetDataMap.cameraDataUBO.GetBuffer(), currentAssetDataMap.cameraDataUBO.GetBufferSize(), 0);
 		currentAssetDataMap.descriptorSets[1].Update(logicalDevice, writeDescSets);
-		//LogError("Validation error about updating uniform buffers is in here (camera uniforms)!");
 	}
 
 	void Renderer::UpdateTransformUniformBuffer(const Transform& transform, UUID uuid)

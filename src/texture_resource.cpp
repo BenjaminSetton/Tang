@@ -75,66 +75,21 @@ namespace TANG
 		return *this;
 	}
 
-	void TextureResource::CreateBaseImage(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, const BaseImageCreateInfo& baseImageInfo)
+	void TextureResource::Create(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, const BaseImageCreateInfo* baseImageInfo, const ImageViewCreateInfo* viewInfo, const SamplerCreateInfo* samplerInfo)
 	{
-		CreateBaseImage_Helper(physicalDevice, logicalDevice, baseImageInfo);
+		if(baseImageInfo != nullptr) CreateBaseImage_Helper(physicalDevice, logicalDevice, baseImageInfo);
+		if(viewInfo != nullptr)      CreateImageView(logicalDevice, viewInfo);
+		if(samplerInfo != nullptr)   CreateSampler(logicalDevice, samplerInfo);
 	}
 
-	void TextureResource::CreateBaseImageFromFile(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, std::string_view fileName)
+	void TextureResource::CreateFromFile(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, std::string_view fileName, const ImageViewCreateInfo* viewInfo, const SamplerCreateInfo* samplerInfo)
 	{
-		int _width, _height, _channels;
-		stbi_uc* pixels = stbi_load(fileName.data(), &_width, &_height, &_channels, STBI_rgb_alpha);
-		if (pixels == nullptr)
-		{
-			LogError("Failed to create texture from file '%s'!", fileName.data());
-		}
-
-		//width = static_cast<uint32_t>(_width);
-		//height = static_cast<uint32_t>(_height);
-
-		VkDeviceSize imageSize = _width * _height * 4;
-		/*VkBuffer stagingBuffer;
-		VkDeviceMemory stagingBufferMemory;
-		CreateBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);*/
-		StagingBuffer stagingBuffer;
-		stagingBuffer.Create(physicalDevice, logicalDevice, imageSize);
-
-		//void* data;
-		//vkMapMemory(logicalDevice, stagingBufferMemory, 0, imageSize, 0, &data);
-		//memcpy(data, pixels, static_cast<size_t>(imageSize));
-		//vkUnmapMemory(logicalDevice, stagingBufferMemory);
-		stagingBuffer.CopyIntoBuffer(logicalDevice, pixels, imageSize);
-
-		// Now that we've copied over the texture data to the staging buffer, we don't need the original pixels array anymore
-		stbi_image_free(pixels);
-
-		// Calculate amount of mipmaps
-		double exactMips = log2(std::min(_width, _height));
-		if ((exactMips - std::trunc(exactMips)) != 0)
-		{
-			LogWarning("Texture '%s' has dimensions which are not a power-of-two (%u, %u)! This will generate inefficient mip-maps", fileName.data(), _width, _height);
-		}
-		/*mipLevels = static_cast<uint32_t>(exactMips);*/
-
-		BaseImageCreateInfo baseImageInfo{};
-		baseImageInfo.width = _width;
-		baseImageInfo.height = _height;
-		baseImageInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
-		baseImageInfo.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-		baseImageInfo.mipLevels = static_cast<uint32_t>(exactMips);
-		baseImageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-		CreateBaseImage_Helper(physicalDevice, logicalDevice, baseImageInfo);
-
-		TransitionLayout(logicalDevice, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-		CopyFromBuffer(logicalDevice, stagingBuffer.GetBuffer());
-		GenerateMipmaps(physicalDevice, logicalDevice);
-
-		/*vkDestroyBuffer(logicalDevice, stagingBuffer, nullptr);
-		vkFreeMemory(logicalDevice, stagingBufferMemory, nullptr);*/
-		stagingBuffer.Destroy(logicalDevice);
+		CreateBaseImageFromFile(physicalDevice, logicalDevice, fileName);
+		if(viewInfo != nullptr) CreateImageView(logicalDevice, viewInfo);
+		if(samplerInfo != nullptr) CreateSampler(logicalDevice, samplerInfo);
 	}
 
-	void TextureResource::DestroyAll(VkDevice logicalDevice)
+	void TextureResource::Destroy(VkDevice logicalDevice)
 	{
 		if (sampler != VK_NULL_HANDLE) vkDestroySampler(logicalDevice, sampler, nullptr);
 		if (imageView != VK_NULL_HANDLE) vkDestroyImageView(logicalDevice, imageView, nullptr);
@@ -242,22 +197,118 @@ namespace TANG
 		return isValid;
 	}
 
-	void TextureResource::CreateBaseImage_Helper(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, const BaseImageCreateInfo& baseImageInfo)
+	void TextureResource::CreateBaseImage(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, const BaseImageCreateInfo* baseImageInfo)
+	{
+		CreateBaseImage_Helper(physicalDevice, logicalDevice, baseImageInfo);
+	}
+
+	void TextureResource::CreateBaseImageFromFile(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, std::string_view fileName)
+	{
+		int _width, _height, _channels;
+		stbi_uc* pixels = stbi_load(fileName.data(), &_width, &_height, &_channels, STBI_rgb_alpha);
+		if (pixels == nullptr)
+		{
+			LogError("Failed to create texture from file '%s'!", fileName.data());
+		}
+
+		VkDeviceSize imageSize = _width * _height * 4;
+		StagingBuffer stagingBuffer;
+		stagingBuffer.Create(physicalDevice, logicalDevice, imageSize);
+		stagingBuffer.CopyIntoBuffer(logicalDevice, pixels, imageSize);
+
+		// Now that we've copied over the texture data to the staging buffer, we don't need the original pixels array anymore
+		stbi_image_free(pixels);
+
+		// Calculate amount of mipmaps
+		double exactMips = log2(std::min(_width, _height));
+		if ((exactMips - std::trunc(exactMips)) != 0)
+		{
+			LogWarning("Texture '%s' has dimensions which are not a power-of-two (%u, %u)! This will generate inefficient mip-maps", fileName.data(), _width, _height);
+		}
+
+		BaseImageCreateInfo baseImageInfo{};
+		baseImageInfo.width = _width;
+		baseImageInfo.height = _height;
+		baseImageInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
+		baseImageInfo.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+		baseImageInfo.mipLevels = static_cast<uint32_t>(exactMips);
+		baseImageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+		CreateBaseImage_Helper(physicalDevice, logicalDevice, &baseImageInfo);
+
+		TransitionLayout(logicalDevice, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+		CopyFromBuffer(logicalDevice, stagingBuffer.GetBuffer());
+		GenerateMipmaps(physicalDevice, logicalDevice);
+
+		stagingBuffer.Destroy(logicalDevice);
+	}
+
+	void TextureResource::CreateImageView(VkDevice logicalDevice, const ImageViewCreateInfo* viewInfo)
+	{
+		if (!IsValid())
+		{
+			LogError("Attempting to create image view, but base image has not yet been created!");
+			return;
+		}
+
+		VkImageViewCreateInfo createInfo{};
+		createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		createInfo.image = baseImage;
+		createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		createInfo.format = format;
+		createInfo.subresourceRange.aspectMask = viewInfo->aspect;
+		createInfo.subresourceRange.baseMipLevel = 0;
+		createInfo.subresourceRange.levelCount = mipLevels;
+		createInfo.subresourceRange.baseArrayLayer = 0;
+		createInfo.subresourceRange.layerCount = 1;
+
+		if (vkCreateImageView(logicalDevice, &createInfo, nullptr, &imageView) != VK_SUCCESS)
+		{
+			LogError(false, "Failed to create texture image view!");
+		}
+	}
+
+	void TextureResource::CreateSampler(VkDevice logicalDevice, const SamplerCreateInfo* samplerInfo)
+	{
+		VkSamplerCreateInfo createInfo{};
+		createInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+		createInfo.magFilter = samplerInfo->magnificationFilter;
+		createInfo.minFilter = samplerInfo->minificationFilter;
+		createInfo.addressModeU = samplerInfo->addressModeUVW;
+		createInfo.addressModeV = samplerInfo->addressModeUVW;
+		createInfo.addressModeW = samplerInfo->addressModeUVW;
+		createInfo.anisotropyEnable = VK_TRUE;
+		createInfo.maxAnisotropy = samplerInfo->maxAnisotropy;
+		createInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+		createInfo.unnormalizedCoordinates = VK_FALSE;
+		createInfo.compareEnable = VK_FALSE;
+		createInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+		createInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+		createInfo.mipLodBias = 0.0f;
+		createInfo.minLod = 0.0f;
+		createInfo.maxLod = static_cast<float>(mipLevels);
+
+		if (vkCreateSampler(logicalDevice, &createInfo, nullptr, &sampler) != VK_SUCCESS)
+		{
+			LogError(false, "Failed to create texture sampler!");
+		}
+	}
+
+	void TextureResource::CreateBaseImage_Helper(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, const BaseImageCreateInfo* baseImageInfo)
 	{
 		VkImageCreateInfo imageInfo{};
 		imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 		imageInfo.imageType = VK_IMAGE_TYPE_2D;
-		imageInfo.extent.width = baseImageInfo.width;
-		imageInfo.extent.height = baseImageInfo.height;
+		imageInfo.extent.width = baseImageInfo->width;
+		imageInfo.extent.height = baseImageInfo->height;
 		imageInfo.extent.depth = 1;
-		imageInfo.mipLevels = baseImageInfo.mipLevels;
+		imageInfo.mipLevels = baseImageInfo->mipLevels;
 		imageInfo.arrayLayers = 1;
-		imageInfo.format = baseImageInfo.format;
+		imageInfo.format = baseImageInfo->format;
 		imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
 		imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		imageInfo.usage = baseImageInfo.usage;
+		imageInfo.usage = baseImageInfo->usage;
 		imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-		imageInfo.samples = baseImageInfo.samples;
+		imageInfo.samples = baseImageInfo->samples;
 
 		if (vkCreateImage(logicalDevice, &imageInfo, nullptr, &baseImage) != VK_SUCCESS)
 		{
@@ -279,36 +330,11 @@ namespace TANG
 
 		vkBindImageMemory(logicalDevice, baseImage, imageMemory, 0);
 
-		width = baseImageInfo.width;
-		height = baseImageInfo.height;
-		mipLevels = baseImageInfo.mipLevels;
-		format = baseImageInfo.format;
+		width = baseImageInfo->width;
+		height = baseImageInfo->height;
+		mipLevels = baseImageInfo->mipLevels;
+		format = baseImageInfo->format;
 		isValid = true;
-	}
-
-	void TextureResource::CreateImageView(VkDevice logicalDevice, const ImageViewCreateInfo& viewInfo)
-	{
-		if (!IsValid())
-		{
-			LogError("Attempting to create image view, but base image has not yet been created!");
-			return;
-		}
-
-		VkImageViewCreateInfo createInfo{};
-		createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-		createInfo.image = baseImage;
-		createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-		createInfo.format = format;
-		createInfo.subresourceRange.aspectMask = viewInfo.aspect;
-		createInfo.subresourceRange.baseMipLevel = 0;
-		createInfo.subresourceRange.levelCount = mipLevels;
-		createInfo.subresourceRange.baseArrayLayer = 0;
-		createInfo.subresourceRange.layerCount = 1;
-
-		if (vkCreateImageView(logicalDevice, &createInfo, nullptr, &imageView) != VK_SUCCESS)
-		{
-			LogError(false, "Failed to create texture image view!");
-		}
 	}
 
 	void TextureResource::CreateImageViewFromBase(VkDevice logicalDevice, VkImage _baseImage, VkFormat _format, uint32_t _mipLevels, VkImageAspectFlags _aspect)
@@ -327,32 +353,6 @@ namespace TANG
 		if (vkCreateImageView(logicalDevice, &createInfo, nullptr, &imageView) != VK_SUCCESS)
 		{
 			LogError(false, "Failed to create texture image view!");
-		}
-	}
-
-	void TextureResource::CreateSampler(VkDevice logicalDevice, const SamplerCreateInfo& samplerInfo)
-	{
-		VkSamplerCreateInfo createInfo{};
-		createInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-		createInfo.magFilter = samplerInfo.magnificationFilter;
-		createInfo.minFilter = samplerInfo.minificationFilter;
-		createInfo.addressModeU = samplerInfo.addressModeUVW;
-		createInfo.addressModeV = samplerInfo.addressModeUVW;
-		createInfo.addressModeW = samplerInfo.addressModeUVW;
-		createInfo.anisotropyEnable = VK_TRUE;
-		createInfo.maxAnisotropy = samplerInfo.maxAnisotropy/*properties.limits.maxSamplerAnisotropy*/;
-		createInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-		createInfo.unnormalizedCoordinates = VK_FALSE;
-		createInfo.compareEnable = VK_FALSE;
-		createInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-		createInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-		createInfo.mipLodBias = 0.0f;
-		createInfo.minLod = 0.0f;
-		createInfo.maxLod = static_cast<float>(mipLevels);
-
-		if (vkCreateSampler(logicalDevice, &createInfo, nullptr, &sampler) != VK_SUCCESS)
-		{
-			LogError(false, "Failed to create texture sampler!");
 		}
 	}
 

@@ -46,19 +46,14 @@ namespace TANG
 		TextureResource(TextureResource&& other);
 		TextureResource& operator=(const TextureResource& other);
 
-		void CreateBaseImage(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, const BaseImageCreateInfo& baseImageInfo);
-		void CreateBaseImageFromFile(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, std::string_view fileName);
-
-		// Create image view from a previously-created base image (through CreateBaseImage or CreateBaseImageFromFile)
-		void CreateImageView(VkDevice logicalDevice, const ImageViewCreateInfo& viewInfo);
+		void Create(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, const BaseImageCreateInfo* baseImageInfo, const ImageViewCreateInfo* viewInfo = nullptr, const SamplerCreateInfo* samplerInfo = nullptr);
+		void CreateFromFile(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, std::string_view fileName, const ImageViewCreateInfo* viewInfo = nullptr, const SamplerCreateInfo* samplerInfo = nullptr);
 
 		// Create image view from a provided base image. This is used to create an image into the swapchain's provided base images, since
 		// we don't want to create our own base images in this case
 		void CreateImageViewFromBase(VkDevice logicalDevice, VkImage baseImage, VkFormat format, uint32_t mipLevels, VkImageAspectFlags aspect);
 
-		void CreateSampler(VkDevice logicalDevice, const SamplerCreateInfo& samplerInfo);
-
-		void DestroyAll(VkDevice logicalDevice);
+		void Destroy(VkDevice logicalDevice);
 		void DestroyImageView(VkDevice logicalDevice);
 
 		void TransitionLayout(VkDevice logicalDevice, VkImageLayout destinationLayout);
@@ -68,7 +63,15 @@ namespace TANG
 
 	private:
 
-		void CreateBaseImage_Helper(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, const BaseImageCreateInfo& baseImageInfo);
+		void CreateBaseImage(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, const BaseImageCreateInfo* baseImageInfo);
+		void CreateBaseImageFromFile(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, std::string_view fileName);
+
+		// Create image view from a previously-created base image (through CreateBaseImage or CreateBaseImageFromFile)
+		void CreateImageView(VkDevice logicalDevice, const ImageViewCreateInfo* viewInfo);
+
+		void CreateSampler(VkDevice logicalDevice, const SamplerCreateInfo* samplerInfo);
+
+		void CreateBaseImage_Helper(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, const BaseImageCreateInfo* baseImageInfo);
 
 		void CopyFromBuffer(VkDevice logicalDevice, VkBuffer buffer);
 		void GenerateMipmaps(VkPhysicalDevice physicalDevice, VkDevice logicalDevice);
