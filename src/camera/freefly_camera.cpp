@@ -118,8 +118,6 @@ namespace TANG
 
 		// Set the new matrix
 		matrix = newMatrix;
-
-		LogInfo("%2.3f, %2.3f, %2.3f", position.x, position.y, position.z);
 	}
 
 	void FreeflyCamera::Shutdown()

@@ -51,7 +51,7 @@
 #version 450
 
 #define PI 3.141592
-#define EPSILON 0.001
+#define EPSILON 0.00001
 
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inNormal;
@@ -77,7 +77,7 @@ vec3 F(float HdotV)
 {
     // baseReflectivity + ( 1 - baseReflectivity ) * ( 1 - dot( view, half ) )^5
     vec3 albedo = texture(diffuseSampler, inUV).rgb;
-    float metalness = texture(metallicSampler, inUV).r;
+    float metalness = texture(metallicSampler, inUV).b;
 
     vec3 baseReflectivity = vec3(0.04);
     baseReflectivity = mix(baseReflectivity, albedo, metalness);
@@ -119,9 +119,10 @@ vec3 CookTorrance(float NdotV, float NdotL, float HdotV, float HdotN)
     return funcNominator / max( funcDenominator, EPSILON ); // Prevent division by 0
 }
 
-vec3 CalculateSpecularBRDF(float NdotV, float NdotL, float HdotV, float HdotN, vec3 kS)
+vec3 CalculateSpecularBRDF(float NdotV, float NdotL, float HdotV, float HdotN)
 {
-    return kS * CookTorrance(NdotV, NdotL, HdotV, HdotN);
+    // NOTE - We're removing the kS term here because we already consider the fresnel factor in the CookTorrance function below
+    return CookTorrance(NdotV, NdotL, HdotV, HdotN);
 }
 
 vec3 CalculateDiffuseBRDF(vec3 kD)
@@ -133,48 +134,38 @@ vec3 CalculateDiffuseBRDF(vec3 kD)
 // NOTE - The light vector must be pointing TOWARDS the light source
 void main() 
 {
-    vec3 normal = inNormal;
-    normal = normalize( normal );
-    normal = (normal * 0.5) + 0.5;
-    vec4 finalColor = vec4(normal, 1);
+    // Calculate the normal from the normal map
+    // TODO - Orient this correctly using a TBN matrix (tangent, binormal, normal matrix)
+    vec3 normal = normalize( inNormal ); // texture(normalSampler, inUV).xyz;
+
+    //normal = normal * 2.0 - 1.0;
+    //normal = normalize( TBN_Mat * normal);
+
+    vec3 cameraPos = cameraData.position.xyz;
+    vec3 light = -normalize(vec3(0.0, 0.0, -1.0));
+    vec3 view = normalize(cameraPos - inPosition);
+    vec3 halfVector = normalize(light + view);
+
+    float NdotV = max(dot(normal, view), 0.0);
+    float NdotL = max(dot(normal, light), 0.0);
+    float HdotV = max(dot(halfVector, view), 0.0);
+    float HdotN = max(dot(halfVector, normal), 0.0);
+    float lightIntensity = 1.0; // NOTE - This is only for point / spotlights, which we do not support right now
+    float metalness = texture(metallicSampler, inUV).b;
+
+    vec3 fresnel = F(HdotV);
+    vec3 kS = fresnel;
+    vec3 kD = vec3(1.0) - kS;
+
+    // Kill diffuse component if we're dealing with a metal
+    kD *= 1.0 - metalness;
+
+    vec3 pbrColor = ( CalculateDiffuseBRDF( kD ) * CalculateSpecularBRDF( NdotV, NdotL, HdotV, HdotN ) ) * lightIntensity * NdotL;
+    
+    // TODO - HDR tone mapping would go here
+
+    // Gamma correction
+    vec4 finalColor = vec4( pow( pbrColor, vec3( 1.0 / 2.2 ) ), 1.0 );
 
     outColor = finalColor;
 }
-
-
-//void main() 
-//{
-//    // Calculate the normal from the normal map
-//    // TODO - Orient this correctly using a TBN matrix (tangent, binormal, normal matrix)
-//    vec3 normal = texture(normalSampler, inUV).xyz;
-//    normal = normal * 2.0 - 1.0;
-//    normal = normalize( TBN_Mat * normal);
-//
-//    vec3 cameraPos = cameraData.position.xyz;
-//    vec3 light = -normalize(vec3(0.0, 0.0, -1.0));
-//    vec3 view = normalize(cameraPos - inPosition);
-//    vec3 halfVector = normalize(light + view);
-//
-//    float NdotV = max(dot(normal, view), 0.0);
-//    float NdotL = max(dot(normal, light), 0.0);
-//    float HdotV = max(dot(halfVector, view), 0.0);
-//    float HdotN = max(dot(halfVector, normal), 0.0);
-//    float lightIntensity = 1.0; // texture(lightmapSampler, inUV).b;
-//    float metalness = texture(metallicSampler, inUV).r;
-//
-//    vec3 fresnel = F(HdotV);
-//    vec3 kS = fresnel;
-//    vec3 kD = 1.0 - kS;
-//
-//    // Kill diffuse component if we're dealing with a metal
-//    kD *= 1.0 - metalness;
-//
-//    vec3 pbrColor = ( CalculateDiffuseBRDF( kD ) * CalculateSpecularBRDF( NdotV, NdotL, HdotV, HdotN, kS ) ) * lightIntensity * NdotL;
-//    
-//    // TODO - HDR tone mapping would go here
-//
-//    // Gamma correction
-//    vec4 finalColor = vec4( pow( pbrColor, vec3( 1.0 / 2.2 ) ), 1.0 );
-//
-//    outColor = finalColor;
-//}
