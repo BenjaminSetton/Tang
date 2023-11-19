@@ -18,6 +18,11 @@
 #include "assimp/Importer.hpp"
 #include "assimp/postprocess.h"
 #include "utils/logger.h"
+#include "utils/sanity_check.h"
+
+// Enabling this define allows assimp to fix some common importing issues, such 
+// as inward-facing normals and other invalid data
+//#define CAREFUL_IMPORT
 
 namespace TANG
 {
@@ -104,7 +109,12 @@ namespace TANG
 		AssetDisk* Load(std::string_view filePath)
 		{
 			Assimp::Importer importer;
-			const aiScene* scene = importer.ReadFile(filePath.data(), aiProcess_Triangulate | aiProcess_FlipUVs);
+#if defined(CAREFUL_IMPORT)
+			uint32_t importFlags = aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_FixInfacingNormals | aiProcess_FindInvalidData;
+#else
+			uint32_t importFlags = aiProcess_Triangulate | aiProcess_FlipUVs;
+#endif
+			const aiScene* scene = importer.ReadFile(filePath.data(), importFlags);
 
 			if (scene == nullptr || (scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE) == 1 || scene->mRootNode == nullptr)
 			{
@@ -151,6 +161,14 @@ namespace TANG
 					vertex.pos = { importedPos.x, importedPos.y, importedPos.z };
 					vertex.normal = { importedNormal.x, importedNormal.y, importedNormal.z };
 					vertex.uv = { importedUVs.x, importedUVs.y };
+
+					const float epsilon_normal = 0.2f;
+					if ((importedNormal.x > -epsilon_normal && importedNormal.x < epsilon_normal) &&
+						(importedNormal.y > -epsilon_normal && importedNormal.y < epsilon_normal) &&
+						(importedNormal.z > -epsilon_normal && importedNormal.z < epsilon_normal))
+					{
+						LogError("wrong normal?");
+					}
 
 					mesh.vertices[j] = vertex;
 				}

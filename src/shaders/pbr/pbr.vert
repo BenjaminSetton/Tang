@@ -6,7 +6,6 @@ layout(set = 1, binding = 0) uniform ProjObject {
 
 layout(set = 2, binding = 2) uniform ViewObject {
     mat4 view;
-    mat4 proj;
 } viewUBO;
 
 layout(set = 2, binding = 0) uniform TransformObject {
@@ -28,6 +27,11 @@ void main() {
     // Calculate the output variables going to the pixel shader
     outPosition = (viewUBO.view * transformUBO.transform * vec4(inPosition, 1.0)).xyz;
 
-    outNormal = (transformUBO.transform * vec4(inNormal, 0.0)).xyz;
+    // We don't want to scale or translate our normals
+    mat4 normalMatrix = transformUBO.transform;
+    normalMatrix[0][0] = 1.0;
+    normalMatrix[1][1] = 1.0;
+    normalMatrix[2][2] = 1.0;
+    outNormal = (normalMatrix * vec4(inNormal, 0.0)).xyz;
     outUV = inUV;
 }

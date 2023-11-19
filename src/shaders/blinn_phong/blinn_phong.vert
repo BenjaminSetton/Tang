@@ -6,7 +6,6 @@ layout(set = 0, binding = 0) uniform ProjObject {
 
 layout(set = 1, binding = 2) uniform ViewObject {
     mat4 view;
-    mat4 proj;
 } viewUBO;
 
 layout(set = 1, binding = 0) uniform TransformObject {
