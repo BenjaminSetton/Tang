@@ -50,8 +50,8 @@
 
 #version 450
 
-#define PI 3.1415926538
-#define EPSILON 0.0001
+#define PI 3.141592
+#define EPSILON 0.001
 
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inNormal;
@@ -96,7 +96,7 @@ float G(float NdotV)
     float funcNominator = NdotV;
     float funcDenominator = NdotV * ( 1.0 - K ) + K;
 
-    return funcNominator / ( funcDenominator + EPSILON ); // Prevent division by 0
+    return funcNominator / max( funcDenominator, EPSILON ); // Prevent division by 0
 }
 
 // NormalDistribution (GGX - Trowbridge & Reitz)
@@ -109,14 +109,14 @@ float D(float HdotN)
     float funcNominator = pow( roughness, 2.0 );
     float funcDenominator = PI * pow( ( pow( HdotN, 2.0 ) * ( pow( roughness, 2.0 ) - 1.0 ) + 1.0 ), 2.0 );
 
-    return funcNominator / ( funcDenominator + EPSILON ); // Prevent division by 0
+    return funcNominator / max( funcDenominator, EPSILON ); // Prevent division by 0
 }
 
 vec3 CookTorrance(float NdotV, float NdotL, float HdotV, float HdotN)
 {
     vec3 funcNominator = D(HdotN) * G(NdotV) * F(HdotV);
     float funcDenominator = 4.0 * NdotL * NdotV;
-    return funcNominator / ( funcDenominator + EPSILON ); // Prevent division by 0
+    return funcNominator / max( funcDenominator, EPSILON ); // Prevent division by 0
 }
 
 vec3 CalculateSpecularBRDF(float NdotV, float NdotL, float HdotV, float HdotN, vec3 kS)
@@ -133,9 +133,16 @@ vec3 CalculateDiffuseBRDF(vec3 kD)
 // NOTE - The light vector must be pointing TOWARDS the light source
 void main() 
 {
+    // Calculate the normal from the normal map
+    // TODO - Orient this correctly using a TBN matrix (tangent, binormal, normal matrix)
+    vec3 normal = inNormal; //texture(normalSampler, inUV).xyz;
+    //normal = normal * 2.0 - 1.0;
+    normal = normalize( normal );
+    //normal = normalize( TBN_Mat * normal); // Replace the line above with this one once the TBN matrix is calculated
+
+
     vec3 cameraPos = cameraData.position.xyz;
-    vec3 normal = normalize(texture(normalSampler, inUV).xyz);
-    vec3 light = normalize(-vec3(-0.75, -1.0, 0.0));
+    vec3 light = -normalize(vec3(0.0, 0.0, -1.0));
     vec3 view = normalize(cameraPos - inPosition);
     vec3 halfVector = normalize(light + view);
 
@@ -143,17 +150,18 @@ void main()
     float NdotL = max(dot(normal, light), 0.0);
     float HdotV = max(dot(halfVector, view), 0.0);
     float HdotN = max(dot(halfVector, normal), 0.0);
-    float lightIntensity = 0.75; // texture(lightmapSampler, inUV).b;
+    float lightIntensity = 1.0; // texture(lightmapSampler, inUV).b;
     float metalness = texture(metallicSampler, inUV).r;
 
     vec3 fresnel = F(HdotV);
-    vec3 kD = fresnel;
-    vec3 kS = 1.0 - kD;
+    vec3 kS = fresnel;
+    vec3 kD = 1.0 - kS;
 
     // Kill diffuse component if we're dealing with a metal
     //kD *= 1.0 - metalness;
 
-    vec3 pbrColor = ( CalculateDiffuseBRDF( kD ) + CalculateSpecularBRDF( NdotV, NdotL, HdotV, HdotN, kS ) ) * lightIntensity * NdotL;
+    // vec3 pbrColor = ( CalculateDiffuseBRDF( kD ) * CalculateSpecularBRDF( NdotV, NdotL, HdotV, HdotN, kS ) ) * lightIntensity * NdotL;
+    vec3 pbrColor = normal;
     
     // TODO - HDR tone mapping would go here
 

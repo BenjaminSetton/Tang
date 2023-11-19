@@ -74,7 +74,7 @@ int main(uint32_t argc, const char** argv)
     }
 
     // Set the camera's velocity
-    TANG::SetCameraSpeed(10.0f);
+    TANG::SetCameraSpeed(5.0f);
     TANG::SetCameraSensitivity(5.0f);
 
     float elapsedTime = 0;
@@ -88,12 +88,12 @@ int main(uint32_t argc, const char** argv)
 
 		for (auto& asset : assets)
 		{
-            float rot[3] = {asset.rot[0], 33.0f * elapsedTime, asset.rot[2]};
+            float rot[3] = {asset.rot[0], 45.0f * elapsedTime, asset.rot[2]};
 
             TANG::UUID id = asset.uuid;
 
             TANG::ShowAsset(id);
-            TANG::UpdateAssetRotation(id, rot, true);
+            //TANG::UpdateAssetRotation(id, rot, true);
 		}
         
         TANG::Update(dt);

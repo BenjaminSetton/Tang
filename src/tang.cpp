@@ -29,7 +29,7 @@ namespace TANG
 		window.Create(WINDOW_WIDTH, WINDOW_HEIGHT);
 		InputManager::GetInstance().Initialize(window.GetHandle());
 		Renderer::GetInstance().Initialize(window.GetHandle(), WINDOW_WIDTH, WINDOW_HEIGHT);
-		camera.Initialize({ 0.0f, 5.0f, 15.0f }, { 0.0f, 0.0f, 0.0f });
+		camera.Initialize({ 0.0f, 5.0f, 15.0f }, { 0.0f, 0.0f, 0.0f }); // Start the camera facing towards negative Z
 	}
 
 	void Update(float deltaTime)
