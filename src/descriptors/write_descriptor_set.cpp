@@ -64,7 +64,7 @@ namespace TANG
 		numBuffers--;
 	}
 
-	void WriteDescriptorSets::AddImageSampler(VkDescriptorSet descriptorSet, uint32_t binding, VkImageView imageView, VkSampler sampler)
+	void WriteDescriptorSets::AddImageSampler(VkDescriptorSet descriptorSet, uint32_t binding, const TextureResource& texResource)
 	{
 		if (numImages == 0)
 		{
@@ -77,9 +77,9 @@ namespace TANG
 
 		descriptorImageInfo.emplace_back(std::move(VkDescriptorImageInfo()));
 		VkDescriptorImageInfo& imageInfo = descriptorImageInfo.back();
-		imageInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-		imageInfo.imageView = imageView;
-		imageInfo.sampler = sampler;
+		imageInfo.imageLayout = texResource.GetLayout();
+		imageInfo.imageView = texResource.GetImageView();
+		imageInfo.sampler = texResource.GetSampler();
 
 		VkWriteDescriptorSet writeDescSet{};
 		writeDescSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;

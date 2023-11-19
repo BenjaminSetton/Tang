@@ -19,7 +19,7 @@ namespace TANG
 		void Create(VkDevice logicalDevice, VkDescriptorSetLayoutCreateInfo& createInfo);
 		void Destroy(VkDevice logicalDevice);
 
-		VkDescriptorSetLayout& GetLayout();
+		VkDescriptorSetLayout GetLayout() const;
 
 	private:
 

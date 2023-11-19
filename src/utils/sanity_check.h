@@ -12,7 +12,7 @@ namespace TANG
 
 	// Compile-time assert
 	#define TNG_ASSERT_COMPILE(x) static_assert(x)
-	#define TNG_ASSERT_SAME_SIZE(x, y) TNG_ASSERT_COMPILE(x == y)
+	#define TNG_ASSERT_SAME_SIZE(x, y) TNG_ASSERT_COMPILE(sizeof(x) == sizeof(y))
 
 	// Utility
 	#define UNUSED(x) (void)x

@@ -69,7 +69,7 @@ namespace TANG
 		vkDestroyDescriptorPool(logicalDevice, pool, nullptr);
 	}
 
-	VkDescriptorPool DescriptorPool::GetPool()
+	VkDescriptorPool DescriptorPool::GetPool() const
 	{
 		return pool;
 	}

@@ -59,6 +59,9 @@ namespace TANG
 		void TransitionLayout(VkDevice logicalDevice, VkImageLayout destinationLayout);
 
 		VkImageView GetImageView() const;
+		VkSampler GetSampler() const;
+		VkFormat GetFormat() const;
+		VkImageLayout GetLayout() const;
 		bool IsValid() const;
 
 	private:

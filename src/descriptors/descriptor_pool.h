@@ -21,7 +21,7 @@ namespace TANG
 		void Reset(VkDevice logicalDevice);
 		void Destroy(VkDevice logicalDevice);
 
-		VkDescriptorPool GetPool();
+		VkDescriptorPool GetPool() const;
 		bool IsValid();
 		void ClearHandle();
 

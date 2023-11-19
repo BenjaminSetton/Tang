@@ -57,6 +57,11 @@ set(HEADERS
 	src/utils/key_declarations.h
 	src/utils/key_mappings.h
 	src/utils/file_utils.h
+	
+	# Shader data
+	src/shaders/shader_data.h
+	src/shaders/blinn_phong/blinn_phong_data.h
+	src/shaders/pbr/pbr_data.h
 )
 
 # Source files
@@ -94,8 +99,10 @@ set(SOURCES
 	src/descriptors/set_layout/set_layout_summary.cpp
 	
 	# Shaders
-	src/shaders/shader.vert
-	src/shaders/shader.frag
+	src/shaders/blinn_phong/blinn_phong.vert
+	src/shaders/blinn_phong/blinn_phong.frag
+	src/shaders/pbr/pbr.vert
+	src/shaders/pbr/pbr.frag
 	
 	src/utils/uuid.cpp
 	src/utils/logger.cpp
@@ -148,6 +155,6 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 		
 # Compile shaders
 set(SHADER_BUILD_BAT "${CMAKE_SOURCE_DIR}/utils/compile_shaders.bat")
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+add_custom_command(TARGET ${PROJECT_NAME} PRE_BUILD
 	COMMAND ${SHADER_BUILD_BAT})
 

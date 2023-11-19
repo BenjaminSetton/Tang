@@ -10,7 +10,7 @@
 namespace TANG
 {
 	// Guarantee that the size of DescriptorSet and VkDescriptorSet matches
-	TNG_ASSERT_SAME_SIZE(sizeof(DescriptorSet), sizeof(VkDescriptorSet));
+	TNG_ASSERT_SAME_SIZE(DescriptorSet, VkDescriptorSet);
 
 	DescriptorSet::DescriptorSet() : descriptorSet(VK_NULL_HANDLE)
 	{
@@ -60,7 +60,7 @@ namespace TANG
 		return *this;
 	}
 
-	bool DescriptorSet::Create(VkDevice logicalDevice, DescriptorPool& descriptorPool, DescriptorSetLayout& setLayout)
+	bool DescriptorSet::Create(VkDevice logicalDevice, const DescriptorPool& descriptorPool, const DescriptorSetLayout& setLayout)
 	{
 		if (descriptorSet != VK_NULL_HANDLE)
 		{
@@ -68,11 +68,13 @@ namespace TANG
 			return false;
 		}
 
+		VkDescriptorSetLayout layout[] = { setLayout.GetLayout() };
+
 		VkDescriptorSetAllocateInfo allocInfo{};
 		allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 		allocInfo.descriptorPool = descriptorPool.GetPool();
 		allocInfo.descriptorSetCount = 1;
-		allocInfo.pSetLayouts = &setLayout.GetLayout();
+		allocInfo.pSetLayouts = layout;
 
 		if (vkAllocateDescriptorSets(logicalDevice, &allocInfo, &descriptorSet) != VK_SUCCESS)
 		{
@@ -83,7 +85,7 @@ namespace TANG
 		return true;
 	}
 
-	void DescriptorSet::Update(VkDevice logicalDevice, WriteDescriptorSets& writeDescriptorSets)
+	void DescriptorSet::Update(VkDevice logicalDevice, const WriteDescriptorSets& writeDescriptorSets)
 	{
 		if (descriptorSet == VK_NULL_HANDLE)
 		{

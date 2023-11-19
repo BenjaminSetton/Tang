@@ -5,6 +5,7 @@ layout(location = 1) in vec3 inNormal;
 layout(location = 2) in vec2 inUV;
 
 layout(set = 0, binding = 1) uniform sampler2D texSampler;
+
 layout(set = 1, binding = 1) uniform CameraData {
     vec4 position;
     vec4 padding1;

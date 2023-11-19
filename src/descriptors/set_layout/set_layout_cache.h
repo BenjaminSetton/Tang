@@ -37,6 +37,7 @@ namespace TANG
 
 		LayoutCache& GetLayoutCache();
 		DescriptorSetLayout* GetSetLayout(const SetLayoutSummary& summary);
+		uint32_t GetLayoutCount() const;
 
 	private:
 

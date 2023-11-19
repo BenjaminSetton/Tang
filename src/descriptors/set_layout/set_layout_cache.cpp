@@ -78,4 +78,9 @@ namespace TANG
 		auto result = layoutCache.find(summary);
 		return result == layoutCache.end() ? nullptr : &(result->second);
 	}
+
+	uint32_t SetLayoutCache::GetLayoutCount() const
+	{
+		return static_cast<uint32_t>(layoutCache.size());
+	}
 }

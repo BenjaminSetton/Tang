@@ -3,6 +3,7 @@
 
 #include <vector>
 
+#include "../texture_resource.h"
 #include "vulkan/vulkan.h"
 
 namespace TANG
@@ -13,14 +14,14 @@ namespace TANG
 	{
 	public:
 
-		WriteDescriptorSets(uint32_t bufferCount, uint32_t imageCount);
+		explicit WriteDescriptorSets(uint32_t bufferCount, uint32_t imageCount);
 		~WriteDescriptorSets();
 		WriteDescriptorSets(const WriteDescriptorSets& other) = delete;
 		WriteDescriptorSets(WriteDescriptorSets&& other);
 		WriteDescriptorSets& operator=(const WriteDescriptorSets& other) = delete;
 
 		void AddUniformBuffer(VkDescriptorSet descriptorSet, uint32_t binding, VkBuffer buffer, VkDeviceSize bufferSize, VkDeviceSize offset);
-		void AddImageSampler(VkDescriptorSet descriptorSet, uint32_t binding, VkImageView imageView, VkSampler sampler);
+		void AddImageSampler(VkDescriptorSet descriptorSet, uint32_t binding, const TextureResource& texResource);
 
 		uint32_t GetWriteDescriptorSetCount() const;
 		const VkWriteDescriptorSet* GetWriteDescriptorSets() const;

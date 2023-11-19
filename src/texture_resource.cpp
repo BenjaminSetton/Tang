@@ -116,8 +116,6 @@ namespace TANG
 			return;
 		}
 
-		DisposableCommand command(logicalDevice, QueueType::TRANSFER);
-
 		VkImageMemoryBarrier barrier{};
 		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 		barrier.oldLayout = layout;
@@ -135,6 +133,7 @@ namespace TANG
 
 		VkPipelineStageFlags sourceStage = VK_PIPELINE_STAGE_NONE;
 		VkPipelineStageFlags destinationStage = VK_PIPELINE_STAGE_NONE;
+		QueueType commandQueueType = QueueType::TRANSFER;
 
 		if (destinationLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
 		{
@@ -156,13 +155,17 @@ namespace TANG
 
 			sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 			destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+
+			commandQueueType = QueueType::TRANSFER;
 		}
 		else if (layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && destinationLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
 			barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 			barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
 			sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-			destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+			destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT; // I guess this depends on whether we're using the texture in the vertex or pixel shader?
+
+			commandQueueType = QueueType::GRAPHICS;
 		}
 		else if (layout == VK_IMAGE_LAYOUT_UNDEFINED && destinationLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
 		{
@@ -171,25 +174,49 @@ namespace TANG
 
 			sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 			destinationStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+
+			commandQueueType = QueueType::GRAPHICS;
 		}
 		else
 		{
 			TNG_ASSERT_MSG(false, "Unsupported layout transition!");
 		}
 
-		vkCmdPipelineBarrier(
-			command.GetBuffer(),
-			sourceStage, destinationStage,
-			0,
-			0, nullptr,
-			0, nullptr,
-			1, &barrier
-		);
+		{
+			DisposableCommand command(logicalDevice, commandQueueType);
+
+			vkCmdPipelineBarrier(
+				command.GetBuffer(),
+				sourceStage, destinationStage,
+				0,
+				0, nullptr,
+				0, nullptr,
+				1, &barrier
+			);
+		}
+
+		// Success!
+		layout = destinationLayout;
 	}
 
 	VkImageView TextureResource::GetImageView() const
 	{
 		return imageView;
+	}
+
+	VkSampler TextureResource::GetSampler() const
+	{
+		return sampler;
+	}
+
+	VkFormat TextureResource::GetFormat() const
+	{
+		return format;
+	}
+
+	VkImageLayout TextureResource::GetLayout() const
+	{
+		return layout;
 	}
 
 	bool TextureResource::IsValid() const
@@ -237,7 +264,7 @@ namespace TANG
 
 		TransitionLayout(logicalDevice, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 		CopyFromBuffer(logicalDevice, stagingBuffer.GetBuffer());
-		GenerateMipmaps(physicalDevice, logicalDevice);
+		GenerateMipmaps(physicalDevice, logicalDevice); // This sets the layout to SHADER_READ_ONLY after it's done
 
 		stagingBuffer.Destroy(logicalDevice);
 	}
@@ -478,6 +505,9 @@ namespace TANG
 			0, nullptr,
 			0, nullptr,
 			1, &barrier);
+
+		// Success!
+		layout = barrier.newLayout;
 	}
 
 	void TextureResource::ResetMembers()

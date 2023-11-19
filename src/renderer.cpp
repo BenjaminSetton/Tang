@@ -62,7 +62,7 @@ static const bool enableValidationLayers = false;
 static const bool enableValidationLayers = true;
 #endif
 
-static const std::string compiledShaderOutputPath = "../out/shaders/";
+static const std::string compiledShaderOutputPath = "../out/shaders/pbr";
 
 static VkVertexInputBindingDescription GetVertexBindingDescription()
 {
@@ -343,9 +343,7 @@ namespace TANG
 			UpdateCameraDataUniformBuffers(resources.uuid, i, pos, viewMat);
 			UpdateProjectionUniformBuffer(resources.uuid, i);
 
-			// Initialize the descriptor sets as well
-			UpdateCameraDataDescriptorSets(resources.uuid, i);
-			UpdateProjectionDescriptorSets(resources.uuid, i);
+			InitializeDescriptorSets(resources.uuid, i);
 		}
 
 
@@ -457,7 +455,7 @@ namespace TANG
 		for (auto& assetData : assetDescriptorMap)
 		{
 			UpdateCameraDataUniformBuffers(assetData.first, currentFrame, position, viewMatrix);
-			UpdateCameraDataDescriptorSets(assetData.first, currentFrame);
+			UpdateCameraDataDescriptorSet(assetData.first, currentFrame);
 		}
 	}
 
@@ -1266,7 +1264,7 @@ namespace TANG
 
 		VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 		pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-		pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(vkDescSetLayouts.size());
+		pipelineLayoutInfo.setLayoutCount = setLayoutCache.GetLayoutCount();
 		pipelineLayoutInfo.pSetLayouts = vkDescSetLayouts.data();
 		pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
 		pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
@@ -1502,53 +1500,27 @@ namespace TANG
 		}
 	}
 
-	void Renderer::CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format,
-		VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties,
-		VkImage& image, VkDeviceMemory& imageMemory)
-	{
-		VkImageCreateInfo imageInfo{};
-		imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-		imageInfo.imageType = VK_IMAGE_TYPE_2D;
-		imageInfo.extent.width = width;
-		imageInfo.extent.height = height;
-		imageInfo.extent.depth = 1;
-		imageInfo.mipLevels = mipLevels;
-		imageInfo.arrayLayers = 1;
-		imageInfo.format = format;
-		imageInfo.tiling = tiling;
-		imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		imageInfo.usage = usage;
-		imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-		imageInfo.samples = numSamples;
-
-		if (vkCreateImage(logicalDevice, &imageInfo, nullptr, &image) != VK_SUCCESS)
-		{
-			TNG_ASSERT_MSG(false, "Failed to create image!");
-		}
-
-		VkMemoryRequirements memRequirements;
-		vkGetImageMemoryRequirements(logicalDevice, image, &memRequirements);
-
-		VkMemoryAllocateInfo allocInfo{};
-		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-		allocInfo.allocationSize = memRequirements.size;
-		allocInfo.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, properties);
-
-		if (vkAllocateMemory(logicalDevice, &allocInfo, nullptr, &imageMemory) != VK_SUCCESS)
-		{
-			TNG_ASSERT_MSG(false, "Failed to allocate image memory!");
-		}
-
-		vkBindImageMemory(logicalDevice, image, imageMemory, 0);
-	}
-
 	void Renderer::CreateDescriptorSetLayouts()
 	{
-		// Holds ProjUBO + ImageSampler
+		//	DIFFUSE = 0,
+		//	NORMAL,
+		//	METALLIC,
+		//	ROUGHNESS,
+		//	LIGHTMAP,
+
+		// Holds PBR textures
 		SetLayoutSummary persistentLayout;
-		persistentLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);           // Projection matrix
-		persistentLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Texture
+		persistentLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Diffuse texture
+		persistentLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Normal texture
+		persistentLayout.AddBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Metallic texture
+		persistentLayout.AddBinding(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Roughness texture
+		persistentLayout.AddBinding(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Lightmap texture
 		setLayoutCache.CreateSetLayout(logicalDevice, persistentLayout, 0);
+
+		// Holds ProjUBO
+		SetLayoutSummary unstableLayout;
+		unstableLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);           // Projection matrix
+		setLayoutCache.CreateSetLayout(logicalDevice, unstableLayout, 0);
 
 		// Holds TransformUBO + ViewUBO + CameraDataUBO
 		SetLayoutSummary volatileLayout;
@@ -1568,8 +1540,8 @@ namespace TANG
 		//        don't know what I'm doing.
 		const uint32_t fddSize = GetFDDSize();
 
-		const uint32_t numUniformBuffers = 3;
-		const uint32_t numImageSamplers = 1;
+		const uint32_t numUniformBuffers = 4;
+		const uint32_t numImageSamplers = 5;
 
 		std::array<VkDescriptorPoolSize, 2> poolSizes{};
 		poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -1629,6 +1601,7 @@ namespace TANG
 		imageInfo.width = framebufferWidth;
 		imageInfo.height = framebufferHeight;
 		imageInfo.format = depthFormat;
+		imageInfo.format = depthFormat;
 		imageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 		imageInfo.mipLevels = 1;
 		imageInfo.samples = msaaSamples;
@@ -1681,7 +1654,7 @@ namespace TANG
 				SecondaryCommandBuffer* secondaryCmdBuffer = GetSecondaryCommandBufferAtIndex(frameBufferIndex, uuid);
 
 				UpdateTransformUniformBuffer(assetResources[resourcesMap[uuid]].transform, uuid);
-				UpdateTransformDescriptorSets(uuid);
+				UpdateTransformDescriptorSet(uuid);
 
 				secondaryCmdBuffer->Reset();
 				RecordSecondaryCommandBuffer(*secondaryCmdBuffer, &iter, frameBufferIndex);
@@ -1799,27 +1772,52 @@ namespace TANG
 		currentAssetDataMap.projUBO.UpdateData(&projUBO, sizeof(ProjUBO));
 	}
 
-	void Renderer::UpdateProjectionDescriptorSets(UUID uuid, uint32_t frameIndex)
+	void Renderer::UpdateProjectionDescriptorSet(UUID uuid, uint32_t frameIndex)
 	{
 		FrameDependentData* currentFDD = GetFDDAtIndex(frameIndex);
 		auto& currentAssetDataMap = currentFDD->assetDescriptorDataMap[uuid];
 
-		// Update ViewProj / image sampler descriptor sets
+		DescriptorSet& descSet = currentAssetDataMap.descriptorSets[1];
+
+		// Update ProjUBO descriptor set
 		WriteDescriptorSets writeDescSets(1, 0);
-		writeDescSets.AddUniformBuffer(currentAssetDataMap.descriptorSets[0].GetDescriptorSet(), 0, currentAssetDataMap.projUBO.GetBuffer(), currentAssetDataMap.projUBO.GetBufferSize(), 0);
-		currentAssetDataMap.descriptorSets[0].Update(logicalDevice, writeDescSets);
+		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 0, currentAssetDataMap.projUBO.GetBuffer(), currentAssetDataMap.projUBO.GetBufferSize(), 0);
+		descSet.Update(logicalDevice, writeDescSets);
 	}
 
-	void Renderer::UpdateCameraDataDescriptorSets(UUID uuid, uint32_t frameIndex)
+	void Renderer::UpdatePBRTextureDescriptorSet(UUID uuid, uint32_t frameIndex)
 	{
 		FrameDependentData* currentFDD = GetFDDAtIndex(frameIndex);
 		auto& currentAssetDataMap = currentFDD->assetDescriptorDataMap[uuid];
+
+		DescriptorSet& descSet = currentAssetDataMap.descriptorSets[0];
+
+		// Get the asset resources so we can retrieve the textures
+		AssetResources& resources = assetResources[resourcesMap[uuid]];
+
+		// Update PBR textures
+		WriteDescriptorSets writeDescSets(0, 5);
+		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 0, resources.material[static_cast<uint32_t>(Material::TEXTURE_TYPE::DIFFUSE)]);
+		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 1, resources.material[static_cast<uint32_t>(Material::TEXTURE_TYPE::NORMAL)]);
+		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 2, resources.material[static_cast<uint32_t>(Material::TEXTURE_TYPE::METALLIC)]);
+		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 3, resources.material[static_cast<uint32_t>(Material::TEXTURE_TYPE::ROUGHNESS)]);
+		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 4, resources.material[static_cast<uint32_t>(Material::TEXTURE_TYPE::LIGHTMAP)]);
+
+		descSet.Update(logicalDevice, writeDescSets);
+	}
+
+	void Renderer::UpdateCameraDataDescriptorSet(UUID uuid, uint32_t frameIndex)
+	{
+		FrameDependentData* currentFDD = GetFDDAtIndex(frameIndex);
+		auto& currentAssetDataMap = currentFDD->assetDescriptorDataMap[uuid];
+
+		DescriptorSet& descSet = currentAssetDataMap.descriptorSets[2];
 
 		// Update view matrix + camera data descriptor set
 		WriteDescriptorSets writeDescSets(2, 0);
-		writeDescSets.AddUniformBuffer(currentAssetDataMap.descriptorSets[1].GetDescriptorSet(), 2, currentAssetDataMap.viewUBO.GetBuffer(), currentAssetDataMap.viewUBO.GetBufferSize(), 0);
-		writeDescSets.AddUniformBuffer(currentAssetDataMap.descriptorSets[1].GetDescriptorSet(), 0, currentAssetDataMap.cameraDataUBO.GetBuffer(), currentAssetDataMap.cameraDataUBO.GetBufferSize(), 0);
-		currentAssetDataMap.descriptorSets[1].Update(logicalDevice, writeDescSets);
+		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 2, currentAssetDataMap.viewUBO.GetBuffer(), currentAssetDataMap.viewUBO.GetBufferSize(), 0);
+		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 0, currentAssetDataMap.cameraDataUBO.GetBuffer(), currentAssetDataMap.cameraDataUBO.GetBufferSize(), 0);
+		descSet.Update(logicalDevice, writeDescSets);
 	}
 
 	void Renderer::UpdateTransformUniformBuffer(const Transform& transform, UUID uuid)
@@ -1851,16 +1849,26 @@ namespace TANG
 		assetDescriptorData.cameraDataUBO.UpdateData(&cameraDataUBO, sizeof(CameraDataUBO));
 	}
 
-	void Renderer::UpdateTransformDescriptorSets(UUID uuid)
+	void Renderer::UpdateTransformDescriptorSet(UUID uuid)
 	{
 		FrameDependentData* currentFDD = GetCurrentFDD();
 		auto& currentAssetDataMap = currentFDD->assetDescriptorDataMap[uuid];
 
+		DescriptorSet& descSet = currentAssetDataMap.descriptorSets[2];
+
 		// Update transform + cameraData descriptor sets
 		WriteDescriptorSets writeDescSets(2, 0);
-		writeDescSets.AddUniformBuffer(currentAssetDataMap.descriptorSets[1].GetDescriptorSet(), 0, currentAssetDataMap.transformUBO.GetBuffer(), currentAssetDataMap.transformUBO.GetBufferSize(), 0);
-		writeDescSets.AddUniformBuffer(currentAssetDataMap.descriptorSets[1].GetDescriptorSet(), 1, currentAssetDataMap.cameraDataUBO.GetBuffer(), currentAssetDataMap.cameraDataUBO.GetBufferSize(), 0);
-		currentAssetDataMap.descriptorSets[1].Update(logicalDevice, writeDescSets);
+		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 0, currentAssetDataMap.transformUBO.GetBuffer(), currentAssetDataMap.transformUBO.GetBufferSize(), 0);
+		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 1, currentAssetDataMap.cameraDataUBO.GetBuffer(), currentAssetDataMap.cameraDataUBO.GetBufferSize(), 0);
+		descSet.Update(logicalDevice, writeDescSets);
+	}
+
+	void Renderer::InitializeDescriptorSets(UUID uuid, uint32_t frameIndex)
+	{
+		// Update all descriptor sets
+		UpdateCameraDataDescriptorSet(uuid, frameIndex);
+		UpdateProjectionDescriptorSet(uuid, frameIndex);
+		UpdatePBRTextureDescriptorSet(uuid, frameIndex);
 	}
 
 	VkResult Renderer::SubmitQueue(QueueType type, VkSubmitInfo* info, uint32_t submitCount, VkFence fence, bool waitUntilIdle)

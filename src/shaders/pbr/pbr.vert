@@ -1,15 +1,15 @@
 #version 450
 
-layout(set = 0, binding = 0) uniform ProjObject {
+layout(set = 1, binding = 0) uniform ProjObject {
     mat4 proj;
 } projUBO;
 
-layout(set = 1, binding = 2) uniform ViewObject {
+layout(set = 2, binding = 2) uniform ViewObject {
     mat4 view;
     mat4 proj;
 } viewUBO;
 
-layout(set = 1, binding = 0) uniform TransformObject {
+layout(set = 2, binding = 0) uniform TransformObject {
     mat4 transform;
 } transformUBO;
 

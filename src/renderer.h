@@ -159,10 +159,6 @@ namespace TANG
 
 		void CreateAssetUniformBuffers(UUID uuid);
 
-		void CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format,
-			VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties,
-			VkImage& image, VkDeviceMemory& imageMemory);
-
 		void CreateDescriptorSetLayouts();
 
 		void CreateDescriptorPool();
@@ -182,9 +178,11 @@ namespace TANG
 
 		void CleanupSwapChain();
 
-		void UpdateTransformDescriptorSets(UUID uuid);
-		void UpdateCameraDataDescriptorSets(UUID uuid, uint32_t frameIndex);
-		void UpdateProjectionDescriptorSets(UUID uuid, uint32_t frameIndex);
+		void InitializeDescriptorSets(UUID uuid, uint32_t frameIndex);
+		void UpdateTransformDescriptorSet(UUID uuid);
+		void UpdateCameraDataDescriptorSet(UUID uuid, uint32_t frameIndex);
+		void UpdateProjectionDescriptorSet(UUID uuid, uint32_t frameIndex);
+		void UpdatePBRTextureDescriptorSet(UUID uuid, uint32_t frameIndex);
 
 		void UpdateTransformUniformBuffer(const Transform& transform, UUID uuid);
 		void UpdateCameraDataUniformBuffers(UUID uuid, uint32_t frameIndex, const glm::vec3& position, const glm::mat4& viewMatrix);
@@ -228,7 +226,8 @@ namespace TANG
 		VkExtent2D swapChainExtent;
 
 		// Stores all the data we need to describe an asset. We need to have a vector of descriptor sets per asset
-		// because each asset has a unique transform
+		// because we divide the descriptor sets based on how frequently they're updated. For example the asset's
+		// position might change every frame, but the PBR textures will likely seldom change (if at all)
 		struct AssetDescriptorData
 		{
 			std::vector<DescriptorSet> descriptorSets;
@@ -265,13 +264,20 @@ namespace TANG
 		// FOR EVERY ASSET:
 		//		FOR EVERY FRAME IN FLIGHT:
 		//			Descriptor set 0:
-		//				- viewProj uniform buffer	(binding 0)
-		//				- image sampler				(binding 1)
+		//				- diffuse sampler			(binding 0)
+		//				- normal sampler			(binding 1)
+		//				- metallic sampler			(binding 2)
+		//				- roughness sampler			(binding 3)
+		//				- lightmap sampler			(binding 4)
 		//			Descriptor set 1:
-		//				- transform					(binding 0)
+		//				- Projection matrix UBO		(binding 0)
+		//			Descriptor set 2:
+		//				- CameraData UBO			(binding 0)
+		//				- Transform matrix UBO		(binding 1)
+		//				- View matrix UBO			(binding 2)
 		// 
-		// Total per all frames in flight (2): 4 descriptor sets - 4 uniform buffers and 2 image samplers
-		// Multiply the above for every asset, for 2 assets: 8 descriptor sets - 8 uniform buffers and 4 image samplers
+		// Total per frame in flight: 3 descriptor sets - 4 uniform buffers and 5 image samplers
+		// Total per all frames in flight (2): 6 descriptor sets - 8 uniform buffers and 10 image samplers
 
 
 		////////////////////////////////////////////////////////////////////
