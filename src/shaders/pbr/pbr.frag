@@ -66,7 +66,8 @@ layout(set = 0, binding = 4) uniform sampler2D lightmapSampler;
 
 layout(set = 2, binding = 1) uniform CameraData {
     vec4 position;
-    vec4 padding1;
+    float exposure;
+    vec3 padding1;
     vec4 padding2;
     vec4 padding3;
 } cameraData;
@@ -162,7 +163,8 @@ void main()
     vec3 ambient = vec3(0.01) * albedo; // NOTE - We should probably also multiply this by the ambient occlusion
     pbrColor += ambient;
     
-    // TODO - HDR tone mapping would go here
+    // HDR tone-mapping (exposure)
+    pbrColor = vec3(1.0) - exp(-pbrColor * cameraData.exposure);
 
     // Gamma correction
     vec3 gammaPBR = pow( pbrColor, vec3( 1.0 / 2.2 ) );

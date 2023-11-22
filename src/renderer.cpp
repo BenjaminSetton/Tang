@@ -188,8 +188,9 @@ namespace TANG
 	// 
 	struct CameraDataUBO
 	{
-		glm::vec4 cameraPos;
-		char padding[48];
+		glm::vec4 position;
+		float exposure;
+		char padding[44];
 	};
 	TNG_ASSERT_COMPILE(sizeof(CameraDataUBO) == 64);
 
@@ -1552,6 +1553,7 @@ namespace TANG
 		// Holds ProjUBO
 		SetLayoutSummary unstableLayout;
 		unstableLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);           // Projection matrix
+		unstableLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT);         // Camera exposure
 		setLayoutCache.CreateSetLayout(logicalDevice, unstableLayout, 0);
 
 		// Holds TransformUBO + ViewUBO + CameraDataUBO
@@ -1859,7 +1861,8 @@ namespace TANG
 		assetDescriptorData.viewUBO.UpdateData(&viewUBO, sizeof(ViewUBO));
 
 		CameraDataUBO cameraDataUBO{};
-		cameraDataUBO.cameraPos = glm::vec4(position, 1.0f);
+		cameraDataUBO.position = glm::vec4(position, 1.0f);
+		cameraDataUBO.exposure = 1.0f;
 		assetDescriptorData.cameraDataUBO.UpdateData(&cameraDataUBO, sizeof(CameraDataUBO));
 	}
 
