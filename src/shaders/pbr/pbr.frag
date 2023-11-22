@@ -56,6 +56,7 @@
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inNormal;
 layout(location = 2) in vec2 inUV;
+layout(location = 3) in mat3 inTBN;
 
 layout(set = 0, binding = 0) uniform sampler2D diffuseSampler;
 layout(set = 0, binding = 1) uniform sampler2D normalSampler;
@@ -131,9 +132,9 @@ void main()
 {
     // Calculate the normal from the normal map
     // TODO - Orient this correctly using a TBN matrix (tangent, binormal, normal matrix)
-    vec3 normal = normalize( inNormal ); // texture(normalSampler, inUV).xyz;
-    //normal = normal * 2.0 - 1.0;
-    //normal = normalize( TBN_Mat * normal );
+    vec3 normal = texture(normalSampler, inUV).rgb;
+    normal = normal * 2.0 - 1.0;
+    normal = normalize( inTBN * normal );
 
     vec3 cameraPos = cameraData.position.xyz;
     vec3 light = -normalize(vec3(-0.4, -0.75, -1.0));

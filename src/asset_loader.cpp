@@ -110,9 +110,9 @@ namespace TANG
 		{
 			Assimp::Importer importer;
 #if defined(CAREFUL_IMPORT)
-			uint32_t importFlags = aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_FixInfacingNormals | aiProcess_FindInvalidData;
+			uint32_t importFlags = aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_FixInfacingNormals | aiProcess_FindInvalidData | aiProcess_CalcTangentSpace;
 #else
-			uint32_t importFlags = aiProcess_Triangulate | aiProcess_FlipUVs;
+			uint32_t importFlags = aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_CalcTangentSpace;
 #endif
 			const aiScene* scene = importer.ReadFile(filePath.data(), importFlags);
 
@@ -155,11 +155,13 @@ namespace TANG
 				{
 					const aiVector3D& importedPos = importedMesh->mVertices[j];
 					const aiVector3D& importedNormal = importedMesh->mNormals[j];
+					const aiVector3D& importedTangent = importedMesh->mTangents[j];
 					const aiVector3D& importedUVs = importedMesh->HasTextureCoords(0) ? importedMesh->mTextureCoords[0][j] : aiVector3D(0, 0, 0);
 
 					VertexType vertex{};
 					vertex.pos = { importedPos.x, importedPos.y, importedPos.z };
 					vertex.normal = { importedNormal.x, importedNormal.y, importedNormal.z };
+					vertex.tangent = { importedTangent.x, importedTangent.y, importedTangent.z };
 					vertex.uv = { importedUVs.x, importedUVs.y };
 
 					const float epsilon_normal = 0.2f;

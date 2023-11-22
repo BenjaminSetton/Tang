@@ -78,23 +78,33 @@ static VkVertexInputBindingDescription GetVertexBindingDescription()
 // the attribute descriptions below are updated. Note in this case we won't
 // assert if the byte usage remains the same but we switch to a different format
 // (like switching the order of two attributes)
-TNG_ASSERT_COMPILE(sizeof(TANG::VertexType) == 32);
+TNG_ASSERT_COMPILE(sizeof(TANG::VertexType) == 44);
 
 static std::array<VkVertexInputAttributeDescription, 3> GetVertexAttributeDescriptions()
 {
 	std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{};
+
+	// POSITION
 	attributeDescriptions[0].binding = 0;
 	attributeDescriptions[0].location = 0;
 	attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT; // vec3 (12 bytes)
 	attributeDescriptions[0].offset = offsetof(TANG::VertexType, pos);
 
+	// NORMAL
 	attributeDescriptions[1].binding = 0;
 	attributeDescriptions[1].location = 1;
 	attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT; // vec3 (12 bytes)
 	attributeDescriptions[1].offset = offsetof(TANG::VertexType, normal);
 
+	// TANGENT
+	attributeDescriptions[1].binding = 0;
+	attributeDescriptions[1].location = 2;
+	attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT; // vec3 (12 bytes)
+	attributeDescriptions[1].offset = offsetof(TANG::VertexType, tangent);
+
+	// UV
 	attributeDescriptions[2].binding = 0;
-	attributeDescriptions[2].location = 2;
+	attributeDescriptions[2].location = 3;
 	attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT; // vec2 (8 bytes)
 	attributeDescriptions[2].offset = offsetof(TANG::VertexType, uv);
 
