@@ -48,6 +48,7 @@ NOTES:
 - [ ] Make shader information more data-driven (e.g. pull shader's input uniform + texture information from a set of data)
 - [ ] Re-organize the renderer's frame-dependent data (FDD) and swap-chain-dependent data (SWIDD)
 - [ ] Create a default material so that assets with incomplete/missing PBR textures can be loaded
+- [ ] Add HDR support
 - [ ] Add cubemap support in preparation for IBL
 - [ ] Implement diffuse IBL
 - [ ] Implement specular IBL
