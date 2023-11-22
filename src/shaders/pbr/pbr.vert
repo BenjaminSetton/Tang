@@ -34,7 +34,12 @@ void main() {
 
     // Construct the TBN matrix
     vec3 T = inTangent;
-    vec3 B = cross(inNormal, inTangent);
     vec3 N = inNormal;
+
+    // Re-orthogonalize the TBN matrix in case the tangents are interpolated between vertices (using Gram-Schmidt process)
+    T = normalize(T - dot(T, N) * N);
+
+    vec3 B = cross(N, T);
+
     outTBN = mat3(T, B, N);
 }
