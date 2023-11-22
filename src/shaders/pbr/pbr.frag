@@ -131,7 +131,6 @@ vec3 CalculateDiffuseBRDF(vec3 kD)
 void main() 
 {
     // Calculate the normal from the normal map
-    // TODO - Orient this correctly using a TBN matrix (tangent, binormal, normal matrix)
     vec3 normal = texture(normalSampler, inUV).rgb;
     normal = normal * 2.0 - 1.0;
     normal = normalize( inTBN * normal );

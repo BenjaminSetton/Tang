@@ -33,8 +33,8 @@ void main() {
     outUV = inUV;
 
     // Construct the TBN matrix
-    vec3 T = inTangent;
-    vec3 N = inNormal;
+    vec3 T = (transformUBO.transform * vec4(inTangent, 0.0)).xyz;
+    vec3 N = outNormal;
 
     // Re-orthogonalize the TBN matrix in case the tangents are interpolated between vertices (using Gram-Schmidt process)
     T = normalize(T - dot(T, N) * N);
