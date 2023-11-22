@@ -110,7 +110,7 @@ namespace TANG
 
 	void TextureResource::TransitionLayout(VkDevice logicalDevice, VkImageLayout destinationLayout)
 	{
-		if (!IsValid())
+		if (IsInvalid())
 		{
 			LogError("Attempting to transition layout of invalid texture!");
 			return;
@@ -219,9 +219,9 @@ namespace TANG
 		return layout;
 	}
 
-	bool TextureResource::IsValid() const
+	bool TextureResource::IsInvalid() const
 	{
-		return isValid;
+		return !isValid;
 	}
 
 	void TextureResource::CreateBaseImage(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, const BaseImageCreateInfo* baseImageInfo)
@@ -232,19 +232,11 @@ namespace TANG
 	void TextureResource::CreateBaseImageFromFile(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, std::string_view fileName)
 	{
 		int _width, _height, _channels;
-		stbi_uc* pixels = stbi_load(fileName.data(), &_width, &_height, &_channels, STBI_rgb_alpha);
-		if (pixels == nullptr)
+		stbi_uc* data = stbi_load(fileName.data(), &_width, &_height, &_channels, STBI_rgb_alpha);
+		if (data == nullptr)
 		{
 			LogError("Failed to create texture from file '%s'!", fileName.data());
 		}
-
-		VkDeviceSize imageSize = _width * _height * 4;
-		StagingBuffer stagingBuffer;
-		stagingBuffer.Create(physicalDevice, logicalDevice, imageSize);
-		stagingBuffer.CopyIntoBuffer(logicalDevice, pixels, imageSize);
-
-		// Now that we've copied over the texture data to the staging buffer, we don't need the original pixels array anymore
-		stbi_image_free(pixels);
 
 		// Calculate amount of mipmaps
 		double exactMips = log2(std::min(_width, _height));
@@ -262,16 +254,19 @@ namespace TANG
 		baseImageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 		CreateBaseImage_Helper(physicalDevice, logicalDevice, &baseImageInfo);
 
-		TransitionLayout(logicalDevice, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-		CopyFromBuffer(logicalDevice, stagingBuffer.GetBuffer());
-		GenerateMipmaps(physicalDevice, logicalDevice); // This sets the layout to SHADER_READ_ONLY after it's done
+		VkDeviceSize imageSize = _width * _height * bytesPerPixel;
+		CopyDataIntoImage(physicalDevice, logicalDevice, data, imageSize);
 
-		stagingBuffer.Destroy(logicalDevice);
+		// Now that we've copied over the data to the texture image, we don't need the original pixels array anymore
+		stbi_image_free(data);
+
+		GenerateMipmaps(physicalDevice, logicalDevice); // This sets the usage to SHADER_READ_ONLY after it's done
+
 	}
 
 	void TextureResource::CreateImageView(VkDevice logicalDevice, const ImageViewCreateInfo* viewInfo)
 	{
-		if (!IsValid())
+		if (IsInvalid())
 		{
 			LogError("Attempting to create image view, but base image has not yet been created!");
 			return;
@@ -361,6 +356,7 @@ namespace TANG
 		height = baseImageInfo->height;
 		mipLevels = baseImageInfo->mipLevels;
 		format = baseImageInfo->format;
+		bytesPerPixel = 4; // We're assuming a texture format of 4 bytes per pixel. No HDR support or support for any texture with size less than 4 bytes per pixel
 		isValid = true;
 	}
 
@@ -383,9 +379,48 @@ namespace TANG
 		}
 	}
 
+	void TextureResource::CopyDataIntoImage(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, void* data, VkDeviceSize bytes)
+	{
+		if (IsInvalid())
+		{
+			LogError("Attempting to copy data into texture, but texture has not been created!");
+			return;
+		}
+
+		if (bytes == 0)
+		{
+			LogWarning("Attempting to copy data into texture image, but a size of 0 bytes was specified!");
+			return;
+		}
+
+		// If bytes is greater than the image size, then allocate up until the image size (and produce a warning)
+		VkDeviceSize imageSize = width * height * bytesPerPixel;
+		if (bytes > imageSize)
+		{
+			LogWarning("Attempting to copy %u bytes into texture image, when the image size is only %u. Only %u bytes will be copied.", bytes, imageSize, imageSize);
+		}
+		
+		VkDeviceSize actualSize = std::min(bytes, imageSize);
+
+		StagingBuffer stagingBuffer;
+		stagingBuffer.Create(physicalDevice, logicalDevice, actualSize);
+		stagingBuffer.CopyIntoBuffer(logicalDevice, data, actualSize);
+
+		VkImageLayout oldLayout = layout;
+
+		TransitionLayout(logicalDevice, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+		CopyFromBuffer(logicalDevice, stagingBuffer.GetBuffer());
+		if (oldLayout != VK_IMAGE_LAYOUT_UNDEFINED)
+		{
+			TransitionLayout(logicalDevice, oldLayout);
+		}
+
+		stagingBuffer.Destroy(logicalDevice);
+	}
+
 	void TextureResource::CopyFromBuffer(VkDevice logicalDevice, VkBuffer buffer)
 	{
-		if (!IsValid())
+		if (IsInvalid())
 		{
 			LogError("Attempting to copy from buffer, but base image has not yet been created!");
 			return;
@@ -411,7 +446,7 @@ namespace TANG
 
 	void TextureResource::GenerateMipmaps(VkPhysicalDevice physicalDevice, VkDevice logicalDevice)
 	{
-		if (!IsValid())
+		if (IsInvalid())
 		{
 			LogError("Attempting to generate mipmaps but base image has not yet been created!");
 			return;
@@ -516,6 +551,7 @@ namespace TANG
 		mipLevels = 0;
 		width = 0;
 		height = 0;
+		bytesPerPixel = 0;
 		isValid = false;
 		baseImage = VK_NULL_HANDLE;
 		imageMemory = VK_NULL_HANDLE;

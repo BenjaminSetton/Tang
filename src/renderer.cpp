@@ -41,6 +41,7 @@
 #include "command_pool_registry.h"
 #include "data_buffer/vertex_buffer.h"
 #include "data_buffer/index_buffer.h"
+#include "default_material.h"
 #include "descriptors/write_descriptor_set.h"
 #include "queue_family_indices.h"
 #include "utils/file_utils.h"
@@ -285,35 +286,57 @@ namespace TANG
 		//
 		//////////////////////////////
 		uint32_t numMaterials = static_cast<uint32_t>(asset->materials.size());
-		if (numMaterials > 0)
+		TNG_ASSERT_MSG(numMaterials <= 1, "Multiple materials per asset are not currently supported!");
+
+		if (numMaterials == 0)
 		{
-			TNG_ASSERT_MSG(numMaterials == 1, "Multiple materials per asset are not currently supported!");
-			Material& material = asset->materials[0];
+			// We need at least _one_ material, even if we didn't deserialize any material information
+			// In this case we use a default material (look at default_material.h)
+			asset->materials.resize(1);
+		}
+		Material& material = asset->materials[0];
 
-			// Resize to the number of possible texture types
-			resources.material.resize(static_cast<uint32_t>(Material::TEXTURE_TYPE::_COUNT));
+		// Resize to the number of possible texture types
+		resources.material.resize(static_cast<uint32_t>(Material::TEXTURE_TYPE::_COUNT));
 
-			// Pre-emptively fill out the texture create info, so we can just pass it to all CreateFromFile() calls
-			SamplerCreateInfo samplerInfo{};
-			samplerInfo.minificationFilter = VK_FILTER_LINEAR;
-			samplerInfo.magnificationFilter = VK_FILTER_LINEAR;
-			samplerInfo.addressModeUVW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-			samplerInfo.maxAnisotropy = 1.0f; // Is this an appropriate value??
+		// Pre-emptively fill out the texture create info, so we can just pass it to all CreateFromFile() calls
+		SamplerCreateInfo samplerInfo{};
+		samplerInfo.minificationFilter = VK_FILTER_LINEAR;
+		samplerInfo.magnificationFilter = VK_FILTER_LINEAR;
+		samplerInfo.addressModeUVW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerInfo.maxAnisotropy = 1.0f; // Is this an appropriate value??
 
-			ImageViewCreateInfo viewCreateInfo{};
-			viewCreateInfo.aspect = VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
+		ImageViewCreateInfo viewCreateInfo{};
+		viewCreateInfo.aspect = VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
 
-			for (uint32_t i = 0; i < static_cast<uint32_t>(Material::TEXTURE_TYPE::_COUNT); i++)
+		for (uint32_t i = 0; i < static_cast<uint32_t>(Material::TEXTURE_TYPE::_COUNT); i++)
+		{
+			Material::TEXTURE_TYPE texType = static_cast<Material::TEXTURE_TYPE>(i);
+			if (material.HasTextureOfType(texType))
 			{
-				Material::TEXTURE_TYPE texType = static_cast<Material::TEXTURE_TYPE>(i);
-				if (material.HasTextureOfType(texType))
-				{
-					Texture* matTexture = material.GetTextureOfType(texType);
-					TNG_ASSERT_MSG(matTexture != nullptr, "Why is this texture nullptr when we specifically checked against it?");
+				Texture* matTexture = material.GetTextureOfType(texType);
+				TNG_ASSERT_MSG(matTexture != nullptr, "Why is this texture nullptr when we specifically checked against it?");
 
-					TextureResource& texResource = resources.material[i];
-					texResource.CreateFromFile(physicalDevice, logicalDevice, matTexture->fileName, &viewCreateInfo, &samplerInfo);
-				}
+				TextureResource& texResource = resources.material[i];
+				texResource.CreateFromFile(physicalDevice, logicalDevice, matTexture->fileName, &viewCreateInfo, &samplerInfo);
+			}
+			else
+			{
+				// Create a fallback for use in the shader
+				BaseImageCreateInfo baseImageInfo{};
+				baseImageInfo.width = 1;
+				baseImageInfo.height = 1;
+				baseImageInfo.mipLevels = 1;
+				baseImageInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
+				baseImageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+				baseImageInfo.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+
+				uint32_t data = DEFAULT_MATERIAL.at(texType);
+
+				TextureResource& texResource = resources.material[i];
+				texResource.Create(physicalDevice, logicalDevice, &baseImageInfo, &viewCreateInfo, &samplerInfo);
+				texResource.CopyDataIntoImage(physicalDevice, logicalDevice, static_cast<void*>(&data), sizeof(data));
+				texResource.TransitionLayout(logicalDevice, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 			}
 		}
 
@@ -466,7 +489,7 @@ namespace TANG
 		CleanupSwapChain();
 
 		CreateSwapChain();
-		CreateColorTexture();
+		CreateColorAttachmentTexture();
 		CreateDepthTexture();
 		CreateFramebuffers();
 		RecreateAllSecondaryCommandBuffers();
@@ -490,8 +513,7 @@ namespace TANG
 		CreateRenderPass();
 		CreateGraphicsPipeline();
 		CreateCommandPools();
-		CreateRandomTexture();
-		CreateColorTexture();
+		CreateColorAttachmentTexture();
 		CreateDepthTexture();
 		CreateFramebuffers();
 		CreatePrimaryCommandBuffers(QueueType::GRAPHICS);
@@ -1574,24 +1596,6 @@ namespace TANG
 
 	}
 
-	void Renderer::CreateRandomTexture()
-	{
-		VkPhysicalDeviceProperties properties{};
-		vkGetPhysicalDeviceProperties(physicalDevice, &properties);
-
-		// Image view
-		ImageViewCreateInfo viewInfo{ VK_IMAGE_ASPECT_COLOR_BIT };
-
-		// Sampler
-		SamplerCreateInfo samplerInfo{};
-		samplerInfo.magnificationFilter = VK_FILTER_LINEAR;
-		samplerInfo.minificationFilter = VK_FILTER_LINEAR;
-		samplerInfo.addressModeUVW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
-
-		randomTexture.CreateFromFile(physicalDevice, logicalDevice, "../src/data/textures/sample/texture.jpg", &viewInfo, &samplerInfo);
-	}
-
 	void Renderer::CreateDepthTexture()
 	{
 		VkFormat depthFormat = FindDepthFormat();
@@ -1612,7 +1616,7 @@ namespace TANG
 		depthBuffer.Create(physicalDevice, logicalDevice, &imageInfo, &imageViewInfo);
 	}
 
-	void Renderer::CreateColorTexture()
+	void Renderer::CreateColorAttachmentTexture()
 	{
 		// Base image
 		BaseImageCreateInfo imageInfo{};

@@ -51,7 +51,7 @@
 #version 450
 
 #define PI 3.141592
-#define EPSILON 0.00001
+#define EPSILON 0.000001
 
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inNormal;
@@ -73,11 +73,9 @@ layout(set = 2, binding = 1) uniform CameraData {
 layout(location = 0) out vec4 outColor;
 
 // Fresnel (Schlick)
-vec3 F(float HdotV)
+vec3 F(float HdotV, vec3 albedo, float metalness)
 {
     // baseReflectivity + ( 1 - baseReflectivity ) * ( 1 - dot( view, half ) )^5
-    vec3 albedo = texture(diffuseSampler, inUV).rgb;
-    float metalness = texture(metallicSampler, inUV).b;
 
     vec3 baseReflectivity = vec3(0.04);
     baseReflectivity = mix(baseReflectivity, albedo, metalness);
@@ -86,43 +84,40 @@ vec3 F(float HdotV)
 }
 
 // Geometry (GGX - Schlick & Beckmann)
-float G(float NdotV)
+float G(float NdotV, float roughness)
 {
     // dot( normal, view ) / ( dot( normal, view ) * ( 1 - K ) + K )
 
-    float roughness = texture(roughnessSampler, inUV).g;
     float K = pow( ( roughness + 1.0 ), 2.0) / 8.0;
 
     float funcNominator = NdotV;
     float funcDenominator = NdotV * ( 1.0 - K ) + K;
 
-    return funcNominator / max( funcDenominator, EPSILON ); // Prevent division by 0
+    return funcNominator / ( funcDenominator + EPSILON ); // Prevent division by 0
 }
 
 // NormalDistribution (GGX - Trowbridge & Reitz)
-float D(float HdotN)
+float D(float HdotN, float roughness)
 {
     // roughness^2 / (PI * ( dot( normal, halfVector )^2 * ( roughness^2 - 1 ) + 1 )^2
-
-    float roughness = texture(roughnessSampler, inUV).g;
 
     float funcNominator = pow( roughness, 2.0 );
     float funcDenominator = PI * pow( ( pow( HdotN, 2.0 ) * ( pow( roughness, 2.0 ) - 1.0 ) + 1.0 ), 2.0 );
 
-    return funcNominator / max( funcDenominator, EPSILON ); // Prevent division by 0
+    return funcNominator / ( funcDenominator + EPSILON ); // Prevent division by 0
 }
 
-vec3 CookTorrance(float NdotV, float NdotL, float HdotV, float HdotN)
+vec3 CookTorrance(float NdotV, float NdotL, float HdotV, float HdotN, vec3 albedo, float metalness, float roughness)
 {
-    vec3 funcNominator = D(HdotN) * G(NdotV) * F(HdotV);
+    vec3 funcNominator = D(HdotN, roughness) * G(NdotV, roughness) * F(HdotV, albedo, metalness);
     float funcDenominator = 4.0 * NdotL * NdotV;
-    return funcNominator / max( funcDenominator, EPSILON ); // Prevent division by 0
+    return funcNominator / ( funcDenominator + EPSILON ); // Prevent division by 0
 }
 
-vec3 CalculateSpecularBRDF(float NdotV, float NdotL, float HdotV, float HdotN)
+vec3 CalculateSpecularBRDF(float NdotV, float NdotL, float HdotV, float HdotN, vec3 albedo, float metalness, float roughness)
 {
     // NOTE - We're removing the kS term here because we already consider the fresnel factor in the CookTorrance function below
-    return CookTorrance(NdotV, NdotL, HdotV, HdotN);
+    return CookTorrance(NdotV, NdotL, HdotV, HdotN, albedo, metalness, roughness);
 }
 
 vec3 CalculateDiffuseBRDF(vec3 kD)
@@ -137,14 +132,14 @@ void main()
     // Calculate the normal from the normal map
     // TODO - Orient this correctly using a TBN matrix (tangent, binormal, normal matrix)
     vec3 normal = normalize( inNormal ); // texture(normalSampler, inUV).xyz;
-
     //normal = normal * 2.0 - 1.0;
-    //normal = normalize( TBN_Mat * normal);
+    //normal = normalize( TBN_Mat * normal );
 
     vec3 cameraPos = cameraData.position.xyz;
-    vec3 light = -normalize(vec3(0.0, 0.0, -1.0));
+    vec3 light = -normalize(vec3(-0.4, -0.75, -1.0));
     vec3 view = normalize(cameraPos - inPosition);
     vec3 halfVector = normalize(light + view);
+    vec3 albedo = texture(diffuseSampler, inUV).rgb;
 
     float NdotV = max(dot(normal, view), 0.0);
     float NdotL = max(dot(normal, light), 0.0);
@@ -152,20 +147,26 @@ void main()
     float HdotN = max(dot(halfVector, normal), 0.0);
     float lightIntensity = 1.0; // NOTE - This is only for point / spotlights, which we do not support right now
     float metalness = texture(metallicSampler, inUV).b;
+    float roughness = texture(roughnessSampler, inUV).g;
 
-    vec3 fresnel = F(HdotV);
+    vec3 fresnel = F(HdotV, albedo, metalness);
     vec3 kS = fresnel;
     vec3 kD = vec3(1.0) - kS;
 
     // Kill diffuse component if we're dealing with a metal
-    kD *= 1.0 - metalness;
+    //kD *= 1.0 - metalness;
 
-    vec3 pbrColor = ( CalculateDiffuseBRDF( kD ) * CalculateSpecularBRDF( NdotV, NdotL, HdotV, HdotN ) ) * lightIntensity * NdotL;
+    vec3 pbrColor = ( CalculateDiffuseBRDF( kD ) + CalculateSpecularBRDF( NdotV, NdotL, HdotV, HdotN, albedo, metalness, roughness ) ) * lightIntensity * NdotL;
+
+    // Add some ambient lighting
+    vec3 ambient = vec3(0.01) * albedo; // NOTE - We should probably also multiply this by the ambient occlusion
+    pbrColor += ambient;
     
     // TODO - HDR tone mapping would go here
 
     // Gamma correction
-    vec4 finalColor = vec4( pow( pbrColor, vec3( 1.0 / 2.2 ) ), 1.0 );
+    vec3 gammaPBR = pow( pbrColor, vec3( 1.0 / 2.2 ) );
 
+    vec4 finalColor = vec4( gammaPBR, 1.0 );
     outColor = finalColor;
 }

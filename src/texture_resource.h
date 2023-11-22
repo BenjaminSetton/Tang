@@ -53,6 +53,11 @@ namespace TANG
 		// we don't want to create our own base images in this case
 		void CreateImageViewFromBase(VkDevice logicalDevice, VkImage baseImage, VkFormat format, uint32_t mipLevels, VkImageAspectFlags aspect);
 
+		// Copies an arbitrary amount of data into the texture image buffer, up to the maximum size declared when creating the texture
+		// NOTE - The usage of the texture will remain the same, EXCEPT if it has an UNDEFINED usage. In that case the usage will become
+		//        TRANSFER_DST_OPTIMAL
+		void CopyDataIntoImage(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, void* data, VkDeviceSize bytes);
+
 		void Destroy(VkDevice logicalDevice);
 		void DestroyImageView(VkDevice logicalDevice);
 
@@ -62,7 +67,7 @@ namespace TANG
 		VkSampler GetSampler() const;
 		VkFormat GetFormat() const;
 		VkImageLayout GetLayout() const;
-		bool IsValid() const;
+		bool IsInvalid() const;
 
 	private:
 
@@ -92,6 +97,7 @@ namespace TANG
 		uint32_t mipLevels;
 		uint32_t width;
 		uint32_t height;
+		uint32_t bytesPerPixel;
 		bool isValid;
 
 		VkImage baseImage;

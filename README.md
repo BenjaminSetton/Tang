@@ -22,6 +22,9 @@ NOTES:
 - GLFW input - https://www.glfw.org/docs/3.3/input_guide.html#input_keyboard
 - Amazing Vulkan tutorials by Brendan Galea - https://www.youtube.com/@BrendanGalea
 - Vulkan abstraction guide - https://vkguide.dev
+- Image-based lighting - https://www.youtube.com/watch?v=xWCZiksqCGA
+- PBR explanation + walk-through (Victor Gordan) - https://www.youtube.com/watch?v=RRE-F57fbXw&t=10s
+- PBR explanation + walk-through (OGL Dev) - https://www.youtube.com/watch?v=XK_p2MxGBQs&t=126s
 
 ## DEPENDENCIES
 
@@ -37,7 +40,15 @@ NOTES:
 - [X] Come up with a better abstraction for descriptor sets, pools, set layouts and uniform buffers. At the moment it's really tedious to add/remove or update data we're sending to the shaders because it must be changed it too many places
 - [X] Write a basic Camera class that allows us to move around the scene
 - [X] Gather keyboard input using GLFW
-- [ ] Gather mouse input using GLFW
-- [ ] Hash shader code so we can detect when it's outdated and produce a warning in that case
-- [ ] Organize the renderer data so it's easier to conceptualize. Currently it's a mess...
-- [ ] Create an abstraction for textures. These must be imported, loaded, and uploaded to the shaders
+- [X] Gather mouse input using GLFW
+- [X] Create an abstraction for textures. These must be imported, loaded, and uploaded to the shaders
+- [X] Implement a PBR shader
+- [X] Re-organize the renderer code to allow a PBR pipeline
+- [ ] Make shader information more data-driven (e.g. pull shader's input uniform + texture information from a set of data)
+- [ ] Re-organize the renderer's frame-dependent data (FDD) and swap-chain-dependent data (SWIDD)
+- [ ] Create a default material so that assets with incomplete/missing PBR textures can be loaded
+- [ ] Add cubemap support in preparation for IBL
+- [ ] Implement diffuse IBL
+- [ ] Implement specular IBL
+- [ ] Move project build scripts from CMake to Premake
+- [ ] Clarify boundary between asset loader and renderer (especially in naming convention)

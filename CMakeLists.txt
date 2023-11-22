@@ -28,6 +28,7 @@ set(HEADERS
 	src/command_pool_registry.h
 	src/queue_types.h
 	src/queue_family_indices.h
+	src/default_material.h
 	
 	src/camera/base_camera.h
 	src/camera/freefly_camera.h

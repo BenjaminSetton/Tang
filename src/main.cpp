@@ -29,7 +29,7 @@ struct MyAsset
 
 static std::vector<std::string> assetNames =
 {
-    "../src/data/assets/sample/axe/scene.gltf",
+    "../src/data/assets/sample/suzanne_smooth.fbx",
 };
 
 int RandomRangeInt(int min, int max)
@@ -62,10 +62,10 @@ int main(uint32_t argc, const char** argv)
         {
             MyAsset asset(assetName, id);
 
-            float scale = 0.005f;
-            asset.scale[0] = scale;
-            asset.scale[1] = scale;
-            asset.scale[2] = scale;
+			//float scale = 0.005f;
+			//asset.scale[0] = scale;
+			//asset.scale[1] = scale;
+			//asset.scale[2] = scale;
 
             TANG::UpdateAssetTransform(id, asset.pos, asset.rot, asset.scale);
 

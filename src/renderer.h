@@ -165,9 +165,8 @@ namespace TANG
 
 		void CreateDescriptorSets(UUID uuid);
 
-		void CreateRandomTexture();
 		void CreateDepthTexture();
-		void CreateColorTexture();
+		void CreateColorAttachmentTexture();
 
 		void RecordPrimaryCommandBuffer(uint32_t frameBufferIndex);
 		void RecordSecondaryCommandBuffer(SecondaryCommandBuffer& commandBuffer, AssetResources* resources, uint32_t frameBufferIndex);
