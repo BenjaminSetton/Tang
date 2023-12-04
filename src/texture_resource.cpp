@@ -82,9 +82,9 @@ namespace TANG
 		if(samplerInfo != nullptr)   CreateSampler(logicalDevice, samplerInfo);
 	}
 
-	void TextureResource::CreateFromFile(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, std::string_view fileName, const ImageViewCreateInfo* viewInfo, const SamplerCreateInfo* samplerInfo)
+	void TextureResource::CreateFromFile(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, std::string_view fileName, const BaseImageCreateInfo* createInfo, const ImageViewCreateInfo* viewInfo, const SamplerCreateInfo* samplerInfo)
 	{
-		CreateBaseImageFromFile(physicalDevice, logicalDevice, fileName);
+		CreateBaseImageFromFile(physicalDevice, logicalDevice, fileName, createInfo);
 		if(viewInfo != nullptr) CreateImageView(logicalDevice, viewInfo);
 		if(samplerInfo != nullptr) CreateSampler(logicalDevice, samplerInfo);
 	}
@@ -229,7 +229,7 @@ namespace TANG
 		CreateBaseImage_Helper(physicalDevice, logicalDevice, baseImageInfo);
 	}
 
-	void TextureResource::CreateBaseImageFromFile(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, std::string_view fileName)
+	void TextureResource::CreateBaseImageFromFile(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, std::string_view fileName, const BaseImageCreateInfo* createInfo)
 	{
 		int _width, _height, _channels;
 		stbi_uc* data = stbi_load(fileName.data(), &_width, &_height, &_channels, STBI_rgb_alpha);
@@ -248,10 +248,10 @@ namespace TANG
 		BaseImageCreateInfo baseImageInfo{};
 		baseImageInfo.width = _width;
 		baseImageInfo.height = _height;
-		baseImageInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
-		baseImageInfo.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+		baseImageInfo.format = createInfo->format;
+		baseImageInfo.usage = createInfo->usage;
 		baseImageInfo.mipLevels = static_cast<uint32_t>(exactMips);
-		baseImageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+		baseImageInfo.samples = createInfo->samples;
 		CreateBaseImage_Helper(physicalDevice, logicalDevice, &baseImageInfo);
 
 		VkDeviceSize imageSize = _width * _height * bytesPerPixel;

@@ -47,7 +47,9 @@ namespace TANG
 		TextureResource& operator=(const TextureResource& other);
 
 		void Create(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, const BaseImageCreateInfo* baseImageInfo, const ImageViewCreateInfo* viewInfo = nullptr, const SamplerCreateInfo* samplerInfo = nullptr);
-		void CreateFromFile(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, std::string_view fileName, const ImageViewCreateInfo* viewInfo = nullptr, const SamplerCreateInfo* samplerInfo = nullptr);
+		
+		// NOTE - The width, height and mipmaps field from BaseImageCreateInfo in unused in this function. Those get pulled from the loaded image directly
+		void CreateFromFile(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, std::string_view fileName, const BaseImageCreateInfo* createInfo, const ImageViewCreateInfo* viewInfo = nullptr, const SamplerCreateInfo* samplerInfo = nullptr);
 
 		// Create image view from a provided base image. This is used to create an image into the swapchain's provided base images, since
 		// we don't want to create our own base images in this case
@@ -72,7 +74,7 @@ namespace TANG
 	private:
 
 		void CreateBaseImage(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, const BaseImageCreateInfo* baseImageInfo);
-		void CreateBaseImageFromFile(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, std::string_view fileName);
+		void CreateBaseImageFromFile(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, std::string_view fileName, const BaseImageCreateInfo* createInfo);
 
 		// Create image view from a previously-created base image (through CreateBaseImage or CreateBaseImageFromFile)
 		void CreateImageView(VkDevice logicalDevice, const ImageViewCreateInfo* viewInfo);

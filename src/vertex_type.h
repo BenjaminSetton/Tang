@@ -3,7 +3,7 @@ namespace TANG
 {
 	struct VertexType
 	{
-		VertexType() : pos(0.0f, 0.0f, 0.0f), normal(0.0f, 0.0f, 0.0f), tangent(0.0f, 0.0f, 0.0f), uv(0.0f, 0.0f)
+		VertexType() : pos(0.0f, 0.0f, 0.0f), normal(0.0f, 0.0f, 0.0f), tangent(0.0f, 0.0f, 0.0f), bitangent(0.0f, 0.0f, 0.0f), uv(0.0f, 0.0f)
 		{
 		}
 
@@ -12,12 +12,12 @@ namespace TANG
 		}
 
 		VertexType(const VertexType& other) : pos(other.pos), normal(other.normal), 
-			tangent(other.tangent), uv(other.uv)
+			tangent(other.tangent), bitangent(other.bitangent), uv(other.uv)
 		{
 		}
 
 		VertexType(VertexType&& other) noexcept : pos(std::move(other.pos)), normal(std::move(other.normal)), 
-			tangent(std::move(other.tangent)), uv(std::move(other.uv))
+			tangent(std::move(other.tangent)), bitangent(std::move(other.bitangent)), uv(std::move(other.uv))
 		{
 		}
 
@@ -31,6 +31,7 @@ namespace TANG
 			pos = other.pos;
 			normal = other.normal;
 			tangent = other.tangent;
+			bitangent = other.bitangent;
 			uv = other.uv;
 
 			return *this;
@@ -42,6 +43,7 @@ namespace TANG
 			return pos == other.pos && 
 				normal == other.normal && 
 				tangent == other.tangent &&
+				bitangent == other.bitangent &&
 				uv == other.uv;
 		}
 
@@ -49,6 +51,7 @@ namespace TANG
 		glm::vec3 pos;
 		glm::vec3 normal;
 		glm::vec3 tangent;
+		glm::vec3 bitangent;
 		glm::vec2 uv;
 	};
 

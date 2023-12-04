@@ -20,9 +20,14 @@
 #include "utils/logger.h"
 #include "utils/sanity_check.h"
 
-// Enabling this define allows assimp to fix some common importing issues, such 
-// as inward-facing normals and other invalid data
-//#define CAREFUL_IMPORT
+// Enables assimp fast imports, which don't perform nearly as much error checking on the asset data.
+// If this is disabled, the loader defaults to "quality" importing which is slower but
+// fixes common errors on data and optimizes the asset data slightly
+//#define FAST_IMPORT
+
+// Stores the material textures file path, relative to the working directory.
+// TODO - Move this to a global config, along with the other project-relative paths
+static const std::string materialTexturesFilePath = "../src/data/textures/";
 
 namespace TANG
 {
@@ -109,10 +114,10 @@ namespace TANG
 		AssetDisk* Load(std::string_view filePath)
 		{
 			Assimp::Importer importer;
-#if defined(CAREFUL_IMPORT)
-			uint32_t importFlags = aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_FixInfacingNormals | aiProcess_FindInvalidData | aiProcess_CalcTangentSpace;
-#else
+#if defined(FAST_IMPORT)
 			uint32_t importFlags = aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_CalcTangentSpace;
+#else
+			uint32_t importFlags = aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_FixInfacingNormals | aiProcess_FindInvalidData | aiProcess_CalcTangentSpace;
 #endif
 			const aiScene* scene = importer.ReadFile(filePath.data(), importFlags);
 
@@ -156,21 +161,15 @@ namespace TANG
 					const aiVector3D& importedPos = importedMesh->mVertices[j];
 					const aiVector3D& importedNormal = importedMesh->mNormals[j];
 					const aiVector3D& importedTangent = importedMesh->mTangents[j];
+					const aiVector3D& importedBitangent = importedMesh->mBitangents[j];
 					const aiVector3D& importedUVs = importedMesh->HasTextureCoords(0) ? importedMesh->mTextureCoords[0][j] : aiVector3D(0, 0, 0);
 
 					VertexType vertex{};
 					vertex.pos = { importedPos.x, importedPos.y, importedPos.z };
 					vertex.normal = { importedNormal.x, importedNormal.y, importedNormal.z };
 					vertex.tangent = { importedTangent.x, importedTangent.y, importedTangent.z };
+					vertex.bitangent = { importedBitangent.x, importedBitangent.y, importedBitangent.z };
 					vertex.uv = { importedUVs.x, importedUVs.y };
-
-					const float epsilon_normal = 0.2f;
-					if ((importedNormal.x > -epsilon_normal && importedNormal.x < epsilon_normal) &&
-						(importedNormal.y > -epsilon_normal && importedNormal.y < epsilon_normal) &&
-						(importedNormal.z > -epsilon_normal && importedNormal.z < epsilon_normal))
-					{
-						LogError("wrong normal?");
-					}
 
 					mesh.vertices[j] = vertex;
 				}
@@ -271,7 +270,7 @@ namespace TANG
 				// it was exported incorrectly
 				if (currentMaterial.GetTextureCount() == 0)
 				{
-					LogWarning("Material '%s' has no supported textures!", currentMaterial.GetName().data());
+					LogWarning("Material '%s' has no supported textures! Deleting empty material...", currentMaterial.GetName().data());
 					asset->materials.erase(asset->materials.begin() + i);
 				}
 			}

@@ -136,6 +136,13 @@ void main()
     normal = normal * 2.0 - 1.0;
     normal = normalize( inTBN * normal );
 
+    // DEBUG
+    //normal = normalize(inNormal);
+    //normal = normal * 0.5 + 0.5;
+    //outColor = vec4(normal, 1.0);
+    //return;
+    // DEBUG
+
     vec3 cameraPos = cameraData.position.xyz;
     vec3 light = -normalize(vec3(-0.4, -0.75, -1.0));
     vec3 view = normalize(cameraPos - inPosition);

@@ -74,15 +74,17 @@ static VkVertexInputBindingDescription GetVertexBindingDescription()
 	return bindingDesc;
 }
 
+static constexpr uint32_t VERTEX_ATTRIBUTE_COUNT = 5;
+
 // Ensure that whenever we update the Vertex layout, we fail to compile unless
 // the attribute descriptions below are updated. Note in this case we won't
 // assert if the byte usage remains the same but we switch to a different format
 // (like switching the order of two attributes)
-TNG_ASSERT_COMPILE(sizeof(TANG::VertexType) == 44);
+TNG_ASSERT_COMPILE(sizeof(TANG::VertexType) == 56);
 
-static std::array<VkVertexInputAttributeDescription, 3> GetVertexAttributeDescriptions()
+static std::array<VkVertexInputAttributeDescription, VERTEX_ATTRIBUTE_COUNT> GetVertexAttributeDescriptions()
 {
-	std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{};
+	std::array<VkVertexInputAttributeDescription, VERTEX_ATTRIBUTE_COUNT> attributeDescriptions{};
 
 	// POSITION
 	attributeDescriptions[0].binding = 0;
@@ -97,16 +99,22 @@ static std::array<VkVertexInputAttributeDescription, 3> GetVertexAttributeDescri
 	attributeDescriptions[1].offset = offsetof(TANG::VertexType, normal);
 
 	// TANGENT
-	attributeDescriptions[1].binding = 0;
-	attributeDescriptions[1].location = 2;
-	attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT; // vec3 (12 bytes)
-	attributeDescriptions[1].offset = offsetof(TANG::VertexType, tangent);
+	attributeDescriptions[2].binding = 0;
+	attributeDescriptions[2].location = 2;
+	attributeDescriptions[2].format = VK_FORMAT_R32G32B32_SFLOAT; // vec3 (12 bytes)
+	attributeDescriptions[2].offset = offsetof(TANG::VertexType, tangent);
+
+	// BITANGENT
+	attributeDescriptions[3].binding = 0;
+	attributeDescriptions[3].location = 3;
+	attributeDescriptions[3].format = VK_FORMAT_R32G32B32_SFLOAT; // vec3 (12 bytes)
+	attributeDescriptions[3].offset = offsetof(TANG::VertexType, tangent);
 
 	// UV
-	attributeDescriptions[2].binding = 0;
-	attributeDescriptions[2].location = 3;
-	attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT; // vec2 (8 bytes)
-	attributeDescriptions[2].offset = offsetof(TANG::VertexType, uv);
+	attributeDescriptions[4].binding = 0;
+	attributeDescriptions[4].location = 4;
+	attributeDescriptions[4].format = VK_FORMAT_R32G32_SFLOAT; // vec2 (8 bytes)
+	attributeDescriptions[4].offset = offsetof(TANG::VertexType, uv);
 
 	return attributeDescriptions;
 }
@@ -320,16 +328,33 @@ namespace TANG
 		ImageViewCreateInfo viewCreateInfo{};
 		viewCreateInfo.aspect = VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
 
+		BaseImageCreateInfo baseImageInfo{};
+		baseImageInfo.width = 0; // Unused
+		baseImageInfo.height = 0; // Unused
+		baseImageInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
+		baseImageInfo.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+		baseImageInfo.mipLevels = 0; // Unused
+		baseImageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+
 		for (uint32_t i = 0; i < static_cast<uint32_t>(Material::TEXTURE_TYPE::_COUNT); i++)
 		{
 			Material::TEXTURE_TYPE texType = static_cast<Material::TEXTURE_TYPE>(i);
 			if (material.HasTextureOfType(texType))
 			{
+				if (texType == Material::TEXTURE_TYPE::NORMAL)
+				{
+					baseImageInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+				}
+				else
+				{
+					baseImageInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
+				}
+
 				Texture* matTexture = material.GetTextureOfType(texType);
 				TNG_ASSERT_MSG(matTexture != nullptr, "Why is this texture nullptr when we specifically checked against it?");
 
 				TextureResource& texResource = resources.material[i];
-				texResource.CreateFromFile(physicalDevice, logicalDevice, matTexture->fileName, &viewCreateInfo, &samplerInfo);
+				texResource.CreateFromFile(physicalDevice, logicalDevice, matTexture->fileName, &baseImageInfo, &viewCreateInfo, &samplerInfo);
 			}
 			else
 			{

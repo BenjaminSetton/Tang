@@ -12,10 +12,6 @@
 
 namespace TANG
 {
-	// Stores the material textures file path, relative to the working directory.
-	// TODO - Move this to a global config, along with the other project-relative paths
-	static const std::string materialTexturesFilePath = "../src/data/textures/sample/";
-
 	// Global maps
 	static const std::vector<aiTextureType> supportedTextureTypes =
 	{
