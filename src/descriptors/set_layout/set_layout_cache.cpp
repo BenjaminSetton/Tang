@@ -68,7 +68,7 @@ namespace TANG
 		layoutCache.clear();
 	}
 
-	LayoutCache& SetLayoutCache::GetLayoutCache()
+	const LayoutCache& SetLayoutCache::GetLayoutCache() const
 	{
 		return layoutCache;
 	}

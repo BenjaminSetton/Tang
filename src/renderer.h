@@ -141,7 +141,7 @@ namespace TANG
 
 		// This is a helper function for creating the "VkShaderModule" wrappers around
 		// the shader code, read from createGraphicsPipeline() below
-		VkShaderModule CreateShaderModule(const char* shaderCode, uint32_t numBytes);
+		/*VkShaderModule CreateShaderModule(const char* shaderCode, uint32_t numBytes);*/
 
 		void CreateCommandPools();
 
@@ -206,7 +206,7 @@ namespace TANG
 		SecondaryCommandBuffer* GetSecondaryCommandBufferAtIndex(uint32_t frameBufferIndex, UUID uuid);
 		VkFramebuffer GetFramebufferAtIndex(uint32_t frameBufferIndex);
 
-		VkShaderModule LoadShader(const std::string& fileName);
+		/*VkShaderModule LoadShader(const std::string& fileName);*/
 
 	private:
 
@@ -300,7 +300,6 @@ namespace TANG
 
 		VkRenderPass renderPass;
 		VkPipelineLayout pipelineLayout;
-
 		VkPipeline graphicsPipeline;
 
 		uint32_t currentFrame;

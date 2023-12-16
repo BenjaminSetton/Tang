@@ -35,7 +35,7 @@ namespace TANG
 		VkDescriptorSetLayout CreateSetLayout(VkDevice logicalDevice, SetLayoutSummary& layoutSummary, VkDescriptorSetLayoutCreateFlags flags);
 		void DestroyLayouts(VkDevice logicalDevice);
 
-		LayoutCache& GetLayoutCache();
+		const LayoutCache& GetLayoutCache() const;
 		DescriptorSetLayout* GetSetLayout(const SetLayoutSummary& summary);
 		uint32_t GetLayoutCount() const;
 

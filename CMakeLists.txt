@@ -29,6 +29,7 @@ set(HEADERS
 	src/queue_types.h
 	src/queue_family_indices.h
 	src/default_material.h
+	src/shader.h
 	
 	src/camera/base_camera.h
 	src/camera/freefly_camera.h
@@ -63,6 +64,9 @@ set(HEADERS
 	src/shaders/shader_data.h
 	src/shaders/blinn_phong/blinn_phong_data.h
 	src/shaders/pbr/pbr_data.h
+	
+	src/pipelines/base_pipeline.h
+	src/pipelines/pbr_pipeline.h
 )
 
 # Source files
@@ -76,6 +80,7 @@ set(SOURCES
 	src/texture_resource.cpp
 	src/command_pool_registry.cpp
 	src/queue_family_indices.cpp
+	src/shader.cpp
 	
 	src/camera/base_camera.cpp
 	src/camera/freefly_camera.cpp
@@ -107,6 +112,9 @@ set(SOURCES
 	
 	src/utils/uuid.cpp
 	src/utils/logger.cpp
+	
+	src/pipelines/base_pipeline.cpp
+	src/pipelines/pbr_pipeline.cpp
 )
 
 # Set the output directories

@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "sanity_check.h"
+#include "logger.h"
 
 namespace TANG
 {
