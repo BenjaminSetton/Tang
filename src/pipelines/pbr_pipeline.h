@@ -7,7 +7,7 @@ namespace TANG
 	{
 	public:
 
-		void Create(VkRenderPass renderPass, const SetLayoutCache& setLayoutCache) override;
+		void Create(VkRenderPass renderPass, const SetLayoutCache& setLayoutCache, const VkExtent2D& viewportSize) override;
 
 	};
 }

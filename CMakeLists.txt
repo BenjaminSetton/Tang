@@ -114,6 +114,7 @@ set(SOURCES
 	
 	src/utils/uuid.cpp
 	src/utils/logger.cpp
+	src/utils/file_utils.cpp
 	
 	src/pipelines/base_pipeline.cpp
 	src/pipelines/pbr_pipeline.cpp

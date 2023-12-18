@@ -19,7 +19,7 @@ namespace TANG
 
 		// Pure virtual creation/destruction methods. Every derived class must specify all the components
 		// necessary to create a Vulkan pipeline
-		virtual void Create(VkRenderPass renderPass, const SetLayoutCache& setLayoutCache) = 0;
+		virtual void Create(VkRenderPass renderPass, const SetLayoutCache& setLayoutCache, const VkExtent2D& viewportSize) = 0;
 		virtual void Destroy();
 
 		VkPipeline GetPipeline() const;

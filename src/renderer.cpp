@@ -1081,7 +1081,7 @@ namespace TANG
 
 	void Renderer::CreatePipelines()
 	{
-		pbrPipeline.Create(renderPass, setLayoutCache);
+		pbrPipeline.Create(renderPass, setLayoutCache, swapChainExtent);
 	}
 
 	void Renderer::CreateRenderPass()

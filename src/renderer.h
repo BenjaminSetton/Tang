@@ -1,11 +1,6 @@
 #ifndef RENDERER_H
 #define RENDERER_H
 
-//
-// This code was taken from the Vulkan tutorial website:
-// https://vulkan-tutorial.com
-//
-
 #include <unordered_map>
 #include <vector>
 
@@ -203,9 +198,6 @@ namespace TANG
 		VkInstance vkInstance;
 		VkDebugUtilsMessengerEXT debugMessenger;
 
-		//VkPhysicalDevice physicalDevice;
-		//VkDevice logicalDevice;
-
 		VkSurfaceKHR surface;
 
 		std::unordered_map<QueueType, VkQueue> queues;
@@ -290,8 +282,6 @@ namespace TANG
 
 		VkRenderPass renderPass;
 		PBRPipeline pbrPipeline;
-		//VkPipelineLayout pipelineLayout;
-		//VkPipeline graphicsPipeline;
 
 		uint32_t currentFrame;
 
@@ -305,9 +295,6 @@ namespace TANG
 		TextureResource randomTexture;
 		TextureResource depthBuffer;
 		TextureResource colorAttachment;
-
-		// Multisampled anti-aliasing
-		//VkSampleCountFlagBits msaaSamples;
 
 		// Cached window sizes
 		uint32_t framebufferWidth, framebufferHeight;
