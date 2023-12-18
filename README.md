@@ -14,7 +14,7 @@ A simple graphics framework that allows any project to quickly display stuff on 
 
 NOTES:
 - The release download will come with two things: the .lib file and a folder containing the headers. Alternatively, you can clone the repository and compile the source code
-- If you wish to open the project, make sure you have CMake installed!
+- If you wish to compile the project yourself, make sure you have CMake installed!
 
 ## RESOURCES
 
@@ -33,7 +33,7 @@ NOTES:
 - GLFW (OS window handling)
 - GLM (math library)
 - stb (image loading)
-- assimp (assert importing)
+- assimp (asset importing)
 
 ## TODO
 
