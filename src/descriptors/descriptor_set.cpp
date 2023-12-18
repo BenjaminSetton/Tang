@@ -1,11 +1,11 @@
 
+#include "../device_cache.h"
+#include "../utils/logger.h"
+#include "../utils/sanity_check.h"
 #include "descriptor_set.h"
-
 #include "descriptor_pool.h"
 #include "set_layout/set_layout.h"
 #include "write_descriptor_set.h"
-#include "../utils/logger.h"
-#include "../utils/sanity_check.h"
 
 namespace TANG
 {
@@ -60,7 +60,7 @@ namespace TANG
 		return *this;
 	}
 
-	bool DescriptorSet::Create(VkDevice logicalDevice, const DescriptorPool& descriptorPool, const DescriptorSetLayout& setLayout)
+	bool DescriptorSet::Create(const DescriptorPool& descriptorPool, const DescriptorSetLayout& setLayout)
 	{
 		if (descriptorSet != VK_NULL_HANDLE)
 		{
@@ -76,7 +76,7 @@ namespace TANG
 		allocInfo.descriptorSetCount = 1;
 		allocInfo.pSetLayouts = layout;
 
-		if (vkAllocateDescriptorSets(logicalDevice, &allocInfo, &descriptorSet) != VK_SUCCESS)
+		if (vkAllocateDescriptorSets(GetLogicalDevice(), &allocInfo, &descriptorSet) != VK_SUCCESS)
 		{
 			LogError("Failed to allocate descriptor sets!");
 			return false;
@@ -85,7 +85,7 @@ namespace TANG
 		return true;
 	}
 
-	void DescriptorSet::Update(VkDevice logicalDevice, const WriteDescriptorSets& writeDescriptorSets)
+	void DescriptorSet::Update(const WriteDescriptorSets& writeDescriptorSets)
 	{
 		if (descriptorSet == VK_NULL_HANDLE)
 		{
@@ -95,7 +95,7 @@ namespace TANG
 
 		uint32_t numWriteDescriptorSets = writeDescriptorSets.GetWriteDescriptorSetCount();
 
-		vkUpdateDescriptorSets(logicalDevice, numWriteDescriptorSets, writeDescriptorSets.GetWriteDescriptorSets(), 0, nullptr);
+		vkUpdateDescriptorSets(GetLogicalDevice(), numWriteDescriptorSets, writeDescriptorSets.GetWriteDescriptorSets(), 0, nullptr);
 	}
 
 	VkDescriptorSet DescriptorSet::GetDescriptorSet() const

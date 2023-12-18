@@ -26,9 +26,9 @@ namespace TANG
 		DescriptorSet(DescriptorSet&& other) noexcept;
 		DescriptorSet& operator=(const DescriptorSet& other);
 
-		bool Create(VkDevice logicalDevice, const DescriptorPool& descriptorPool, const DescriptorSetLayout& setLayouts);
+		bool Create(const DescriptorPool& descriptorPool, const DescriptorSetLayout& setLayouts);
 
-		void Update(VkDevice logicalDevice, const WriteDescriptorSets& writeDescriptorSets);
+		void Update(const WriteDescriptorSets& writeDescriptorSets);
 
 		VkDescriptorSet GetDescriptorSet() const;
 

@@ -16,8 +16,8 @@ namespace TANG
 		DescriptorSetLayout(DescriptorSetLayout&& other) noexcept;
 		DescriptorSetLayout& operator=(const DescriptorSetLayout& other);
 
-		void Create(VkDevice logicalDevice, VkDescriptorSetLayoutCreateInfo& createInfo);
-		void Destroy(VkDevice logicalDevice);
+		void Create(VkDescriptorSetLayoutCreateInfo& createInfo);
+		void Destroy();
 
 		VkDescriptorSetLayout GetLayout() const;
 

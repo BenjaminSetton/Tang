@@ -4,7 +4,6 @@
 #include <unordered_map>
 
 #include "queue_types.h"
-#include "utils/logger.h"
 #include "vulkan/vulkan.h"
 
 namespace TANG

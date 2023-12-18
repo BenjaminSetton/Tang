@@ -1,20 +1,23 @@
 
 #include "../command_pool_registry.h"
 #include "disposable_command.h"
+#include "../device_cache.h"
 #include "../renderer.h"
 #include "../utils/logger.h"
 
 namespace TANG
 {
-	DisposableCommand::DisposableCommand(VkDevice logicalDevice, QueueType _type) : type(_type)
+	DisposableCommand::DisposableCommand(QueueType _type) : type(_type)
 	{
+		VkDevice logicalDevice = GetLogicalDevice();
+
 		VkResult res;
 		allocatedBuffer = VK_NULL_HANDLE;
 
 		VkCommandBufferAllocateInfo allocInfo{};
 		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-		allocInfo.commandPool = CommandPoolRegistry::GetInstance().GetCommandPool(type);
+		allocInfo.commandPool = CommandPoolRegistry::Get().GetCommandPool(type);
 		allocInfo.commandBufferCount = 1;
 
 		VkCommandBuffer commandBuffer;
@@ -57,7 +60,7 @@ namespace TANG
 
 		res = Renderer::GetInstance().SubmitQueue(type, &submitInfo, 1, VK_NULL_HANDLE, true);
 
-		vkFreeCommandBuffers(logicalDeviceHandle, CommandPoolRegistry::GetInstance().GetCommandPool(type), 1, &allocatedBuffer);
+		vkFreeCommandBuffers(logicalDeviceHandle, CommandPoolRegistry::Get().GetCommandPool(type), 1, &allocatedBuffer);
 	}
 
 	VkCommandBuffer DisposableCommand::GetBuffer() const

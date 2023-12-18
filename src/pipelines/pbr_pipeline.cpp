@@ -1,11 +1,12 @@
 
-#include "pbr_pipeline.h"
+#include <array>
+#include <vector>
+
+#include "../device_cache.h"
 #include "../shader.h"
 #include "../utils/sanity_check.h"
 #include "../vertex_type.h"
-
-#include <array>
-#include <vector>
+#include "pbr_pipeline.h"
 
 static VkVertexInputBindingDescription GetVertexBindingDescription()
 {
@@ -63,12 +64,12 @@ static std::array<VkVertexInputAttributeDescription, VERTEX_ATTRIBUTE_COUNT> Get
 
 namespace TANG
 {
-	void PBRPipeline::Create(VkDevice logicalDevice, VkRenderPass renderPass, const SetLayoutCache& setLayoutCache)
+	void PBRPipeline::Create(VkRenderPass renderPass, const SetLayoutCache& setLayoutCache)
 	{
 		// Read the compiled shaders
 		Shader vertexShader, fragmentShader;
-		vertexShader.Create(logicalDevice, "vert.spv", ShaderType::PBR);
-		fragmentShader.Create(logicalDevice, "frag.spv", ShaderType::PBR);
+		vertexShader.Create("vert.spv", ShaderType::PBR);
+		fragmentShader.Create("frag.spv", ShaderType::PBR);
 
 		VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
 		vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -155,7 +156,7 @@ namespace TANG
 		VkPipelineMultisampleStateCreateInfo multisampling{};
 		multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 		multisampling.sampleShadingEnable = VK_FALSE;
-		multisampling.rasterizationSamples = msaaSamples;
+		multisampling.rasterizationSamples = DeviceCache::Get().GetMaxMSAA();
 		multisampling.minSampleShading = 1.0f; // Optional
 		multisampling.pSampleMask = nullptr; // Optional
 		multisampling.alphaToCoverageEnable = VK_FALSE; // Optional
@@ -215,7 +216,7 @@ namespace TANG
 		pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
 		pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
 
-		if (!CreatePipelineLayout(logicalDevice, pipelineLayoutInfo))
+		if (!CreatePipelineLayout(pipelineLayoutInfo))
 		{
 			TNG_ASSERT_MSG(false, "Failed to create pipeline layout!");
 		}
@@ -238,13 +239,13 @@ namespace TANG
 		pipelineInfo.basePipelineHandle = VK_NULL_HANDLE; // Optional
 		pipelineInfo.basePipelineIndex = -1; // Optional
 
-		if (!CreatePipelineObject(logicalDevice, pipelineInfo))
+		if (!CreatePipelineObject(pipelineInfo))
 		{
 			TNG_ASSERT_MSG(false, "Failed to create pipeline!");
 		}
 
-		vertexShader.Destroy(logicalDevice);
-		fragmentShader.Destroy(logicalDevice);
+		vertexShader.Destroy();
+		fragmentShader.Destroy();
 	}
 }
 

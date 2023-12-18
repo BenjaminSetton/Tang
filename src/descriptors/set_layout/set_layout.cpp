@@ -1,6 +1,7 @@
 
 #include "set_layout.h"
 
+#include "../../device_cache.h"
 #include "../../utils/logger.h"
 #include "../../utils/sanity_check.h"
 
@@ -47,8 +48,10 @@ namespace TANG
 		return *this;
 	}
 
-	void DescriptorSetLayout::Create(VkDevice logicalDevice, VkDescriptorSetLayoutCreateInfo& createInfo)
+	void DescriptorSetLayout::Create(VkDescriptorSetLayoutCreateInfo& createInfo)
 	{
+		VkDevice logicalDevice = GetLogicalDevice();
+
 		if (setLayout != VK_NULL_HANDLE)
 		{
 			LogWarning("Overwriting descriptor set layout");
@@ -60,8 +63,10 @@ namespace TANG
 		}
 	}
 
-	void DescriptorSetLayout::Destroy(VkDevice logicalDevice)
+	void DescriptorSetLayout::Destroy()
 	{
+		VkDevice logicalDevice = GetLogicalDevice();
+
 		if (setLayout == VK_NULL_HANDLE)
 		{
 			LogError("Descriptor set layout is already destroyed, but we're attempting to destroy it again");

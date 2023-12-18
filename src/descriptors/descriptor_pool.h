@@ -17,9 +17,9 @@ namespace TANG
 		DescriptorPool(DescriptorPool&& other);
 		DescriptorPool& operator=(const DescriptorPool& other);
 
-		void Create(VkDevice logicalDevice, VkDescriptorPoolSize* poolSizes, uint32_t poolSizeCounts, uint32_t maxSets, VkDescriptorPoolCreateFlags flags);
-		void Reset(VkDevice logicalDevice);
-		void Destroy(VkDevice logicalDevice);
+		void Create(VkDescriptorPoolSize* poolSizes, uint32_t poolSizeCounts, uint32_t maxSets, VkDescriptorPoolCreateFlags flags);
+		void Reset();
+		void Destroy();
 
 		VkDescriptorPool GetPool() const;
 		bool IsValid();

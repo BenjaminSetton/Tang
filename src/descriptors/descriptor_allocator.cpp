@@ -1,10 +1,11 @@
 
+#include "../device_cache.h"
+#include "../utils/logger.h"
+#include "../utils/sanity_check.h"
 #include "descriptor_allocator.h"
 #include "descriptor_pool.h"
 #include "descriptor_set.h"
 #include "set_layout/set_layout.h"
-#include "../utils/logger.h"
-#include "../utils/sanity_check.h"
 
 namespace TANG
 {
@@ -57,18 +58,18 @@ namespace TANG
 		return *this;
 	}
 
-	bool DescriptorAllocator::CreateSet(VkDevice logicalDevice, DescriptorSetLayout setLayout, DescriptorSet* out_set)
+	bool DescriptorAllocator::CreateSet(DescriptorSetLayout setLayout, DescriptorSet* out_set)
 	{
 		TNG_ASSERT_MSG(out_set != nullptr, "Cannot create a descriptor set when the handle is null!");
 
 		// Grab a pool, if we don't have one already
 		if (!currentPool.IsValid())
 		{
-			currentPool = PickPool(logicalDevice);
+			currentPool = PickPool();
 			usedPools.push_back(currentPool);
 		}
 
-		bool succeeded = out_set->Create(logicalDevice, currentPool, setLayout);
+		bool succeeded = out_set->Create(currentPool, setLayout);
 
 		// Try a second time
 		// TODO - In reality, we only ever need to retry if the allocation failed because either the pool ran out of memory,
@@ -76,10 +77,10 @@ namespace TANG
 		if (!succeeded)
 		{
 			// Grab another pool, regardless of the pool we had before, and retry
-			currentPool = PickPool(logicalDevice);
+			currentPool = PickPool();
 			usedPools.push_back(currentPool);
 
-			succeeded = out_set->Create(logicalDevice, currentPool, setLayout);
+			succeeded = out_set->Create(currentPool, setLayout);
 
 			// If we failed again, we can't recover from the issue
 			if(!succeeded) return false;
@@ -88,8 +89,10 @@ namespace TANG
 		return true;
 	}
 
-	void DescriptorAllocator::DestroyPools(VkDevice logicalDevice)
+	void DescriptorAllocator::DestroyPools()
 	{
+		VkDevice logicalDevice = GetLogicalDevice();
+
 		for (auto pool : freePools)
 		{
 			vkDestroyDescriptorPool(logicalDevice, pool.GetPool(), nullptr);
@@ -104,7 +107,7 @@ namespace TANG
 		usedPools.clear();
 	}
 
-	DescriptorPool DescriptorAllocator::CreatePool(VkDevice logicalDevice, const DescriptorAllocator::PoolSizes& poolSizes, uint32_t maxSets, VkDescriptorPoolCreateFlags flags)
+	DescriptorPool DescriptorAllocator::CreatePool(const DescriptorAllocator::PoolSizes& poolSizes, uint32_t maxSets, VkDescriptorPoolCreateFlags flags)
 	{
 		std::vector<VkDescriptorPoolSize> sizes;
 		sizes.reserve(poolSizes.sizes.size());
@@ -114,16 +117,16 @@ namespace TANG
 		}
 
 		DescriptorPool descPool;
-		descPool.Create(logicalDevice, sizes.data(), static_cast<uint32_t>(sizes.size()), maxSets, flags);
+		descPool.Create(sizes.data(), static_cast<uint32_t>(sizes.size()), maxSets, flags);
 
 		return descPool;
 	}
 
-	void DescriptorAllocator::ResetPools(VkDevice logicalDevice)
+	void DescriptorAllocator::ResetPools()
 	{
 		for (auto pool : usedPools)
 		{
-			pool.Reset(logicalDevice);
+			pool.Reset();
 			freePools.push_back(pool);
 		}
 
@@ -131,7 +134,7 @@ namespace TANG
 		currentPool.ClearHandle();
 	}
 
-	DescriptorPool DescriptorAllocator::PickPool(VkDevice logicalDevice)
+	DescriptorPool DescriptorAllocator::PickPool()
 	{
 		if (freePools.size() > 0)
 		{
@@ -143,7 +146,7 @@ namespace TANG
 		else
 		{
 			// No pools available, create a new one
-			return CreatePool(logicalDevice, descriptorSizes, 100, 0);
+			return CreatePool(descriptorSizes, 100, 0);
 		}
 	}
 }

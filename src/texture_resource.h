@@ -46,24 +46,24 @@ namespace TANG
 		TextureResource(TextureResource&& other);
 		TextureResource& operator=(const TextureResource& other);
 
-		void Create(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, const BaseImageCreateInfo* baseImageInfo, const ImageViewCreateInfo* viewInfo = nullptr, const SamplerCreateInfo* samplerInfo = nullptr);
+		void Create(const BaseImageCreateInfo* baseImageInfo, const ImageViewCreateInfo* viewInfo = nullptr, const SamplerCreateInfo* samplerInfo = nullptr);
 		
 		// NOTE - The width, height and mipmaps field from BaseImageCreateInfo in unused in this function. Those get pulled from the loaded image directly
-		void CreateFromFile(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, std::string_view fileName, const BaseImageCreateInfo* createInfo, const ImageViewCreateInfo* viewInfo = nullptr, const SamplerCreateInfo* samplerInfo = nullptr);
+		void CreateFromFile(std::string_view fileName, const BaseImageCreateInfo* createInfo, const ImageViewCreateInfo* viewInfo = nullptr, const SamplerCreateInfo* samplerInfo = nullptr);
 
 		// Create image view from a provided base image. This is used to create an image into the swapchain's provided base images, since
 		// we don't want to create our own base images in this case
-		void CreateImageViewFromBase(VkDevice logicalDevice, VkImage baseImage, VkFormat format, uint32_t mipLevels, VkImageAspectFlags aspect);
+		void CreateImageViewFromBase(VkImage baseImage, VkFormat format, uint32_t mipLevels, VkImageAspectFlags aspect);
 
 		// Copies an arbitrary amount of data into the texture image buffer, up to the maximum size declared when creating the texture
 		// NOTE - The usage of the texture will remain the same, EXCEPT if it has an UNDEFINED usage. In that case the usage will become
 		//        TRANSFER_DST_OPTIMAL
-		void CopyDataIntoImage(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, void* data, VkDeviceSize bytes);
+		void CopyDataIntoImage(void* data, VkDeviceSize bytes);
 
-		void Destroy(VkDevice logicalDevice);
-		void DestroyImageView(VkDevice logicalDevice);
+		void Destroy();
+		void DestroyImageView();
 
-		void TransitionLayout(VkDevice logicalDevice, VkImageLayout destinationLayout);
+		void TransitionLayout(VkImageLayout destinationLayout);
 
 		VkImageView GetImageView() const;
 		VkSampler GetSampler() const;
@@ -73,25 +73,25 @@ namespace TANG
 
 	private:
 
-		void CreateBaseImage(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, const BaseImageCreateInfo* baseImageInfo);
-		void CreateBaseImageFromFile(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, std::string_view fileName, const BaseImageCreateInfo* createInfo);
+		void CreateBaseImage(const BaseImageCreateInfo* baseImageInfo);
+		void CreateBaseImageFromFile(std::string_view fileName, const BaseImageCreateInfo* createInfo);
 
 		// Create image view from a previously-created base image (through CreateBaseImage or CreateBaseImageFromFile)
-		void CreateImageView(VkDevice logicalDevice, const ImageViewCreateInfo* viewInfo);
+		void CreateImageView(const ImageViewCreateInfo* viewInfo);
 
-		void CreateSampler(VkDevice logicalDevice, const SamplerCreateInfo* samplerInfo);
+		void CreateSampler(const SamplerCreateInfo* samplerInfo);
 
-		void CreateBaseImage_Helper(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, const BaseImageCreateInfo* baseImageInfo);
+		void CreateBaseImage_Helper(const BaseImageCreateInfo* baseImageInfo);
 
-		void CopyFromBuffer(VkDevice logicalDevice, VkBuffer buffer);
-		void GenerateMipmaps(VkPhysicalDevice physicalDevice, VkDevice logicalDevice);
+		void CopyFromBuffer(VkBuffer buffer);
+		void GenerateMipmaps();
 
 		// NOTE - This function does NOT clean up the allocated memory!!
 		void ResetMembers();
 
 		bool HasStencilComponent(VkFormat format);
 
-		uint32_t FindMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter, VkMemoryPropertyFlags properties);
+		uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 
 	private:
 

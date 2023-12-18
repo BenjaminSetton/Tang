@@ -3,6 +3,7 @@
 
 #include "buffer.h"
 #include "../utils/logger.h"
+#include "../device_cache.h"
 
 namespace TANG
 {
@@ -112,8 +113,10 @@ namespace TANG
 		vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
 	}
 
-	void Buffer::CreateBase(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties)
+	void Buffer::CreateBase(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties)
 	{
+		VkDevice logicalDevice = GetLogicalDevice();
+
 		VkBufferCreateInfo bufferInfo{};
 		bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 		bufferInfo.size = size;
@@ -132,7 +135,7 @@ namespace TANG
 		VkMemoryAllocateInfo allocInfo{};
 		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 		allocInfo.allocationSize = memRequirements.size;
-		allocInfo.memoryTypeIndex = FindMemoryType(physicalDevice, memRequirements.memoryTypeBits, properties);
+		allocInfo.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, properties);
 
 		if (vkAllocateMemory(logicalDevice, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS)
 		{
@@ -147,10 +150,9 @@ namespace TANG
 		bufferState = BUFFER_STATE::CREATED;
 	}
 
-	uint32_t Buffer::FindMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter, VkMemoryPropertyFlags memFlags)
+	uint32_t Buffer::FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags memFlags)
 	{
-		VkPhysicalDeviceMemoryProperties memProperties;
-		vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
+		VkPhysicalDeviceMemoryProperties memProperties = DeviceCache::Get().GetPhysicalDeviceMemoryProperties();
 
 		for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++)
 		{

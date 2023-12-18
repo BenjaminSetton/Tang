@@ -17,7 +17,7 @@ namespace TANG
 		SecondaryCommandBuffer(SecondaryCommandBuffer&& other) noexcept;
 		SecondaryCommandBuffer& operator=(const SecondaryCommandBuffer& other);
 
-		void Create(VkDevice logicalDevice, VkCommandPool commandPool) override;
+		void Create(VkCommandPool commandPool) override;
 
 		void CMD_BindMesh(AssetResources* resources);
 		void CMD_BindDescriptorSets(VkPipelineLayout pipelineLayout, uint32_t descriptorSetCount, VkDescriptorSet* descriptorSets);

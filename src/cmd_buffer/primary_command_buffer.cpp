@@ -1,9 +1,10 @@
 
 #include <array>
 
-#include "primary_command_buffer.h"
+#include "../device_cache.h"
 #include "../utils/sanity_check.h"
 #include "../utils/logger.h"
+#include "primary_command_buffer.h"
 
 namespace TANG
 {
@@ -55,7 +56,7 @@ namespace TANG
 		return *this;
 	}
 
-	void PrimaryCommandBuffer::Create(VkDevice logicalDevice, VkCommandPool commandPool)
+	void PrimaryCommandBuffer::Create(VkCommandPool commandPool)
 	{
 		VkCommandBufferAllocateInfo allocInfo = {};
 		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -63,7 +64,7 @@ namespace TANG
 		allocInfo.commandPool = commandPool;
 		allocInfo.commandBufferCount = 1;
 
-		if (vkAllocateCommandBuffers(logicalDevice, &allocInfo, &commandBuffer) != VK_SUCCESS) {
+		if (vkAllocateCommandBuffers(GetLogicalDevice(), &allocInfo, &commandBuffer) != VK_SUCCESS) {
 			TNG_ASSERT_MSG(false, "Failed to allocate primary command buffer!");
 		}
 

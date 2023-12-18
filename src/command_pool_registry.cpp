@@ -1,5 +1,6 @@
 
 #include "command_pool_registry.h"
+#include "device_cache.h"
 #include "queue_family_indices.h"
 #include "utils/logger.h"
 #include "utils/sanity_check.h"
@@ -10,8 +11,11 @@ namespace TANG
 	{
 	}
 
-	void CommandPoolRegistry::CreatePools(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkSurfaceKHR surface)
+	void CommandPoolRegistry::CreatePools(VkSurfaceKHR surface)
 	{
+		VkDevice logicalDevice = GetLogicalDevice();
+		VkPhysicalDevice physicalDevice = GetPhysicalDevice();
+
 		QueueFamilyIndices queueFamilyIndices = FindQueueFamilies(physicalDevice, surface);
 
 		// Allocate the graphics command pool
@@ -57,8 +61,10 @@ namespace TANG
 		}
 	}
 
-	void CommandPoolRegistry::DestroyPools(VkDevice logicalDevice)
+	void CommandPoolRegistry::DestroyPools()
 	{
+		VkDevice logicalDevice = GetLogicalDevice();
+
 		for (const auto& iter : pools)
 		{
 			vkDestroyCommandPool(logicalDevice, iter.second, nullptr);

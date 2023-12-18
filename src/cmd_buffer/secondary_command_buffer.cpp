@@ -1,9 +1,10 @@
 
 #include "../asset_types.h"
 #include "../data_buffer/index_buffer.h" // For GetIndexType()
-#include "secondary_command_buffer.h"
+#include "../device_cache.h"
 #include "../utils/sanity_check.h"
 #include "../utils/logger.h"
+#include "secondary_command_buffer.h"
 
 namespace TANG
 {
@@ -40,8 +41,10 @@ namespace TANG
 		return *this;
 	}
 
-	void SecondaryCommandBuffer::Create(VkDevice logicalDevice, VkCommandPool commandPool)
+	void SecondaryCommandBuffer::Create(VkCommandPool commandPool)
 	{
+		VkDevice logicalDevice = GetLogicalDevice();
+
 		VkCommandBufferAllocateInfo allocInfo = {};
 		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_SECONDARY;

@@ -17,6 +17,7 @@
 #include "descriptors/descriptor_set.h"
 #include "descriptors/set_layout/set_layout_cache.h"
 #include "descriptors/set_layout/set_layout_summary.h"
+#include "pipelines/pbr_pipeline.h"
 #include "queue_types.h"
 #include "texture_resource.h"
 #include "utils/sanity_check.h"
@@ -29,7 +30,8 @@ namespace TANG
 	class QueueFamilyIndices;
 	class DisposableCommand;
 
-	class Renderer {
+	class Renderer
+	{
 
 	private:
 
@@ -95,8 +97,6 @@ namespace TANG
 		// Updates the view matrix using the provided position and inverted view matrix. The caller can get this data from any derived BaseCamera object
 		void UpdateCameraData(const glm::vec3& position, const glm::mat4& viewMatrix);
 
-
-
 	private:
 
 		void CreateSurface(GLFWwindow* windowHandle);
@@ -132,20 +132,14 @@ namespace TANG
 
 		VkExtent2D ChooseSwapChainExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32_t actualWidth, uint32_t actualHeight);
 
-		uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
-
 		void CreateLogicalDevice();
 
 		void CreateSwapChain();
 		void CreateSwapChainImageViews(uint32_t imageCount);
 
-		// This is a helper function for creating the "VkShaderModule" wrappers around
-		// the shader code, read from createGraphicsPipeline() below
-		/*VkShaderModule CreateShaderModule(const char* shaderCode, uint32_t numBytes);*/
-
 		void CreateCommandPools();
 
-		void CreateGraphicsPipeline();
+		void CreatePipelines();
 
 		void CreateRenderPass();
 
@@ -154,8 +148,6 @@ namespace TANG
 		void CreatePrimaryCommandBuffers(QueueType poolType);
 
 		void CreateSyncObjects();
-
-		void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
 
 		void CreateAssetUniformBuffers(UUID uuid);
 
@@ -198,8 +190,6 @@ namespace TANG
 
 		bool HasStencilComponent(VkFormat format);
 
-		VkSampleCountFlagBits GetMaxUsableSampleCount();
-
 		void DestroyAssetBuffersHelper(AssetResources& resources);
 
 		PrimaryCommandBuffer* GetCurrentPrimaryBuffer();
@@ -213,8 +203,8 @@ namespace TANG
 		VkInstance vkInstance;
 		VkDebugUtilsMessengerEXT debugMessenger;
 
-		VkPhysicalDevice physicalDevice;
-		VkDevice logicalDevice;
+		//VkPhysicalDevice physicalDevice;
+		//VkDevice logicalDevice;
 
 		VkSurfaceKHR surface;
 
@@ -299,8 +289,9 @@ namespace TANG
 		std::vector<SetLayoutSummary> layoutSummaries;
 
 		VkRenderPass renderPass;
-		VkPipelineLayout pipelineLayout;
-		VkPipeline graphicsPipeline;
+		PBRPipeline pbrPipeline;
+		//VkPipelineLayout pipelineLayout;
+		//VkPipeline graphicsPipeline;
 
 		uint32_t currentFrame;
 
@@ -316,7 +307,7 @@ namespace TANG
 		TextureResource colorAttachment;
 
 		// Multisampled anti-aliasing
-		VkSampleCountFlagBits msaaSamples;
+		//VkSampleCountFlagBits msaaSamples;
 
 		// Cached window sizes
 		uint32_t framebufferWidth, framebufferHeight;

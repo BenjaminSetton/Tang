@@ -4,6 +4,7 @@
 #include "cmd_buffer/disposable_command.h"
 #include "command_pool_registry.h"
 #include "data_buffer/staging_buffer.h"
+#include "device_cache.h"
 #include "texture_resource.h"
 #include "utils/logger.h"
 #include "utils/sanity_check.h"
@@ -75,22 +76,24 @@ namespace TANG
 		return *this;
 	}
 
-	void TextureResource::Create(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, const BaseImageCreateInfo* baseImageInfo, const ImageViewCreateInfo* viewInfo, const SamplerCreateInfo* samplerInfo)
+	void TextureResource::Create(const BaseImageCreateInfo* baseImageInfo, const ImageViewCreateInfo* viewInfo, const SamplerCreateInfo* samplerInfo)
 	{
-		if(baseImageInfo != nullptr) CreateBaseImage_Helper(physicalDevice, logicalDevice, baseImageInfo);
-		if(viewInfo != nullptr)      CreateImageView(logicalDevice, viewInfo);
-		if(samplerInfo != nullptr)   CreateSampler(logicalDevice, samplerInfo);
+		if(baseImageInfo != nullptr) CreateBaseImage_Helper(baseImageInfo);
+		if(viewInfo != nullptr)      CreateImageView(viewInfo);
+		if(samplerInfo != nullptr)   CreateSampler(samplerInfo);
 	}
 
-	void TextureResource::CreateFromFile(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, std::string_view fileName, const BaseImageCreateInfo* createInfo, const ImageViewCreateInfo* viewInfo, const SamplerCreateInfo* samplerInfo)
+	void TextureResource::CreateFromFile(std::string_view fileName, const BaseImageCreateInfo* createInfo, const ImageViewCreateInfo* viewInfo, const SamplerCreateInfo* samplerInfo)
 	{
-		CreateBaseImageFromFile(physicalDevice, logicalDevice, fileName, createInfo);
-		if(viewInfo != nullptr) CreateImageView(logicalDevice, viewInfo);
-		if(samplerInfo != nullptr) CreateSampler(logicalDevice, samplerInfo);
+		CreateBaseImageFromFile(fileName, createInfo);
+		if(viewInfo != nullptr) CreateImageView(viewInfo);
+		if(samplerInfo != nullptr) CreateSampler(samplerInfo);
 	}
 
-	void TextureResource::Destroy(VkDevice logicalDevice)
+	void TextureResource::Destroy()
 	{
+		VkDevice logicalDevice = GetLogicalDevice();
+
 		if (sampler != VK_NULL_HANDLE) vkDestroySampler(logicalDevice, sampler, nullptr);
 		if (imageView != VK_NULL_HANDLE) vkDestroyImageView(logicalDevice, imageView, nullptr);
 		if (baseImage != VK_NULL_HANDLE) vkDestroyImage(logicalDevice, baseImage, nullptr);
@@ -99,8 +102,10 @@ namespace TANG
 		ResetMembers();
 	}
 
-	void TextureResource::DestroyImageView(VkDevice logicalDevice)
+	void TextureResource::DestroyImageView()
 	{
+		VkDevice logicalDevice = GetLogicalDevice();
+
 		if (imageView != VK_NULL_HANDLE)
 		{
 			vkDestroyImageView(logicalDevice, imageView, nullptr);
@@ -108,7 +113,7 @@ namespace TANG
 		}
 	}
 
-	void TextureResource::TransitionLayout(VkDevice logicalDevice, VkImageLayout destinationLayout)
+	void TextureResource::TransitionLayout(VkImageLayout destinationLayout)
 	{
 		if (IsInvalid())
 		{
@@ -183,7 +188,7 @@ namespace TANG
 		}
 
 		{
-			DisposableCommand command(logicalDevice, commandQueueType);
+			DisposableCommand command(commandQueueType);
 
 			vkCmdPipelineBarrier(
 				command.GetBuffer(),
@@ -224,12 +229,12 @@ namespace TANG
 		return !isValid;
 	}
 
-	void TextureResource::CreateBaseImage(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, const BaseImageCreateInfo* baseImageInfo)
+	void TextureResource::CreateBaseImage(const BaseImageCreateInfo* baseImageInfo)
 	{
-		CreateBaseImage_Helper(physicalDevice, logicalDevice, baseImageInfo);
+		CreateBaseImage_Helper(baseImageInfo);
 	}
 
-	void TextureResource::CreateBaseImageFromFile(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, std::string_view fileName, const BaseImageCreateInfo* createInfo)
+	void TextureResource::CreateBaseImageFromFile(std::string_view fileName, const BaseImageCreateInfo* createInfo)
 	{
 		int _width, _height, _channels;
 		stbi_uc* data = stbi_load(fileName.data(), &_width, &_height, &_channels, STBI_rgb_alpha);
@@ -252,20 +257,22 @@ namespace TANG
 		baseImageInfo.usage = createInfo->usage;
 		baseImageInfo.mipLevels = static_cast<uint32_t>(exactMips);
 		baseImageInfo.samples = createInfo->samples;
-		CreateBaseImage_Helper(physicalDevice, logicalDevice, &baseImageInfo);
+		CreateBaseImage_Helper(&baseImageInfo);
 
 		VkDeviceSize imageSize = _width * _height * bytesPerPixel;
-		CopyDataIntoImage(physicalDevice, logicalDevice, data, imageSize);
+		CopyDataIntoImage(data, imageSize);
 
 		// Now that we've copied over the data to the texture image, we don't need the original pixels array anymore
 		stbi_image_free(data);
 
-		GenerateMipmaps(physicalDevice, logicalDevice); // This sets the usage to SHADER_READ_ONLY after it's done
+		GenerateMipmaps(); // This sets the usage to SHADER_READ_ONLY after it's done
 
 	}
 
-	void TextureResource::CreateImageView(VkDevice logicalDevice, const ImageViewCreateInfo* viewInfo)
+	void TextureResource::CreateImageView(const ImageViewCreateInfo* viewInfo)
 	{
+		VkDevice logicalDevice = GetLogicalDevice();
+
 		if (IsInvalid())
 		{
 			LogError("Attempting to create image view, but base image has not yet been created!");
@@ -289,8 +296,10 @@ namespace TANG
 		}
 	}
 
-	void TextureResource::CreateSampler(VkDevice logicalDevice, const SamplerCreateInfo* samplerInfo)
+	void TextureResource::CreateSampler(const SamplerCreateInfo* samplerInfo)
 	{
+		VkDevice logicalDevice = GetLogicalDevice();
+
 		VkSamplerCreateInfo createInfo{};
 		createInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
 		createInfo.magFilter = samplerInfo->magnificationFilter;
@@ -315,8 +324,10 @@ namespace TANG
 		}
 	}
 
-	void TextureResource::CreateBaseImage_Helper(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, const BaseImageCreateInfo* baseImageInfo)
+	void TextureResource::CreateBaseImage_Helper(const BaseImageCreateInfo* baseImageInfo)
 	{
+		VkDevice logicalDevice = GetLogicalDevice();
+
 		VkImageCreateInfo imageInfo{};
 		imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 		imageInfo.imageType = VK_IMAGE_TYPE_2D;
@@ -343,7 +354,7 @@ namespace TANG
 		VkMemoryAllocateInfo allocInfo{};
 		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 		allocInfo.allocationSize = memRequirements.size;
-		allocInfo.memoryTypeIndex = FindMemoryType(physicalDevice, memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		allocInfo.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
 		if (vkAllocateMemory(logicalDevice, &allocInfo, nullptr, &imageMemory) != VK_SUCCESS)
 		{
@@ -360,8 +371,10 @@ namespace TANG
 		isValid = true;
 	}
 
-	void TextureResource::CreateImageViewFromBase(VkDevice logicalDevice, VkImage _baseImage, VkFormat _format, uint32_t _mipLevels, VkImageAspectFlags _aspect)
+	void TextureResource::CreateImageViewFromBase(VkImage _baseImage, VkFormat _format, uint32_t _mipLevels, VkImageAspectFlags _aspect)
 	{
+		VkDevice logicalDevice = GetLogicalDevice();
+
 		VkImageViewCreateInfo createInfo{};
 		createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 		createInfo.image = _baseImage;
@@ -379,7 +392,7 @@ namespace TANG
 		}
 	}
 
-	void TextureResource::CopyDataIntoImage(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, void* data, VkDeviceSize bytes)
+	void TextureResource::CopyDataIntoImage(void* data, VkDeviceSize bytes)
 	{
 		if (IsInvalid())
 		{
@@ -403,22 +416,22 @@ namespace TANG
 		VkDeviceSize actualSize = std::min(bytes, imageSize);
 
 		StagingBuffer stagingBuffer;
-		stagingBuffer.Create(physicalDevice, logicalDevice, actualSize);
-		stagingBuffer.CopyIntoBuffer(logicalDevice, data, actualSize);
+		stagingBuffer.Create(actualSize);
+		stagingBuffer.CopyIntoBuffer(data, actualSize);
 
 		VkImageLayout oldLayout = layout;
 
-		TransitionLayout(logicalDevice, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-		CopyFromBuffer(logicalDevice, stagingBuffer.GetBuffer());
+		TransitionLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+		CopyFromBuffer(stagingBuffer.GetBuffer());
 		if (oldLayout != VK_IMAGE_LAYOUT_UNDEFINED)
 		{
-			TransitionLayout(logicalDevice, oldLayout);
+			TransitionLayout(oldLayout);
 		}
 
-		stagingBuffer.Destroy(logicalDevice);
+		stagingBuffer.Destroy();
 	}
 
-	void TextureResource::CopyFromBuffer(VkDevice logicalDevice, VkBuffer buffer)
+	void TextureResource::CopyFromBuffer(VkBuffer buffer)
 	{
 		if (IsInvalid())
 		{
@@ -426,7 +439,7 @@ namespace TANG
 			return;
 		}
 
-		DisposableCommand command(logicalDevice, QueueType::TRANSFER);
+		DisposableCommand command(QueueType::TRANSFER);
 
 		VkBufferImageCopy region{};
 		region.bufferOffset = 0;
@@ -444,8 +457,10 @@ namespace TANG
 		vkCmdCopyBufferToImage(command.GetBuffer(), buffer, baseImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 	}
 
-	void TextureResource::GenerateMipmaps(VkPhysicalDevice physicalDevice, VkDevice logicalDevice)
+	void TextureResource::GenerateMipmaps()
 	{
+		VkPhysicalDevice physicalDevice = GetPhysicalDevice();
+
 		if (IsInvalid())
 		{
 			LogError("Attempting to generate mipmaps but base image has not yet been created!");
@@ -460,7 +475,7 @@ namespace TANG
 			TNG_ASSERT_MSG(false, "Texture image does not support linear blitting!");
 		}
 
-		DisposableCommand command(logicalDevice, QueueType::GRAPHICS);
+		DisposableCommand command(QueueType::GRAPHICS);
 
 		VkImageMemoryBarrier barrier{};
 		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -566,10 +581,9 @@ namespace TANG
 		return _format == VK_FORMAT_D32_SFLOAT_S8_UINT || _format == VK_FORMAT_D24_UNORM_S8_UINT;
 	}
 
-	uint32_t TextureResource::FindMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter, VkMemoryPropertyFlags properties)
+	uint32_t TextureResource::FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
 	{
-		VkPhysicalDeviceMemoryProperties memProperties;
-		vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
+		VkPhysicalDeviceMemoryProperties memProperties = DeviceCache::Get().GetPhysicalDeviceMemoryProperties();
 
 		for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++)
 		{

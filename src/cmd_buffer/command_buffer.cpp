@@ -1,5 +1,6 @@
 
 #include "command_buffer.h"
+#include "../device_cache.h"
 #include "../utils/logger.h"
 #include "../utils/sanity_check.h"
 
@@ -59,8 +60,10 @@ namespace TANG
 		return *this;
 	}
 
-	void CommandBuffer::Destroy(VkDevice logicalDevice, VkCommandPool commandPool)
+	void CommandBuffer::Destroy(VkCommandPool commandPool)
 	{
+		VkDevice logicalDevice = GetLogicalDevice();
+
 		if (!IsCommandBufferValid() || IsRecording())
 		{
 			LogError("Can't destroy a command buffer because it's either still recording or the command buffer is null! Memory will be leaked");

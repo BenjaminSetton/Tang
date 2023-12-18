@@ -30,6 +30,7 @@ set(HEADERS
 	src/queue_family_indices.h
 	src/default_material.h
 	src/shader.h
+	src/device_cache.h
 	
 	src/camera/base_camera.h
 	src/camera/freefly_camera.h
@@ -81,6 +82,7 @@ set(SOURCES
 	src/command_pool_registry.cpp
 	src/queue_family_indices.cpp
 	src/shader.cpp
+	src/device_cache.cpp
 	
 	src/camera/base_camera.cpp
 	src/camera/freefly_camera.cpp

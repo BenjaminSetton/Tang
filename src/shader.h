@@ -22,8 +22,8 @@ namespace TANG
 		Shader(const Shader& other) = delete;
 		Shader& operator=(const Shader& other) = delete;
 
-		void Create(VkDevice logicalDevice, const std::string_view& fileName, const ShaderType& type);
-		void Destroy(VkDevice logicalDevice);
+		void Create(const std::string_view& fileName, const ShaderType& type);
+		void Destroy();
 
 		VkShaderModule GetShaderObject() const;
 

@@ -23,7 +23,7 @@ namespace TANG
 		PrimaryCommandBuffer(PrimaryCommandBuffer&& other) noexcept;
 		PrimaryCommandBuffer& operator=(const PrimaryCommandBuffer& other);
 
-		void Create(VkDevice logicalDevice, VkCommandPool commandPool) override;
+		void Create(VkCommandPool commandPool) override;
 
 		// Submits all currently written commands to the provided queue
 		void SubmitToQueue(VkQueue queue);

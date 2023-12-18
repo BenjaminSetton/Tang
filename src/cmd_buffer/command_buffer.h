@@ -32,8 +32,8 @@ namespace TANG
 		CommandBuffer(CommandBuffer&& other) noexcept;
 		CommandBuffer& operator=(const CommandBuffer& other);
 
-		virtual void Create(VkDevice logicalDevice, VkCommandPool commandPool) = 0;
-		void Destroy(VkDevice logicalDevice, VkCommandPool commandPool);
+		virtual void Create(VkCommandPool commandPool) = 0;
+		void Destroy(VkCommandPool commandPool);
 
 		void BeginRecording(VkCommandBufferUsageFlags flags, VkCommandBufferInheritanceInfo* inheritanceInfo);
 		void EndRecording();

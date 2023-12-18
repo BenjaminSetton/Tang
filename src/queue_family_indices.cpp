@@ -1,7 +1,9 @@
 
 #include <limits>
 
+#include "device_cache.h"
 #include "queue_family_indices.h"
+#include "utils/logger.h"
 #include "utils/sanity_check.h"
 
 namespace TANG

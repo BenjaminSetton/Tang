@@ -2,8 +2,9 @@
 #include <cstring> //memcpy
 #include <utility> // std::move
 
-#include "uniform_buffer.h"
+#include "../device_cache.h"
 #include "../utils/logger.h"
+#include "uniform_buffer.h"
 
 namespace TANG
 {
@@ -41,13 +42,15 @@ namespace TANG
 		return *this;
 	}
 
-	void UniformBuffer::Create(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkDeviceSize size)
+	void UniformBuffer::Create(VkDeviceSize size)
 	{
-		CreateBase(physicalDevice, logicalDevice, size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		CreateBase(size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 	}
 
-	void UniformBuffer::Destroy(VkDevice logicalDevice)
+	void UniformBuffer::Destroy()
 	{
+		VkDevice logicalDevice = GetLogicalDevice();
+
 		if (mappedData != nullptr)
 		{
 			vkUnmapMemory(logicalDevice, bufferMemory);
@@ -64,13 +67,13 @@ namespace TANG
 		bufferState = BUFFER_STATE::DESTROYED;
 	}
 
-	void UniformBuffer::MapMemory(VkDevice logicalDevice, VkDeviceSize size)
+	void UniformBuffer::MapMemory(VkDeviceSize size)
 	{
-		vkMapMemory(logicalDevice, bufferMemory, 0, size, 0, &mappedData);
+		vkMapMemory(GetLogicalDevice(), bufferMemory, 0, size, 0, &mappedData);
 		bufferState = BUFFER_STATE::MAPPED;
 	}
 
-	void UniformBuffer::UnMapMemory(VkDevice logicalDevice)
+	void UniformBuffer::UnMapMemory()
 	{
 		if (bufferState != BUFFER_STATE::MAPPED)
 		{
@@ -78,7 +81,7 @@ namespace TANG
 			return;
 		}
 
-		vkUnmapMemory(logicalDevice, bufferMemory);
+		vkUnmapMemory(GetLogicalDevice(), bufferMemory);
 		bufferState = BUFFER_STATE::CREATED;
 		mappedData = nullptr;
 	}

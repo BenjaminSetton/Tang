@@ -2,9 +2,10 @@
 #include <string.h> // memcpy
 #include <utility> // numeric_limits
 
+#include "../device_cache.h"
+#include "../utils/logger.h"
 #include "staging_buffer.h"
 #include "vertex_buffer.h"
-#include "../utils/logger.h"
 
 namespace TANG
 {
@@ -41,17 +42,19 @@ namespace TANG
 		return *this;
 	}
 
-	void VertexBuffer::Create(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkDeviceSize size)
+	void VertexBuffer::Create(VkDeviceSize size)
 	{
 		// Create the vertex buffer
-		CreateBase(physicalDevice, logicalDevice, size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		CreateBase(size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		
 		// Create the staging buffer
-		stagingBuffer.Create(physicalDevice, logicalDevice, size);
+		stagingBuffer.Create(size);
 	}
 
-	void VertexBuffer::Destroy(VkDevice logicalDevice)
+	void VertexBuffer::Destroy()
 	{
+		VkDevice logicalDevice = GetLogicalDevice();
+
 		// Destroy vertex buffer
 		vkDestroyBuffer(logicalDevice, buffer, nullptr);
 		vkFreeMemory(logicalDevice, bufferMemory, nullptr);
@@ -59,18 +62,20 @@ namespace TANG
 		buffer = VK_NULL_HANDLE;
 		bufferMemory = VK_NULL_HANDLE;
 
-		DestroyIntermediateBuffers(logicalDevice);
+		DestroyIntermediateBuffers();
 
 		bufferState = BUFFER_STATE::DESTROYED;
 	}
 
-	void VertexBuffer::DestroyIntermediateBuffers(VkDevice logicalDevice)
+	void VertexBuffer::DestroyIntermediateBuffers()
 	{
-		stagingBuffer.Destroy(logicalDevice);
+		stagingBuffer.Destroy();
 	}
 
-	void VertexBuffer::CopyIntoBuffer(VkDevice logicalDevice, VkCommandBuffer commandBuffer, void* sourceData, VkDeviceSize size)
+	void VertexBuffer::CopyIntoBuffer(VkCommandBuffer commandBuffer, void* sourceData, VkDeviceSize size)
 	{
+		VkDevice logicalDevice = GetLogicalDevice();
+
 		if (stagingBuffer.IsInvalid())
 		{
 			LogWarning("Attempting to copy data into vertex buffer, but staging buffer has not been created!");

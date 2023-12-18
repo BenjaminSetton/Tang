@@ -42,6 +42,7 @@
 #include "data_buffer/index_buffer.h"
 #include "default_material.h"
 #include "descriptors/write_descriptor_set.h"
+#include "device_cache.h"
 #include "queue_family_indices.h"
 #include "utils/file_utils.h"
 
@@ -100,7 +101,6 @@ void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT
 	}
 }
 
-
 namespace TANG
 {
 	struct SwapChainSupportDetails
@@ -146,12 +146,11 @@ namespace TANG
 	TNG_ASSERT_COMPILE(sizeof(CameraDataUBO) == 64);
 
 	Renderer::Renderer() : 
-		vkInstance(VK_NULL_HANDLE), debugMessenger(VK_NULL_HANDLE), physicalDevice(VK_NULL_HANDLE), logicalDevice(VK_NULL_HANDLE), surface(VK_NULL_HANDLE),
-		queues(), swapChain(VK_NULL_HANDLE), swapChainImageFormat(VK_FORMAT_UNDEFINED), swapChainExtent({ 0, 0 }), frameDependentData(), swapChainImageDependentData(),
-		setLayoutCache(), layoutSummaries(), renderPass(VK_NULL_HANDLE), pipelineLayout(VK_NULL_HANDLE), graphicsPipeline(VK_NULL_HANDLE), currentFrame(0), resourcesMap(),
-		assetResources(), descriptorPool(), randomTexture(), depthBuffer(), colorAttachment(), msaaSamples(VK_SAMPLE_COUNT_1_BIT), framebufferWidth(0), framebufferHeight(0)
-	{
-	}
+		vkInstance(VK_NULL_HANDLE), debugMessenger(VK_NULL_HANDLE), surface(VK_NULL_HANDLE), queues(), swapChain(VK_NULL_HANDLE), 
+		swapChainImageFormat(VK_FORMAT_UNDEFINED), swapChainExtent({ 0, 0 }), frameDependentData(), swapChainImageDependentData(),
+		setLayoutCache(), layoutSummaries(), renderPass(VK_NULL_HANDLE), pbrPipeline(), currentFrame(0), resourcesMap(), assetResources(), descriptorPool(), 
+		randomTexture(), depthBuffer(), colorAttachment(), framebufferWidth(0), framebufferHeight(0)
+	{ }
 
 	void Renderer::Update(float deltaTime)
 	{
@@ -213,27 +212,27 @@ namespace TANG
 			uint64_t numBytes = currMesh.vertices.size() * sizeof(VertexType);
 
 			VertexBuffer& vb = resources.vertexBuffers[i];
-			vb.Create(physicalDevice, logicalDevice, numBytes);
+			vb.Create(numBytes);
 
 			{
-				DisposableCommand command(logicalDevice, QueueType::TRANSFER);
-				vb.CopyIntoBuffer(logicalDevice, command.GetBuffer(), currMesh.vertices.data(), numBytes);
+				DisposableCommand command(QueueType::TRANSFER);
+				vb.CopyIntoBuffer(command.GetBuffer(), currMesh.vertices.data(), numBytes);
 			}
 
 			// Create the index buffer
 			numBytes = currMesh.indices.size() * sizeof(IndexType);
 
 			IndexBuffer& ib = resources.indexBuffer;
-			ib.Create(physicalDevice, logicalDevice, numBytes);
+			ib.Create(numBytes);
 
 			{
-				DisposableCommand command(logicalDevice, QueueType::TRANSFER);
-				ib.CopyIntoBuffer(logicalDevice, command.GetBuffer(), currMesh.indices.data(), numBytes);
+				DisposableCommand command(QueueType::TRANSFER);
+				ib.CopyIntoBuffer(command.GetBuffer(), currMesh.indices.data(), numBytes);
 			}
 
 			// Destroy the staging buffers
-			vb.DestroyIntermediateBuffers(logicalDevice);
-			ib.DestroyIntermediateBuffers(logicalDevice);
+			vb.DestroyIntermediateBuffers();
+			ib.DestroyIntermediateBuffers();
 
 			// Accumulate the index count of this mesh;
 			totalIndexCount += currMesh.indices.size();
@@ -297,7 +296,7 @@ namespace TANG
 				TNG_ASSERT_MSG(matTexture != nullptr, "Why is this texture nullptr when we specifically checked against it?");
 
 				TextureResource& texResource = resources.material[i];
-				texResource.CreateFromFile(physicalDevice, logicalDevice, matTexture->fileName, &baseImageInfo, &viewCreateInfo, &samplerInfo);
+				texResource.CreateFromFile(matTexture->fileName, &baseImageInfo, &viewCreateInfo, &samplerInfo);
 			}
 			else
 			{
@@ -313,9 +312,9 @@ namespace TANG
 				uint32_t data = DEFAULT_MATERIAL.at(texType);
 
 				TextureResource& texResource = resources.material[i];
-				texResource.Create(physicalDevice, logicalDevice, &fallbackBaseImageInfo, &viewCreateInfo, &samplerInfo);
-				texResource.CopyDataIntoImage(physicalDevice, logicalDevice, static_cast<void*>(&data), sizeof(data));
-				texResource.TransitionLayout(logicalDevice, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+				texResource.Create(&fallbackBaseImageInfo, &viewCreateInfo, &samplerInfo);
+				texResource.CopyDataIntoImage(static_cast<void*>(&data), sizeof(data));
+				texResource.TransitionLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 			}
 		}
 
@@ -369,7 +368,7 @@ namespace TANG
 
 			secondaryCmdBufferMap.emplace(assetID, SecondaryCommandBuffer());
 			SecondaryCommandBuffer& commandBuffer = secondaryCmdBufferMap[assetID];
-			commandBuffer.Create(logicalDevice, CommandPoolRegistry::GetInstance().GetCommandPool(QueueType::GRAPHICS));
+			commandBuffer.Create(CommandPoolRegistry::Get().GetCommandPool(QueueType::GRAPHICS));
 		}
 	}
 
@@ -378,16 +377,16 @@ namespace TANG
 		// Destroy all vertex buffers
 		for (auto& vb : resources.vertexBuffers)
 		{
-			vb.Destroy(logicalDevice);
+			vb.Destroy();
 		}
 
 		// Destroy the index buffer
-		resources.indexBuffer.Destroy(logicalDevice);
+		resources.indexBuffer.Destroy();
 
 		// Destroy textures
 		for (auto& tex : resources.material)
 		{
-			tex.Destroy(logicalDevice);
+			tex.Destroy();
 		}
 	}
 
@@ -463,6 +462,8 @@ namespace TANG
 
 	void Renderer::RecreateSwapChain()
 	{
+		VkDevice logicalDevice = GetLogicalDevice();
+
 		vkDeviceWaitIdle(logicalDevice);
 
 		CleanupSwapChain();
@@ -490,7 +491,7 @@ namespace TANG
 		CreateDescriptorSetLayouts();
 		CreateDescriptorPool();
 		CreateRenderPass();
-		CreateGraphicsPipeline();
+		CreatePipelines();
 		CreateCommandPools();
 		CreateColorAttachmentTexture();
 		CreateDepthTexture();
@@ -501,30 +502,32 @@ namespace TANG
 
 	void Renderer::Shutdown()
 	{
+		VkDevice logicalDevice = DeviceCache::Get().GetLogicalDevice();
+
 		vkDeviceWaitIdle(logicalDevice);
 
 		DestroyAllAssetResources();
 
 		CleanupSwapChain();
 
-		randomTexture.Destroy(logicalDevice);
+		randomTexture.Destroy();
 
-		setLayoutCache.DestroyLayouts(logicalDevice);
+		setLayoutCache.DestroyLayouts();
 
 		for (uint32_t i = 0; i < GetFDDSize(); i++)
 		{
 			auto frameData = GetFDDAtIndex(i);
 			for (auto& iter : frameData->assetDescriptorDataMap)
 			{
-				iter.second.transformUBO.Destroy(logicalDevice);
-				iter.second.projUBO.Destroy(logicalDevice);
-				iter.second.viewUBO.Destroy(logicalDevice);
-				iter.second.cameraDataUBO.Destroy(logicalDevice);
+				iter.second.transformUBO.Destroy();
+				iter.second.projUBO.Destroy();
+				iter.second.viewUBO.Destroy();
+				iter.second.cameraDataUBO.Destroy();
 			}
 
 		}
 
-		descriptorPool.Destroy(logicalDevice);
+		descriptorPool.Destroy();
 
 		for (uint32_t i = 0; i < GetFDDSize(); i++)
 		{
@@ -534,13 +537,14 @@ namespace TANG
 			vkDestroyFence(logicalDevice, frameData->inFlightFence, nullptr);
 		}
 
-		CommandPoolRegistry::GetInstance().DestroyPools(logicalDevice);
+		CommandPoolRegistry::Get().DestroyPools();
 
-		//vkDestroyPipeline(logicalDevice, graphicsPipeline, nullptr);
-		//vkDestroyPipelineLayout(logicalDevice, pipelineLayout, nullptr);
+		pbrPipeline.Destroy();
 		vkDestroyRenderPass(logicalDevice, renderPass, nullptr);
 
 		vkDestroyDevice(logicalDevice, nullptr);
+		DeviceCache::Get().InvalidateCache();
+
 		vkDestroySurfaceKHR(vkInstance, surface, nullptr);
 
 		if (enableValidationLayers)
@@ -587,6 +591,7 @@ namespace TANG
 
 	void Renderer::DrawFrame()
 	{
+		VkDevice logicalDevice = GetLogicalDevice();
 		VkResult result = VK_SUCCESS;
 
 		FrameDependentData* currentFDD = GetCurrentFDD();
@@ -732,7 +737,7 @@ namespace TANG
 
 		if (CreateDebugUtilsMessengerEXT(vkInstance, &createInfo, nullptr, &debugMessenger) != VK_SUCCESS)
 		{
-			throw std::runtime_error("Failed to setup debug messenger!");
+			TNG_ASSERT_MSG(false, "Failed to setup debug messenger!");
 		}
 	}
 
@@ -821,16 +826,12 @@ namespace TANG
 		{
 			if (IsDeviceSuitable(device))
 			{
-				physicalDevice = device;
-				msaaSamples = GetMaxUsableSampleCount();
-				break;
+				DeviceCache::Get().CachePhysicalDevice(device);
+				return;
 			}
 		}
 
-		if (physicalDevice == VK_NULL_HANDLE)
-		{
-			TNG_ASSERT_MSG(false, "Failed to find suitable device (GPU)!");
-		}
+		TNG_ASSERT_MSG(false, "Failed to find a suitable physical device!");
 	}
 
 	bool Renderer::IsDeviceSuitable(VkPhysicalDevice device)
@@ -848,22 +849,6 @@ namespace TANG
 		vkGetPhysicalDeviceFeatures(device, &supportedFeatures);
 
 		return indices.IsComplete() && extensionsSupported && swapChainAdequate && supportedFeatures.samplerAnisotropy;
-
-		//
-		// THE CODE BELOW IS AN EXAMPLE OF HOW TO SELECT DEDICATED GPUS ONLY, WHILE
-		// IGNORING INTEGRATED GPUS. FOR THE SAKE OF THIS EXAMPLE, WE'LL CONSIDER ALL
-		// GPUS TO BE SUITABLE.
-		//
-
-		//VkPhysicalDeviceProperties properties;
-		//vkGetPhysicalDeviceProperties(device, &properties);
-
-		//VkPhysicalDeviceFeatures features;
-		//vkGetPhysicalDeviceFeatures(device, &features);
-
-		//// We're only going to say that dedicated GPUs are suitable, let's not deal with
-		//// integrated graphics for now
-		//return properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
 	}
 
 	SwapChainSupportDetails Renderer::QuerySwapChainSupport(VkPhysicalDevice device)
@@ -943,25 +928,10 @@ namespace TANG
 		}
 	}
 
-	uint32_t Renderer::FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
-	{
-		VkPhysicalDeviceMemoryProperties memProperties;
-		vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
-
-		for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++)
-		{
-			if (typeFilter & (1 << i) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties)
-			{
-				return i;
-			}
-		}
-
-		TNG_ASSERT_MSG(false, "Failed to find suitable memory type!");
-		return std::numeric_limits<uint32_t>::max();
-	}
-
 	void Renderer::CreateLogicalDevice()
 	{
+		VkPhysicalDevice physicalDevice = GetPhysicalDevice();
+
 		QueueFamilyIndices indices = FindQueueFamilies(physicalDevice, surface);
 		if (!indices.IsComplete())
 		{
@@ -1010,20 +980,26 @@ namespace TANG
 			createInfo.enabledLayerCount = 0;
 		}
 
-		if (vkCreateDevice(physicalDevice, &createInfo, nullptr, &logicalDevice) != VK_SUCCESS)
+		VkDevice device;
+		if (vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) != VK_SUCCESS)
 		{
 			TNG_ASSERT_MSG(false, "Failed to create the logical device!");
 		}
 
+		DeviceCache::Get().CacheLogicalDevice(device);
+
 		// Get the queues from the logical device
-		vkGetDeviceQueue(logicalDevice, indices.GetIndex(QueueType::GRAPHICS), 0, &queues[QueueType::GRAPHICS]);
-		vkGetDeviceQueue(logicalDevice, indices.GetIndex(QueueType::PRESENT), 0, &queues[QueueType::PRESENT]);
-		vkGetDeviceQueue(logicalDevice, indices.GetIndex(QueueType::TRANSFER), 0, &queues[QueueType::TRANSFER]);
+		vkGetDeviceQueue(device, indices.GetIndex(QueueType::GRAPHICS), 0, &queues[QueueType::GRAPHICS]);
+		vkGetDeviceQueue(device, indices.GetIndex(QueueType::PRESENT), 0, &queues[QueueType::PRESENT]);
+		vkGetDeviceQueue(device, indices.GetIndex(QueueType::TRANSFER), 0, &queues[QueueType::TRANSFER]);
 
 	}
 
 	void Renderer::CreateSwapChain()
 	{
+		VkDevice logicalDevice = GetLogicalDevice();
+		VkPhysicalDevice physicalDevice = GetPhysicalDevice();
+
 		SwapChainSupportDetails details = QuerySwapChainSupport(physicalDevice);
 		VkSurfaceFormatKHR surfaceFormat = ChooseSwapSurfaceFormat(details.formats);
 		VkPresentModeKHR presentMode = ChooseSwapPresentMode(details.presentModes);
@@ -1084,6 +1060,8 @@ namespace TANG
 	// Create image views for all images on the swap chain
 	void Renderer::CreateSwapChainImageViews(uint32_t imageCount)
 	{
+		VkDevice logicalDevice = GetLogicalDevice();
+
 		swapChainImageDependentData.resize(imageCount);
 		std::vector<VkImage> swapChainImages(imageCount);
 
@@ -1091,216 +1069,19 @@ namespace TANG
 
 		for (uint32_t i = 0; i < imageCount; i++)
 		{
-			swapChainImageDependentData[i].swapChainImage.CreateImageViewFromBase(logicalDevice, swapChainImages[i], swapChainImageFormat, 1, VK_IMAGE_ASPECT_COLOR_BIT);
+			swapChainImageDependentData[i].swapChainImage.CreateImageViewFromBase(swapChainImages[i], swapChainImageFormat, 1, VK_IMAGE_ASPECT_COLOR_BIT);
 		}
 		swapChainImages.clear();
 	}
 
-	// This is a helper function for creating the "VkShaderModule" wrappers around
-	// the shader code, read from CreateGraphicsPipeline() below
-	//VkShaderModule Renderer::CreateShaderModule(const char* shaderCode, uint32_t numBytes)
-	//{
-	//	VkShaderModuleCreateInfo createInfo{};
-	//	createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-	//	createInfo.codeSize = numBytes;
-	//	createInfo.pCode = reinterpret_cast<const uint32_t*>(shaderCode);
-
-	//	VkShaderModule shaderModule;
-	//	if (vkCreateShaderModule(logicalDevice, &createInfo, nullptr, &shaderModule) != VK_SUCCESS)
-	//	{
-	//		TNG_ASSERT_MSG(false, "Failed to create shader module!");
-	//	}
-
-	//	return shaderModule;
-	//}
-
 	void Renderer::CreateCommandPools()
 	{
-		CommandPoolRegistry::GetInstance().CreatePools(physicalDevice, logicalDevice, surface);
+		CommandPoolRegistry::Get().CreatePools(surface);
 	}
 
-	void Renderer::CreateGraphicsPipeline()
+	void Renderer::CreatePipelines()
 	{
-		//// Read the compiled shaders
-		//VkShaderModule vertShaderModule = LoadShader("vert.spv");
-		//VkShaderModule fragShaderModule = LoadShader("frag.spv");
-
-		//VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
-		//vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-		//vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
-		//vertShaderStageInfo.module = vertShaderModule;
-		//vertShaderStageInfo.pName = "main";
-
-		//VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
-		//fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-		//fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-		//fragShaderStageInfo.module = fragShaderModule;
-		//fragShaderStageInfo.pName = "main";
-
-		//VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
-
-		//// Vertex input
-		//VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
-
-		//auto bindingDescription = GetVertexBindingDescription();
-		//auto attributeDescriptions = GetVertexAttributeDescriptions();
-		//vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-		//vertexInputInfo.vertexBindingDescriptionCount = 1;
-		//vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-		//vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
-		//vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
-
-		//// Input assembler
-		//VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
-		//inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-		//inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-		//inputAssembly.primitiveRestartEnable = VK_FALSE;
-
-		//// Viewports and scissors
-		//VkViewport viewport{};
-		//viewport.x = 0.0f;
-		//viewport.y = 0.0f;
-		//viewport.width = (float)swapChainExtent.width;
-		//viewport.height = (float)swapChainExtent.height;
-		//viewport.minDepth = 0.0f;
-		//viewport.maxDepth = 1.0f;
-
-		//VkRect2D scissor{};
-		//scissor.offset = { 0, 0 };
-		//scissor.extent = swapChainExtent;
-
-		//// We're declaring these as dynamic states, meaning we can change
-		//// them at any point. Usually the pipeline states in Vulkan are static,
-		//// meaning a pipeline is created and never changed. This allows
-		//// the GPU to heavily optimize for the pipelines defined. In this
-		//// case though, we face a negligible penalty for making these dynamic.
-		//std::vector<VkDynamicState> dynamicStates =
-		//{
-		//	VK_DYNAMIC_STATE_VIEWPORT,
-		//	VK_DYNAMIC_STATE_SCISSOR
-		//};
-		//VkPipelineDynamicStateCreateInfo dynamicState{};
-		//dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-		//dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
-		//dynamicState.pDynamicStates = dynamicStates.data();
-
-		//VkPipelineViewportStateCreateInfo viewportState{};
-		//viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-		//viewportState.viewportCount = 1;
-		//viewportState.scissorCount = 1;
-
-		//// Rasterizer
-		//VkPipelineRasterizationStateCreateInfo rasterizer{};
-		//rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-		//rasterizer.depthClampEnable = VK_FALSE;
-		//rasterizer.rasterizerDiscardEnable = VK_FALSE;
-		//rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-		//// For the polygonMode it's possible to use LINE or POINT as well
-		//// In this case the following line is required:
-		//rasterizer.lineWidth = 1.0f;
-		//// Any line thicker than 1.0 requires the "wideLines" GPU feature
-		//rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-		//rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-		//rasterizer.depthBiasEnable = VK_FALSE;
-		//rasterizer.depthBiasConstantFactor = 0.0f; // Optional
-		//rasterizer.depthBiasClamp = 0.0f; // Optional
-		//rasterizer.depthBiasSlopeFactor = 0.0f; // Optional
-
-		//// Multisampling
-		//VkPipelineMultisampleStateCreateInfo multisampling{};
-		//multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-		//multisampling.sampleShadingEnable = VK_FALSE;
-		//multisampling.rasterizationSamples = msaaSamples;
-		//multisampling.minSampleShading = 1.0f; // Optional
-		//multisampling.pSampleMask = nullptr; // Optional
-		//multisampling.alphaToCoverageEnable = VK_FALSE; // Optional
-		//multisampling.alphaToOneEnable = VK_FALSE; // Optional
-
-		//// Color blending
-		//VkPipelineColorBlendAttachmentState colorBlendAttachment{};
-		//colorBlendAttachment.colorWriteMask =
-		//	VK_COLOR_COMPONENT_R_BIT |
-		//	VK_COLOR_COMPONENT_G_BIT |
-		//	VK_COLOR_COMPONENT_B_BIT |
-		//	VK_COLOR_COMPONENT_A_BIT;
-		//colorBlendAttachment.blendEnable = VK_FALSE;
-		//colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
-		//colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
-		//colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD; // Optional
-		//colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
-		//colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
-		//colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD; // Optional
-
-		//VkPipelineColorBlendStateCreateInfo colorBlending{};
-		//colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-		//colorBlending.logicOpEnable = VK_FALSE;
-		//colorBlending.logicOp = VK_LOGIC_OP_COPY; // Optional
-		//colorBlending.attachmentCount = 1;
-		//colorBlending.pAttachments = &colorBlendAttachment;
-		//colorBlending.blendConstants[0] = 0.0f; // Optional
-		//colorBlending.blendConstants[1] = 0.0f; // Optional
-		//colorBlending.blendConstants[2] = 0.0f; // Optional
-		//colorBlending.blendConstants[3] = 0.0f; // Optional
-
-		//// Depth stencil
-		//VkPipelineDepthStencilStateCreateInfo depthStencil{};
-		//depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-		//depthStencil.depthTestEnable = VK_TRUE;
-		//depthStencil.depthWriteEnable = VK_TRUE;
-		//depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
-		//depthStencil.depthBoundsTestEnable = VK_FALSE;
-		//depthStencil.minDepthBounds = 0.0f; // Optional
-		//depthStencil.maxDepthBounds = 1.0f; // Optional
-		//depthStencil.stencilTestEnable = VK_FALSE;
-		//depthStencil.front = {}; // Optional
-		//depthStencil.back = {}; // Optional
-
-		//// Pipeline layout
-		//std::vector<VkDescriptorSetLayout> vkDescSetLayouts;
-		//const LayoutCache& cache = setLayoutCache.GetLayoutCache();
-		//for (auto& iter : cache)
-		//{
-		//	vkDescSetLayouts.push_back(iter.second.GetLayout());
-		//}
-
-		//VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
-		//pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-		//pipelineLayoutInfo.setLayoutCount = setLayoutCache.GetLayoutCount();
-		//pipelineLayoutInfo.pSetLayouts = vkDescSetLayouts.data();
-		//pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
-		//pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
-
-		//if (vkCreatePipelineLayout(logicalDevice, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS)
-		//{
-		//	TNG_ASSERT_MSG(false, "Failed to create pipeline layout!");
-		//}
-
-		//VkGraphicsPipelineCreateInfo pipelineInfo{};
-		//pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-		//pipelineInfo.stageCount = 2;
-		//pipelineInfo.pStages = shaderStages;
-		//pipelineInfo.pVertexInputState = &vertexInputInfo;
-		//pipelineInfo.pInputAssemblyState = &inputAssembly;
-		//pipelineInfo.pViewportState = &viewportState;
-		//pipelineInfo.pRasterizationState = &rasterizer;
-		//pipelineInfo.pMultisampleState = &multisampling;
-		//pipelineInfo.pDepthStencilState = &depthStencil;
-		//pipelineInfo.pColorBlendState = &colorBlending;
-		//pipelineInfo.pDynamicState = &dynamicState;
-		//pipelineInfo.layout = pipelineLayout;
-		//pipelineInfo.renderPass = renderPass;
-		//pipelineInfo.subpass = 0;
-		//pipelineInfo.basePipelineHandle = VK_NULL_HANDLE; // Optional
-		//pipelineInfo.basePipelineIndex = -1; // Optional
-
-		//if (vkCreateGraphicsPipelines(logicalDevice, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS)
-		//{
-		//	TNG_ASSERT_MSG(false, "Failed to create graphics pipeline!");
-		//}
-
-		//vkDestroyShaderModule(logicalDevice, fragShaderModule, nullptr);
-		//vkDestroyShaderModule(logicalDevice, vertShaderModule, nullptr);
-
+		pbrPipeline.Create(renderPass, setLayoutCache);
 	}
 
 	void Renderer::CreateRenderPass()
@@ -1319,7 +1100,7 @@ namespace TANG
 
 		VkAttachmentDescription colorAttachmentDesc{};
 		colorAttachmentDesc.format = swapChainImageFormat;
-		colorAttachmentDesc.samples = msaaSamples;
+		colorAttachmentDesc.samples = DeviceCache::Get().GetMaxMSAA();
 		colorAttachmentDesc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 		colorAttachmentDesc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 		colorAttachmentDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
@@ -1333,7 +1114,7 @@ namespace TANG
 
 		VkAttachmentDescription depthAttachmentDesc{};
 		depthAttachmentDesc.format = FindDepthFormat();
-		depthAttachmentDesc.samples = msaaSamples;
+		depthAttachmentDesc.samples = DeviceCache::Get().GetMaxMSAA();
 		depthAttachmentDesc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 		depthAttachmentDesc.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 		depthAttachmentDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
@@ -1383,12 +1164,10 @@ namespace TANG
 		renderPassInfo.dependencyCount = 1;
 		renderPassInfo.pDependencies = &dependency;
 
-		if (vkCreateRenderPass(logicalDevice, &renderPassInfo, nullptr, &renderPass) != VK_SUCCESS)
+		if (vkCreateRenderPass(GetLogicalDevice(), &renderPassInfo, nullptr, &renderPass) != VK_SUCCESS)
 		{
 			TNG_ASSERT_MSG(false, "Failed to create render pass!");
 		}
-
-
 	}
 
 	void Renderer::CreateFramebuffers()
@@ -1413,7 +1192,7 @@ namespace TANG
 			framebufferInfo.height = swapChainExtent.height;
 			framebufferInfo.layers = 1;
 
-			if (vkCreateFramebuffer(logicalDevice, &framebufferInfo, nullptr, &(swidd[i].swapChainFramebuffer)) != VK_SUCCESS)
+			if (vkCreateFramebuffer(GetLogicalDevice(), &framebufferInfo, nullptr, &(swidd[i].swapChainFramebuffer)) != VK_SUCCESS)
 			{
 				TNG_ASSERT_MSG(false, "Failed to create framebuffer!");
 			}
@@ -1424,12 +1203,14 @@ namespace TANG
 	{
 		for (uint32_t i = 0; i < GetFDDSize(); i++)
 		{
-			GetFDDAtIndex(i)->primaryCommandBuffer.Create(logicalDevice, CommandPoolRegistry::GetInstance().GetCommandPool(poolType));
+			GetFDDAtIndex(i)->primaryCommandBuffer.Create(CommandPoolRegistry::Get().GetCommandPool(poolType));
 		}
 	}
 
 	void Renderer::CreateSyncObjects()
 	{
+		VkDevice logicalDevice = GetLogicalDevice();
+
 		VkSemaphoreCreateInfo semaphoreInfo{};
 		semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
@@ -1450,35 +1231,6 @@ namespace TANG
 		}
 	}
 
-	void Renderer::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory)
-	{
-		VkBufferCreateInfo bufferInfo{};
-		bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-		bufferInfo.size = size;
-		bufferInfo.usage = usage;
-		bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-		if (vkCreateBuffer(logicalDevice, &bufferInfo, nullptr, &buffer) != VK_SUCCESS)
-		{
-			TNG_ASSERT_MSG(false, "Failed to create buffer!");
-		}
-
-		VkMemoryRequirements memRequirements;
-		vkGetBufferMemoryRequirements(logicalDevice, buffer, &memRequirements);
-
-		VkMemoryAllocateInfo allocInfo{};
-		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-		allocInfo.allocationSize = memRequirements.size;
-		allocInfo.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, properties);
-
-		if (vkAllocateMemory(logicalDevice, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS)
-		{
-			TNG_ASSERT_MSG(false, "Failed to allocate memory for the buffer!");
-		}
-
-		vkBindBufferMemory(logicalDevice, buffer, bufferMemory, 0);
-	}
-
 	void Renderer::CreateAssetUniformBuffers(UUID uuid)
 	{
 		VkDeviceSize transformUBOSize = sizeof(TransformUBO);
@@ -1493,23 +1245,23 @@ namespace TANG
 
 			// Create the TransformUBO
 			UniformBuffer& transUBO = assetDescriptorData.transformUBO;
-			transUBO.Create(physicalDevice, logicalDevice, transformUBOSize);
-			transUBO.MapMemory(logicalDevice, transformUBOSize);
+			transUBO.Create(transformUBOSize);
+			transUBO.MapMemory(transformUBOSize);
 				
 			// Create the ViewUBO
 			UniformBuffer& vpUBO = assetDescriptorData.viewUBO;
-			vpUBO.Create(physicalDevice, logicalDevice, viewUBOSize);
-			vpUBO.MapMemory(logicalDevice, viewUBOSize);
+			vpUBO.Create(viewUBOSize);
+			vpUBO.MapMemory(viewUBOSize);
 
 			// Create the ProjUBO
 			UniformBuffer& projUBO = assetDescriptorData.projUBO;
-			projUBO.Create(physicalDevice, logicalDevice, projUBOSize);
-			projUBO.MapMemory(logicalDevice, projUBOSize);
+			projUBO.Create(projUBOSize);
+			projUBO.MapMemory(projUBOSize);
 
 			// Create the camera data UBO
 			UniformBuffer& cameraDataUBO = assetDescriptorData.cameraDataUBO;
-			cameraDataUBO.Create(physicalDevice, logicalDevice, cameraDataSize);
-			cameraDataUBO.MapMemory(logicalDevice, cameraDataSize);
+			cameraDataUBO.Create(cameraDataSize);
+			cameraDataUBO.MapMemory(cameraDataSize);
 		}
 	}
 
@@ -1528,20 +1280,20 @@ namespace TANG
 		persistentLayout.AddBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Metallic texture
 		persistentLayout.AddBinding(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Roughness texture
 		persistentLayout.AddBinding(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Lightmap texture
-		setLayoutCache.CreateSetLayout(logicalDevice, persistentLayout, 0);
+		setLayoutCache.CreateSetLayout(persistentLayout, 0);
 
 		// Holds ProjUBO
 		SetLayoutSummary unstableLayout;
 		unstableLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);           // Projection matrix
 		unstableLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT);         // Camera exposure
-		setLayoutCache.CreateSetLayout(logicalDevice, unstableLayout, 0);
+		setLayoutCache.CreateSetLayout(unstableLayout, 0);
 
 		// Holds TransformUBO + ViewUBO + CameraDataUBO
 		SetLayoutSummary volatileLayout;
 		volatileLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);   // Transform matrix
 		volatileLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT); // Camera data
 		volatileLayout.AddBinding(2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);   // View matrix
-		setLayoutCache.CreateSetLayout(logicalDevice, volatileLayout, 0);
+		setLayoutCache.CreateSetLayout(volatileLayout, 0);
 	}
 
 	void Renderer::CreateDescriptorPool()
@@ -1563,7 +1315,7 @@ namespace TANG
 		poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 		poolSizes[1].descriptorCount = numImageSamplers * GetFDDSize();
 
-		descriptorPool.Create(logicalDevice, poolSizes.data(), static_cast<uint32_t>(poolSizes.size()), static_cast<uint32_t>(poolSizes.size()) * fddSize * MAX_ASSET_COUNT, 0);
+		descriptorPool.Create(poolSizes.data(), static_cast<uint32_t>(poolSizes.size()), static_cast<uint32_t>(poolSizes.size()) * fddSize * MAX_ASSET_COUNT, 0);
 	}
 
 	void Renderer::CreateDescriptorSets(UUID uuid)
@@ -1582,7 +1334,7 @@ namespace TANG
 				assetDescriptorData.descriptorSets.push_back(DescriptorSet());
 				DescriptorSet* currentSet = &assetDescriptorData.descriptorSets.back();
 
-				currentSet->Create(logicalDevice, descriptorPool, iter.second);
+				currentSet->Create(descriptorPool, iter.second);
 			}
 		}
 
@@ -1600,12 +1352,12 @@ namespace TANG
 		imageInfo.format = depthFormat;
 		imageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 		imageInfo.mipLevels = 1;
-		imageInfo.samples = msaaSamples;
+		imageInfo.samples = DeviceCache::Get().GetMaxMSAA();
 
 		// Image view
 		ImageViewCreateInfo imageViewInfo{ VK_IMAGE_ASPECT_DEPTH_BIT };
 
-		depthBuffer.Create(physicalDevice, logicalDevice, &imageInfo, &imageViewInfo);
+		depthBuffer.Create(&imageInfo, &imageViewInfo);
 	}
 
 	void Renderer::CreateColorAttachmentTexture()
@@ -1617,12 +1369,12 @@ namespace TANG
 		imageInfo.format = swapChainImageFormat;
 		imageInfo.usage = VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 		imageInfo.mipLevels = 1;
-		imageInfo.samples = msaaSamples;
+		imageInfo.samples = DeviceCache::Get().GetMaxMSAA();
 
 		// Image view
 		ImageViewCreateInfo imageViewInfo{ VK_IMAGE_ASPECT_COLOR_BIT };
 
-		colorAttachment.Create(physicalDevice, logicalDevice, &imageInfo, &imageViewInfo);
+		colorAttachment.Create(&imageInfo, &imageViewInfo);
 	}
 
 	void Renderer::RecordPrimaryCommandBuffer(uint32_t frameBufferIndex)
@@ -1670,15 +1422,6 @@ namespace TANG
 		commandBuffer->EndRecording();
 	}
 
-	//VkShaderModule Renderer::LoadShader(const std::string& fileName)
-	//{
-	//	namespace fs = std::filesystem;
-	//	const std::string defaultShaderCompiledPath = (fs::path(compiledShaderOutputPath) / fs::path(fileName)).generic_string();
-
-	//	auto shaderCode = ReadFile(defaultShaderCompiledPath);
-	//	return CreateShaderModule(shaderCode.data(), static_cast<uint32_t>(shaderCode.size()));
-	//}
-
 	void Renderer::RecordSecondaryCommandBuffer(SecondaryCommandBuffer& commandBuffer, AssetResources* resources, uint32_t frameBufferIndex)
 	{
 		// Retrieve the vector of descriptor sets for the given asset
@@ -1699,8 +1442,8 @@ namespace TANG
 		commandBuffer.BeginRecording(VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT | VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT, &inheritanceInfo);
 
 		commandBuffer.CMD_BindMesh(resources);
-		commandBuffer.CMD_BindDescriptorSets(pipelineLayout, static_cast<uint32_t>(vkDescSets.size()), vkDescSets.data());
-		commandBuffer.CMD_BindGraphicsPipeline(graphicsPipeline);
+		commandBuffer.CMD_BindDescriptorSets(pbrPipeline.GetPipelineLayout(), static_cast<uint32_t>(vkDescSets.size()), vkDescSets.data());
+		commandBuffer.CMD_BindGraphicsPipeline(pbrPipeline.GetPipeline());
 		commandBuffer.CMD_SetScissor({ 0, 0 }, swapChainExtent);
 		commandBuffer.CMD_SetViewport(static_cast<float>(swapChainExtent.width), static_cast<float>(swapChainExtent.height));
 		commandBuffer.CMD_DrawIndexed(static_cast<uint32_t>(resources->indexCount));
@@ -1715,7 +1458,7 @@ namespace TANG
 			for (auto& resources : assetResources)
 			{
 				SecondaryCommandBuffer* commandBuffer = GetSecondaryCommandBufferAtIndex(i, resources.uuid);
-				commandBuffer->Create(logicalDevice, CommandPoolRegistry::GetInstance().GetCommandPool(QueueType::GRAPHICS));
+				commandBuffer->Create(CommandPoolRegistry::Get().GetCommandPool(QueueType::GRAPHICS));
 				RecordSecondaryCommandBuffer(*commandBuffer, &resources, i);
 			}
 		}
@@ -1723,8 +1466,10 @@ namespace TANG
 
 	void Renderer::CleanupSwapChain()
 	{
-		colorAttachment.Destroy(logicalDevice);
-		depthBuffer.Destroy(logicalDevice);
+		VkDevice logicalDevice = GetLogicalDevice();
+
+		colorAttachment.Destroy();
+		depthBuffer.Destroy();
 
 		for (auto& swidd : swapChainImageDependentData)
 		{
@@ -1733,7 +1478,7 @@ namespace TANG
 
 		for (auto& swidd : swapChainImageDependentData)
 		{
-			swidd.swapChainImage.DestroyImageView(logicalDevice);
+			swidd.swapChainImage.DestroyImageView();
 		}
 
 		// Clean up the secondary commands buffers that reference the swap chain framebuffers
@@ -1742,7 +1487,7 @@ namespace TANG
 			auto& secondaryCmdBuffer = swapChainImageDependentData[i].secondaryCommandBuffer;
 			for (auto iter : secondaryCmdBuffer)
 			{
-				iter.second.Destroy(logicalDevice, CommandPoolRegistry::GetInstance().GetCommandPool(QueueType::GRAPHICS));
+				iter.second.Destroy(CommandPoolRegistry::Get().GetCommandPool(QueueType::GRAPHICS));
 			}
 		}
 
@@ -1778,7 +1523,7 @@ namespace TANG
 		// Update ProjUBO descriptor set
 		WriteDescriptorSets writeDescSets(1, 0);
 		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 0, currentAssetDataMap.projUBO.GetBuffer(), currentAssetDataMap.projUBO.GetBufferSize(), 0);
-		descSet.Update(logicalDevice, writeDescSets);
+		descSet.Update(writeDescSets);
 	}
 
 	void Renderer::UpdatePBRTextureDescriptorSet(UUID uuid, uint32_t frameIndex)
@@ -1799,7 +1544,7 @@ namespace TANG
 		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 3, resources.material[static_cast<uint32_t>(Material::TEXTURE_TYPE::ROUGHNESS)]);
 		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 4, resources.material[static_cast<uint32_t>(Material::TEXTURE_TYPE::LIGHTMAP)]);
 
-		descSet.Update(logicalDevice, writeDescSets);
+		descSet.Update(writeDescSets);
 	}
 
 	void Renderer::UpdateCameraDataDescriptorSet(UUID uuid, uint32_t frameIndex)
@@ -1813,7 +1558,7 @@ namespace TANG
 		WriteDescriptorSets writeDescSets(2, 0);
 		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 2, currentAssetDataMap.viewUBO.GetBuffer(), currentAssetDataMap.viewUBO.GetBufferSize(), 0);
 		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 0, currentAssetDataMap.cameraDataUBO.GetBuffer(), currentAssetDataMap.cameraDataUBO.GetBufferSize(), 0);
-		descSet.Update(logicalDevice, writeDescSets);
+		descSet.Update(writeDescSets);
 	}
 
 	void Renderer::UpdateTransformUniformBuffer(const Transform& transform, UUID uuid)
@@ -1857,7 +1602,7 @@ namespace TANG
 		WriteDescriptorSets writeDescSets(2, 0);
 		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 0, currentAssetDataMap.transformUBO.GetBuffer(), currentAssetDataMap.transformUBO.GetBufferSize(), 0);
 		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 1, currentAssetDataMap.cameraDataUBO.GetBuffer(), currentAssetDataMap.cameraDataUBO.GetBufferSize(), 0);
-		descSet.Update(logicalDevice, writeDescSets);
+		descSet.Update(writeDescSets);
 	}
 
 	void Renderer::InitializeDescriptorSets(UUID uuid, uint32_t frameIndex)
@@ -1893,7 +1638,7 @@ namespace TANG
 
 	void Renderer::CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)
 	{
-		DisposableCommand command(logicalDevice, QueueType::TRANSFER);
+		DisposableCommand command(QueueType::TRANSFER);
 
 		VkBufferImageCopy region{};
 		region.bufferOffset = 0;
@@ -1913,6 +1658,7 @@ namespace TANG
 
 	VkFormat Renderer::FindSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features)
 	{
+		VkPhysicalDevice physicalDevice = GetPhysicalDevice();
 		for (VkFormat format : candidates)
 		{
 			VkFormatProperties props;
@@ -1944,22 +1690,6 @@ namespace TANG
 	bool Renderer::HasStencilComponent(VkFormat format)
 	{
 		return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
-	}
-
-	VkSampleCountFlagBits Renderer::GetMaxUsableSampleCount()
-	{
-		VkPhysicalDeviceProperties physicalDeviceProperties;
-		vkGetPhysicalDeviceProperties(physicalDevice, &physicalDeviceProperties);
-
-		VkSampleCountFlags counts = physicalDeviceProperties.limits.framebufferColorSampleCounts & physicalDeviceProperties.limits.framebufferDepthSampleCounts;
-		if (counts & VK_SAMPLE_COUNT_64_BIT) { return VK_SAMPLE_COUNT_64_BIT; }
-		if (counts & VK_SAMPLE_COUNT_32_BIT) { return VK_SAMPLE_COUNT_32_BIT; }
-		if (counts & VK_SAMPLE_COUNT_16_BIT) { return VK_SAMPLE_COUNT_16_BIT; }
-		if (counts & VK_SAMPLE_COUNT_8_BIT) { return VK_SAMPLE_COUNT_8_BIT; }
-		if (counts & VK_SAMPLE_COUNT_4_BIT) { return VK_SAMPLE_COUNT_4_BIT; }
-		if (counts & VK_SAMPLE_COUNT_2_BIT) { return VK_SAMPLE_COUNT_2_BIT; }
-
-		return VK_SAMPLE_COUNT_1_BIT;
 	}
 
 	/////////////////////////////////////////////////////

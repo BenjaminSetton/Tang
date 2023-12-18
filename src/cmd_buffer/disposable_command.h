@@ -15,7 +15,7 @@ namespace TANG
 	{
 	public:
 
-		explicit DisposableCommand(VkDevice logicalDevice, QueueType type);
+		explicit DisposableCommand(QueueType type);
 		~DisposableCommand();
 		DisposableCommand(const DisposableCommand& other) = delete;
 		DisposableCommand(DisposableCommand&& other) noexcept = delete;

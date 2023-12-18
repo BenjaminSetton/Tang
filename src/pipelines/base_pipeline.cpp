@@ -1,4 +1,5 @@
 
+#include "../device_cache.h"
 #include "base_pipeline.h"
 
 namespace TANG
@@ -12,8 +13,10 @@ namespace TANG
 	BasePipeline::BasePipeline(BasePipeline&& other) noexcept : pipelineObject(std::move(other.pipelineObject))
 	{ }
 
-	void BasePipeline::Destroy(VkDevice logicalDevice)
+	void BasePipeline::Destroy()
 	{
+		VkDevice logicalDevice = GetLogicalDevice();
+
 		if(pipelineObject) vkDestroyPipeline(logicalDevice, pipelineObject, nullptr);
 		if(pipelineLayout) vkDestroyPipelineLayout(logicalDevice, pipelineLayout, nullptr);
 	}
@@ -28,13 +31,13 @@ namespace TANG
 		return pipelineLayout;
 	}
 
-	bool BasePipeline::CreatePipelineObject(VkDevice logicalDevice, const VkGraphicsPipelineCreateInfo& pipelineCreateInfo)
+	bool BasePipeline::CreatePipelineObject(const VkGraphicsPipelineCreateInfo& pipelineCreateInfo)
 	{
-		return (vkCreateGraphicsPipelines(logicalDevice, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &pipelineObject) == VK_SUCCESS);
+		return (vkCreateGraphicsPipelines(GetLogicalDevice(), VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &pipelineObject) == VK_SUCCESS);
 	}
 
-	bool BasePipeline::CreatePipelineLayout(VkDevice logicalDevice, const VkPipelineLayoutCreateInfo& pipelineLayoutCreateInfo)
+	bool BasePipeline::CreatePipelineLayout(const VkPipelineLayoutCreateInfo& pipelineLayoutCreateInfo)
 	{
-		return (vkCreatePipelineLayout(logicalDevice, &pipelineLayoutCreateInfo, nullptr, &pipelineLayout) == VK_SUCCESS);
+		return (vkCreatePipelineLayout(GetLogicalDevice(), &pipelineLayoutCreateInfo, nullptr, &pipelineLayout) == VK_SUCCESS);
 	}
 }

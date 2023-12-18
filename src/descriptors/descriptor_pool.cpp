@@ -1,6 +1,7 @@
 
 #include "descriptor_pool.h"
 
+#include "../device_cache.h"
 #include "../utils/sanity_check.h"
 #include "../utils/logger.h"
 
@@ -45,7 +46,7 @@ namespace TANG
 		return *this;
 	}
 
-	void DescriptorPool::Create(VkDevice logicalDevice, VkDescriptorPoolSize* poolSizes, uint32_t poolSizeCounts, uint32_t maxSets, VkDescriptorPoolCreateFlags flags)
+	void DescriptorPool::Create(VkDescriptorPoolSize* poolSizes, uint32_t poolSizeCounts, uint32_t maxSets, VkDescriptorPoolCreateFlags flags)
 	{
 		VkDescriptorPoolCreateInfo poolInfo{};
 		poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -54,19 +55,19 @@ namespace TANG
 		poolInfo.maxSets = maxSets;
 		poolInfo.flags = flags;
 
-		if (vkCreateDescriptorPool(logicalDevice, &poolInfo, nullptr, &pool) != VK_SUCCESS) {
+		if (vkCreateDescriptorPool(GetLogicalDevice(), &poolInfo, nullptr, &pool) != VK_SUCCESS) {
 			TNG_ASSERT_MSG(false, "Failed to create descriptor pool!");
 		}
 	}
 
-	void DescriptorPool::Reset(VkDevice logicalDevice)
+	void DescriptorPool::Reset()
 	{
-		vkResetDescriptorPool(logicalDevice, pool, 0);
+		vkResetDescriptorPool(GetLogicalDevice(), pool, 0);
 	}
 
-	void DescriptorPool::Destroy(VkDevice logicalDevice)
+	void DescriptorPool::Destroy()
 	{
-		vkDestroyDescriptorPool(logicalDevice, pool, nullptr);
+		vkDestroyDescriptorPool(GetLogicalDevice(), pool, nullptr);
 	}
 
 	VkDescriptorPool DescriptorPool::GetPool() const

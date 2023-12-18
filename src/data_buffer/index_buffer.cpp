@@ -1,7 +1,8 @@
 
-#include "../asset_types.h"
 #include "index_buffer.h"
 #include "staging_buffer.h"
+#include "../asset_types.h"
+#include "../device_cache.h"
 #include "../utils/sanity_check.h"
 
 #include "vulkan/vulkan.h"
@@ -41,36 +42,38 @@ namespace TANG
 		return *this;
 	}
 
-	void IndexBuffer::Create(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkDeviceSize size)
+	void IndexBuffer::Create(VkDeviceSize size)
 	{
 		// Create the index buffer
-		CreateBase(physicalDevice, logicalDevice, size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		CreateBase(size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		
-		// Create the staging buffer
-		stagingBuffer.Create(physicalDevice, logicalDevice, size);
+		stagingBuffer.Create(size);
 	}
 
-	void IndexBuffer::Destroy(VkDevice logicalDevice)
+	void IndexBuffer::Destroy()
 	{
-		// Destroy index buffer
+		VkDevice logicalDevice = GetLogicalDevice();
+
 		vkDestroyBuffer(logicalDevice, buffer, nullptr);
 		vkFreeMemory(logicalDevice, bufferMemory, nullptr);
 
 		buffer = VK_NULL_HANDLE;
 		bufferMemory = VK_NULL_HANDLE;
 
-		DestroyIntermediateBuffers(logicalDevice);
+		DestroyIntermediateBuffers();
 
 		bufferState = BUFFER_STATE::DESTROYED;
 	}
 
-	void IndexBuffer::DestroyIntermediateBuffers(VkDevice logicalDevice)
+	void IndexBuffer::DestroyIntermediateBuffers()
 	{
-			stagingBuffer.Destroy(logicalDevice);
+		stagingBuffer.Destroy();
 	}
 
-	void IndexBuffer::CopyIntoBuffer(VkDevice logicalDevice, VkCommandBuffer commandBuffer, void* sourceData, VkDeviceSize size)
+	void IndexBuffer::CopyIntoBuffer(VkCommandBuffer commandBuffer, void* sourceData, VkDeviceSize size)
 	{
+		VkDevice logicalDevice = GetLogicalDevice();
+
 		if (stagingBuffer.IsInvalid())
 		{
 			LogWarning("Attempting to copy data into index buffer, but staging buffer has not been created!");
@@ -83,7 +86,6 @@ namespace TANG
 		memcpy(bufferPtr, sourceData, size);
 		vkUnmapMemory(logicalDevice, stagingBuffer.GetBufferMemory());
 
-		// Copy the data from the staging buffer into the vertex buffer
 		CopyFromBuffer(commandBuffer, stagingBuffer.GetBuffer(), buffer, size);
 
 		bufferState = BUFFER_STATE::MAPPED;

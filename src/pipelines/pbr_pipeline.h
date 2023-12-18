@@ -7,7 +7,7 @@ namespace TANG
 	{
 	public:
 
-		void Create(VkDevice logicalDevice, VkRenderPass renderPass, const SetLayoutCache& setLayoutCache) override;
+		void Create(VkRenderPass renderPass, const SetLayoutCache& setLayoutCache) override;
 
 	};
 }

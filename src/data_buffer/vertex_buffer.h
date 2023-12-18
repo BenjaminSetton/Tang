@@ -15,13 +15,13 @@ namespace TANG
 		VertexBuffer(VertexBuffer&& other);
 		VertexBuffer& operator=(const VertexBuffer& other);
 
-		void Create(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkDeviceSize size) override;
+		void Create(VkDeviceSize size) override;
 
-		void Destroy(VkDevice logicalDevice) override;
+		void Destroy() override;
 
-		void DestroyIntermediateBuffers(VkDevice logicalDevice);
+		void DestroyIntermediateBuffers();
 
-		void CopyIntoBuffer(VkDevice logicalDevice, VkCommandBuffer commandBuffer, void* sourceData, VkDeviceSize size);
+		void CopyIntoBuffer(VkCommandBuffer commandBuffer, void* sourceData, VkDeviceSize size);
 
 	private:
 

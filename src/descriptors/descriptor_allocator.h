@@ -39,16 +39,16 @@ namespace TANG
 			};
 		};
 
-		bool CreateSet(VkDevice logicalDevice, DescriptorSetLayout setLayout, DescriptorSet* set);
+		bool CreateSet(DescriptorSetLayout setLayout, DescriptorSet* set);
 
 		// Creates a pool given the pool sizes, max sets and flags
-		DescriptorPool CreatePool(VkDevice logicalDevice, const DescriptorAllocator::PoolSizes& poolSizes, uint32_t maxSets, VkDescriptorPoolCreateFlags flags);
-		void DestroyPools(VkDevice logicalDevice);
-		void ResetPools(VkDevice logicalDevice);
+		DescriptorPool CreatePool(const DescriptorAllocator::PoolSizes& poolSizes, uint32_t maxSets, VkDescriptorPoolCreateFlags flags);
+		void DestroyPools();
+		void ResetPools();
 
 	private:
 
-		DescriptorPool PickPool(VkDevice logicalDevice);
+		DescriptorPool PickPool();
 
 		DescriptorPool currentPool;
 		PoolSizes descriptorSizes;

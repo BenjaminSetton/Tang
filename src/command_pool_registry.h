@@ -18,14 +18,14 @@ namespace TANG
 
 	public:
 
-		static CommandPoolRegistry& GetInstance()
+		static CommandPoolRegistry& Get()
 		{
 			static CommandPoolRegistry instance;
 			return instance;
 		}
 
-		void CreatePools(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkSurfaceKHR surface);
-		void DestroyPools(VkDevice logicalDevice);
+		void CreatePools(VkSurfaceKHR surface);
+		void DestroyPools();
 
 		VkCommandPool GetCommandPool(QueueType type) const;
 

@@ -1,9 +1,10 @@
 
 #include <algorithm>
 
-#include "set_layout_cache.h"
+#include "../../device_cache.h"
 #include "../../utils/logger.h"
 #include "../../utils/sanity_check.h"
+#include "set_layout_cache.h"
 
 namespace TANG
 {
@@ -28,7 +29,7 @@ namespace TANG
 		// Nothing to do here
 	}
 
-	VkDescriptorSetLayout SetLayoutCache::CreateSetLayout(VkDevice logicalDevice, SetLayoutSummary& layoutSummary, VkDescriptorSetLayoutCreateFlags flags)
+	VkDescriptorSetLayout SetLayoutCache::CreateSetLayout(SetLayoutSummary& layoutSummary, VkDescriptorSetLayoutCreateFlags flags)
 	{
 		if (!layoutSummary.IsValid())
 		{
@@ -51,18 +52,18 @@ namespace TANG
 		createInfo.bindingCount = layoutSummary.GetBindingCount();
 
 		DescriptorSetLayout layout;
-		layout.Create(logicalDevice, createInfo);
+		layout.Create(createInfo);
 		
 		layoutCache[layoutSummary] = layout;
 
 		return layout.GetLayout();
 	}
 
-	void SetLayoutCache::DestroyLayouts(VkDevice logicalDevice)
+	void SetLayoutCache::DestroyLayouts()
 	{
 		for (auto iter : layoutCache)
 		{
-			iter.second.Destroy(logicalDevice);
+			iter.second.Destroy();
 		}
 
 		layoutCache.clear();

@@ -18,10 +18,10 @@ namespace TANG
 		StagingBuffer(StagingBuffer&& other) noexcept;
 		StagingBuffer& operator=(const StagingBuffer& other) = delete;
 
-		void Create(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkDeviceSize size) override;
-		void Destroy(VkDevice logicalDevice) override;
+		void Create(VkDeviceSize size) override;
+		void Destroy() override;
 
-		void CopyIntoBuffer(VkDevice logicalDevice, void* sourceData, VkDeviceSize size);
+		void CopyIntoBuffer(void* sourceData, VkDeviceSize size);
 
 	private:
 		// Nothing to see here...

@@ -3,6 +3,7 @@
 #include <utility>
 
 #include "staging_buffer.h"
+#include "../device_cache.h"
 #include "../utils/logger.h"
 
 namespace TANG
@@ -20,13 +21,15 @@ namespace TANG
 	{
 	}
 
-	void StagingBuffer::Create(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkDeviceSize size)
+	void StagingBuffer::Create(VkDeviceSize size)
 	{
-		CreateBase(physicalDevice, logicalDevice, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		CreateBase(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 	}
 
-	void StagingBuffer::Destroy(VkDevice logicalDevice)
+	void StagingBuffer::Destroy()
 	{
+		VkDevice logicalDevice = GetLogicalDevice();
+
 		if(buffer) vkDestroyBuffer(logicalDevice, buffer, nullptr);
 		if(bufferMemory) vkFreeMemory(logicalDevice, bufferMemory, nullptr);
 
@@ -36,8 +39,10 @@ namespace TANG
 		bufferState = BUFFER_STATE::DESTROYED;
 	}
 
-	void StagingBuffer::CopyIntoBuffer(VkDevice logicalDevice, void* sourceData, VkDeviceSize size)
+	void StagingBuffer::CopyIntoBuffer(void* sourceData, VkDeviceSize size)
 	{
+		VkDevice logicalDevice = GetLogicalDevice();
+
 		if (IsInvalid())
 		{
 			LogWarning("Attempting to copy into invalid staging buffer!");
