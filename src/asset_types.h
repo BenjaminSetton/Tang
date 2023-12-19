@@ -1,7 +1,14 @@
 #ifndef ASSET_TYPES_H
 #define ASSET_TYPES_H
 
-#include <glm.hpp>
+// SILENCE WARNINGS FROM GLM
+// 4201: warning C4201: nonstandard extension used: nameless struct/union
+#pragma warning(push)
+#pragma warning(disable : 4201)
+
+#include <glm/glm.hpp>
+
+#pragma warning(pop)
 
 #include "utils/logger.h"
 #include "utils/uuid.h"

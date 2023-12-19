@@ -1,7 +1,7 @@
 #ifndef BASE_CAMERA_H
 #define BASE_CAMERA_H
 
-#include "glm.hpp"
+#include "glm/glm.hpp"
 
 namespace TANG
 {

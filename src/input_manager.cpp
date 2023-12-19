@@ -1,6 +1,6 @@
 
 #include "input_manager.h"
-#include "glfw3.h"
+#include "glfw/glfw3.h"
 #include "utils/key_mappings.h"
 #include "utils/logger.h"
 #include "utils/sanity_check.h"

@@ -2,7 +2,7 @@
 #define KEY_DECLARATIONS_H
 
 // Needed to include GLFW key types for mapping
-#include "glfw3.h"
+#include "glfw/glfw3.h"
 
 namespace TANG
 {

@@ -1,12 +1,11 @@
 
-#define GLM_FORCE_RADIANS
-#include <gtc/matrix_transform.hpp>
-
 // DISABLE WARNING FROM "type_quat.hpp": nonstandard extension used: nameless struct/union
 #pragma warning(push)
 #pragma warning(disable : 4201)
 
-#include <gtc/quaternion.hpp>
+#define GLM_FORCE_RADIANS
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 #pragma warning(pop)
 

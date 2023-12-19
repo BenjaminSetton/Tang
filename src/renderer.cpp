@@ -2,18 +2,20 @@
 #include "renderer.h"
 
 // DISABLE WARNINGS FROM GLM
+// 4201: warning C4201: nonstandard extension used: nameless struct/union
+// 4244: warning C4244: 'conversion' conversion from 'type1' to 'type2', possible loss of data
 #pragma warning(push)
 #pragma warning(disable : 4201 4244)
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #define GLM_FORCE_ALIGNED_GENTYPES
-#include <glm.hpp>
-#include <gtc/matrix_transform.hpp>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 #define GLM_ENABLE_EXPERIMENTAL
-#include <gtx/hash.hpp>
-#include <gtx/euler_angles.hpp>
+#include <glm/gtx/hash.hpp>
+#include <glm/gtx/euler_angles.hpp>
 
 #pragma warning(pop) 
 
@@ -25,9 +27,9 @@
 // Unfortunately the renderer has to know about GLFW in order to create the surface, since the vulkan call itself
 // takes in a GLFWwindow pointer >:(. This also means we have to pass it into the renderer's Initialize() call,
 // since the surface has to be initialized for other Vulkan objects to be properly initialized as well...
-#include <glfw3.h> // GLFWwindow, glfwCreateWindowSurface() and glfwGetRequiredInstanceExtensions()
+#include <glfw/glfw3.h> // GLFWwindow, glfwCreateWindowSurface() and glfwGetRequiredInstanceExtensions()
 
-#include <glm.hpp>
+#include <glm/glm.hpp>
 #include <iostream>
 #include <limits>
 #include <optional>

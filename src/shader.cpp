@@ -7,7 +7,7 @@
 #include "utils/file_utils.h"
 #include "utils/sanity_check.h"
 
-static const std::string CompiledShaderOutputPath = "../out/shaders";
+static const std::string CompiledShaderOutputPath = "./shaders";
 
 static const std::unordered_map<TANG::ShaderType, std::string> ShaderTypeToFolderName =
 {

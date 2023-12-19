@@ -1,5 +1,12 @@
 
-#include <gtc/matrix_transform.hpp>
+// SILENCE WARNINGS FROM GLM
+// 4201: warning C4201: nonstandard extension used: nameless struct/union
+#pragma warning(push)
+#pragma warning(disable : 4201)
+
+#include <glm/gtc/matrix_transform.hpp>
+
+#pragma warning(pop)
 
 #include "base_camera.h"
 #include "../utils/sanity_check.h"
