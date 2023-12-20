@@ -1,8 +1,8 @@
 
+#include <utility>
+
 #include "../descriptors/set_layout/set_layout_cache.h"
 #include "vulkan/vulkan.h"
-
-#include <utility>
 
 namespace TANG
 {
@@ -19,7 +19,7 @@ namespace TANG
 
 		// Pure virtual creation/destruction methods. Every derived class must specify all the components
 		// necessary to create a Vulkan pipeline
-		virtual void Create(VkRenderPass renderPass, const SetLayoutCache& setLayoutCache, const VkExtent2D& viewportSize) = 0;
+		virtual void Create() = 0;
 		virtual void Destroy();
 
 		VkPipeline GetPipeline() const;
@@ -29,6 +29,12 @@ namespace TANG
 
 		[[nodiscard]] bool CreatePipelineObject(const VkGraphicsPipelineCreateInfo& pipelineCreateInfo);
 		[[nodiscard]] bool CreatePipelineLayout(const VkPipelineLayoutCreateInfo& pipelineLayoutCreateInfo);
+
+		virtual void FlushData() = 0;
+
+		// This should be set to true in every derived class' implementation of SetData(...),
+		// and subsequently used inside Create() to return early if the data was not set properly
+		bool wasDataSet;
 
 	private:
 

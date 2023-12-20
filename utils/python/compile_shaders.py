@@ -30,6 +30,10 @@ def main():
     for path in Path(f"{projectDir}/{sourceDir}").rglob("*.frag"):
         shaderList.append(path)
     
+    # TODO - Checksum shader sources and only compile those which are different from the ones
+    #        we already compiled
+    
+    # Compile the shader sources
     for shaderPath in shaderList:
         shaderName = (shaderPath.suffix)[1:]
         parentDirName = shaderPath.parent.name

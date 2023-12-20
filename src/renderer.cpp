@@ -150,7 +150,7 @@ namespace TANG
 	Renderer::Renderer() : 
 		vkInstance(VK_NULL_HANDLE), debugMessenger(VK_NULL_HANDLE), surface(VK_NULL_HANDLE), queues(), swapChain(VK_NULL_HANDLE), 
 		swapChainImageFormat(VK_FORMAT_UNDEFINED), swapChainExtent({ 0, 0 }), frameDependentData(), swapChainImageDependentData(),
-		setLayoutCache(), layoutSummaries(), renderPass(VK_NULL_HANDLE), pbrPipeline(), currentFrame(0), resourcesMap(), assetResources(), descriptorPool(), 
+		setLayoutCache(), layoutSummaries(), pbrRenderPass(), pbrPipeline(), currentFrame(0), resourcesMap(), assetResources(), descriptorPool(), 
 		randomTexture(), depthBuffer(), colorAttachment(), framebufferWidth(0), framebufferHeight(0)
 	{ }
 
@@ -542,7 +542,7 @@ namespace TANG
 		CommandPoolRegistry::Get().DestroyPools();
 
 		pbrPipeline.Destroy();
-		vkDestroyRenderPass(logicalDevice, renderPass, nullptr);
+		pbrRenderPass.Destroy();
 
 		vkDestroyDevice(logicalDevice, nullptr);
 		DeviceCache::Get().InvalidateCache();
@@ -1083,7 +1083,8 @@ namespace TANG
 
 	void Renderer::CreatePipelines()
 	{
-		pbrPipeline.Create(renderPass, setLayoutCache, swapChainExtent);
+		pbrPipeline.SetData(pbrRenderPass, setLayoutCache, swapChainExtent);
+		pbrPipeline.Create();
 	}
 
 	void Renderer::CreateRenderPass()
@@ -1100,76 +1101,8 @@ namespace TANG
 		// 
 		// Attachments with RGB/Depth/Stencil information are called Color/Depth/Stencil Attachments respectively.
 
-		VkAttachmentDescription colorAttachmentDesc{};
-		colorAttachmentDesc.format = swapChainImageFormat;
-		colorAttachmentDesc.samples = DeviceCache::Get().GetMaxMSAA();
-		colorAttachmentDesc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-		colorAttachmentDesc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-		colorAttachmentDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-		colorAttachmentDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		colorAttachmentDesc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		colorAttachmentDesc.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-		VkAttachmentReference colorAttachmentRef{};
-		colorAttachmentRef.attachment = 0;
-		colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-		VkAttachmentDescription depthAttachmentDesc{};
-		depthAttachmentDesc.format = FindDepthFormat();
-		depthAttachmentDesc.samples = DeviceCache::Get().GetMaxMSAA();
-		depthAttachmentDesc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-		depthAttachmentDesc.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		depthAttachmentDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-		depthAttachmentDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		depthAttachmentDesc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		depthAttachmentDesc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-		VkAttachmentReference depthAttachmentRef{};
-		depthAttachmentRef.attachment = 1;
-		depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-		VkAttachmentDescription colorAttachmentResolve{};
-		colorAttachmentResolve.format = swapChainImageFormat;
-		colorAttachmentResolve.samples = VK_SAMPLE_COUNT_1_BIT;
-		colorAttachmentResolve.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-		colorAttachmentResolve.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-		colorAttachmentResolve.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-		colorAttachmentResolve.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		colorAttachmentResolve.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		colorAttachmentResolve.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
-		VkAttachmentReference colorAttachmentResolveRef{};
-		colorAttachmentResolveRef.attachment = 2;
-		colorAttachmentResolveRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-		VkSubpassDescription subpass{};
-		subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-		subpass.colorAttachmentCount = 1;
-		subpass.pColorAttachments = &colorAttachmentRef;
-		subpass.pDepthStencilAttachment = &depthAttachmentRef;
-		subpass.pResolveAttachments = &colorAttachmentResolveRef;
-
-		VkSubpassDependency dependency{};
-		dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-		dependency.dstSubpass = 0;
-		dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-		dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-		dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-
-		std::array<VkAttachmentDescription, 3> attachments = { colorAttachmentDesc, depthAttachmentDesc, colorAttachmentResolve };
-		VkRenderPassCreateInfo renderPassInfo{};
-		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-		renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-		renderPassInfo.pAttachments = attachments.data();
-		renderPassInfo.subpassCount = 1;
-		renderPassInfo.pSubpasses = &subpass;
-		renderPassInfo.dependencyCount = 1;
-		renderPassInfo.pDependencies = &dependency;
-
-		if (vkCreateRenderPass(GetLogicalDevice(), &renderPassInfo, nullptr, &renderPass) != VK_SUCCESS)
-		{
-			TNG_ASSERT_MSG(false, "Failed to create render pass!");
-		}
+		pbrRenderPass.SetData(swapChainImageFormat, FindDepthFormat());
+		pbrRenderPass.Create();
 	}
 
 	void Renderer::CreateFramebuffers()
@@ -1187,7 +1120,7 @@ namespace TANG
 
 			VkFramebufferCreateInfo framebufferInfo{};
 			framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-			framebufferInfo.renderPass = renderPass;
+			framebufferInfo.renderPass = pbrRenderPass.GetRenderPass();
 			framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
 			framebufferInfo.pAttachments = attachments.data();
 			framebufferInfo.width = swapChainExtent.width;
@@ -1389,7 +1322,7 @@ namespace TANG
 		// Primary command buffers don't need to define inheritance info
 		commandBuffer->BeginRecording(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, nullptr);
 
-		commandBuffer->CMD_BeginRenderPass(renderPass, GetFramebufferAtIndex(frameBufferIndex), swapChainExtent, true);
+		commandBuffer->CMD_BeginRenderPass(pbrRenderPass.GetRenderPass(), GetFramebufferAtIndex(frameBufferIndex), swapChainExtent, true);
 
 		// Execute the secondary commands here
 		std::vector<VkCommandBuffer> secondaryCmdBuffers;
@@ -1437,7 +1370,7 @@ namespace TANG
 		VkCommandBufferInheritanceInfo inheritanceInfo{};
 		inheritanceInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
 		inheritanceInfo.pNext = nullptr;
-		inheritanceInfo.renderPass = renderPass; // NOTE - We only have one render pass for now, if that changes we must change it here too
+		inheritanceInfo.renderPass = pbrRenderPass.GetRenderPass(); // NOTE - We only have one render pass for now, if that changes we must change it here too
 		inheritanceInfo.subpass = 0;
 		inheritanceInfo.framebuffer = GetSWIDDAtIndex(frameBufferIndex)->swapChainFramebuffer;
 

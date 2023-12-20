@@ -5,6 +5,7 @@
 #include "../device_cache.h"
 #include "../shader.h"
 #include "../utils/sanity_check.h"
+#include "../utils/logger.h"
 #include "../vertex_type.h"
 #include "pbr_pipeline.h"
 
@@ -64,8 +65,38 @@ static std::array<VkVertexInputAttributeDescription, VERTEX_ATTRIBUTE_COUNT> Get
 
 namespace TANG
 {
-	void PBRPipeline::Create(VkRenderPass renderPass, const SetLayoutCache& setLayoutCache, const VkExtent2D& viewportSize)
+	PBRPipeline::PBRPipeline()
 	{
+		FlushData();
+	}
+
+	PBRPipeline::~PBRPipeline()
+	{
+		FlushData();
+	}
+
+	PBRPipeline::PBRPipeline(PBRPipeline&& other) noexcept : BasePipeline(std::move(other))
+	{
+	}
+
+	// Get references to the data required in Create(), it's not needed
+	void PBRPipeline::SetData(const PBRRenderPass& _renderPass, const SetLayoutCache& _setLayoutCache, VkExtent2D _viewportSize)
+	{
+		renderPass = &_renderPass;
+		setLayoutCache = &_setLayoutCache;
+		viewportSize = _viewportSize;
+
+		wasDataSet = true;
+	}
+
+	void PBRPipeline::Create()
+	{
+		if (!wasDataSet)
+		{
+			LogError("Failed to create PBR pipeline! Create data has not been set correctly");
+			return;
+		}
+
 		// Read the compiled shaders
 		Shader vertexShader, fragmentShader;
 		vertexShader.Create("vert.spv", ShaderType::PBR);
@@ -203,7 +234,7 @@ namespace TANG
 
 		// Pipeline layout
 		std::vector<VkDescriptorSetLayout> vkDescSetLayouts;
-		const LayoutCache& cache = setLayoutCache.GetLayoutCache();
+		const LayoutCache& cache = setLayoutCache->GetLayoutCache();
 		for (auto& iter : cache)
 		{
 			vkDescSetLayouts.push_back(iter.second.GetLayout());
@@ -211,7 +242,7 @@ namespace TANG
 
 		VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 		pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-		pipelineLayoutInfo.setLayoutCount = setLayoutCache.GetLayoutCount();
+		pipelineLayoutInfo.setLayoutCount = setLayoutCache->GetLayoutCount();
 		pipelineLayoutInfo.pSetLayouts = vkDescSetLayouts.data();
 		pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
 		pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
@@ -234,7 +265,7 @@ namespace TANG
 		pipelineInfo.pColorBlendState = &colorBlending;
 		pipelineInfo.pDynamicState = &dynamicState;
 		pipelineInfo.layout = GetPipelineLayout();
-		pipelineInfo.renderPass = renderPass;
+		pipelineInfo.renderPass = renderPass->GetRenderPass();
 		pipelineInfo.subpass = 0;
 		pipelineInfo.basePipelineHandle = VK_NULL_HANDLE; // Optional
 		pipelineInfo.basePipelineIndex = -1; // Optional
@@ -246,6 +277,15 @@ namespace TANG
 
 		vertexShader.Destroy();
 		fragmentShader.Destroy();
+	}
+
+	void PBRPipeline::FlushData()
+	{
+		renderPass = nullptr;
+		setLayoutCache = nullptr;
+		viewportSize = VkExtent2D();
+
+		wasDataSet = false;
 	}
 }
 

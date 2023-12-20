@@ -4,13 +4,13 @@
 
 namespace TANG
 {
-	BasePipeline::BasePipeline() : pipelineObject(VK_NULL_HANDLE)
+	BasePipeline::BasePipeline() : pipelineObject(VK_NULL_HANDLE), wasDataSet(false)
 	{ }
 
 	BasePipeline::~BasePipeline()
 	{ }
 
-	BasePipeline::BasePipeline(BasePipeline&& other) noexcept : pipelineObject(std::move(other.pipelineObject))
+	BasePipeline::BasePipeline(BasePipeline&& other) noexcept : pipelineObject(std::move(other.pipelineObject)), wasDataSet(std::move(other.wasDataSet))
 	{ }
 
 	void BasePipeline::Destroy()

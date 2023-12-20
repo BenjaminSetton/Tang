@@ -14,6 +14,7 @@
 #include "descriptors/set_layout/set_layout_summary.h"
 #include "pipelines/pbr_pipeline.h"
 #include "queue_types.h"
+#include "render_passes/pbr_render_pass.h"
 #include "texture_resource.h"
 #include "utils/sanity_check.h"
 
@@ -280,7 +281,7 @@ namespace TANG
 		SetLayoutCache setLayoutCache;
 		std::vector<SetLayoutSummary> layoutSummaries;
 
-		VkRenderPass renderPass;
+		PBRRenderPass pbrRenderPass;
 		PBRPipeline pbrPipeline;
 
 		uint32_t currentFrame;
