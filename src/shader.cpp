@@ -12,17 +12,21 @@ static const std::string CompiledShaderOutputPath = "./shaders";
 static const std::unordered_map<TANG::ShaderType, std::string> ShaderTypeToFolderName =
 {
 	{ TANG::ShaderType::PBR, "pbr" },
-	{ TANG::ShaderType::SKYBOX, "skybox" },
+	{ TANG::ShaderType::CUBEMAP_PREPROCESSING, "cubemap_preprocessing" },
 };
 
 namespace TANG
 {
 
-	Shader::Shader() : shaderObject(VK_NULL_HANDLE)
-	{ }
+	Shader::Shader(const std::string_view& fileName, const ShaderType& type) : shaderObject(VK_NULL_HANDLE)
+	{
+		Create(fileName, type);
+	}
 
 	Shader::~Shader()
-	{ }
+	{ 
+		Destroy();
+	}
 
 	Shader::Shader(Shader&& other) noexcept : shaderObject(std::move(other.shaderObject))
 	{ }

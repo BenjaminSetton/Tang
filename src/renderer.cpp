@@ -65,6 +65,8 @@ static const bool enableValidationLayers = false;
 static const bool enableValidationLayers = true;
 #endif
 
+static const std::string SkyboxTextureFilePath = "../src/data/textures/cubemaps/skybox_sunny.hdr";
+
 VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
 	VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 	VkDebugUtilsMessageTypeFlagsEXT messageType,
@@ -80,7 +82,6 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
 
 	return VK_FALSE;
 }
-
 
 VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
 	const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger)
@@ -150,9 +151,35 @@ namespace TANG
 	Renderer::Renderer() : 
 		vkInstance(VK_NULL_HANDLE), debugMessenger(VK_NULL_HANDLE), surface(VK_NULL_HANDLE), queues(), swapChain(VK_NULL_HANDLE), 
 		swapChainImageFormat(VK_FORMAT_UNDEFINED), swapChainExtent({ 0, 0 }), frameDependentData(), swapChainImageDependentData(),
-		setLayoutCache(), layoutSummaries(), pbrRenderPass(), pbrPipeline(), currentFrame(0), resourcesMap(), assetResources(), descriptorPool(), 
-		randomTexture(), depthBuffer(), colorAttachment(), framebufferWidth(0), framebufferHeight(0)
+		pbrSetLayoutCache(), layoutSummaries(), pbrRenderPass(), pbrPipeline(), currentFrame(0), resourcesMap(), assetResources(), descriptorPool(),
+		depthBuffer(), colorAttachment(), framebufferWidth(0), framebufferHeight(0)
 	{ }
+
+	void Renderer::Initialize(GLFWwindow* windowHandle, uint32_t windowWidth, uint32_t windowHeight)
+	{
+		frameDependentData.resize(MAX_FRAMES_IN_FLIGHT);
+		framebufferWidth = windowWidth;
+		framebufferHeight = windowHeight;
+
+		// Initialize Vulkan-related objects
+		CreateInstance();
+		SetupDebugMessenger();
+		CreateSurface(windowHandle);
+		PickPhysicalDevice();
+		CreateLogicalDevice();
+		CreateSwapChain();
+		CreateDescriptorSetLayouts();
+		CreateDescriptorPool();
+		CreateRenderPasses();
+		CreatePipelines();
+		CreateCommandPools();
+		LoadSkybox();
+		CreateColorAttachmentTexture();
+		CreateDepthTexture();
+		CreateFramebuffers();
+		CreatePrimaryCommandBuffers(QueueType::GRAPHICS);
+		CreateSyncObjects();
+	}
 
 	void Renderer::Update(float deltaTime)
 	{
@@ -178,6 +205,59 @@ namespace TANG
 		}
 
 		currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+	}
+
+	void Renderer::Shutdown()
+	{
+		VkDevice logicalDevice = DeviceCache::Get().GetLogicalDevice();
+
+		vkDeviceWaitIdle(logicalDevice);
+
+		DestroyAllAssetResources();
+
+		CleanupSwapChain();
+
+		pbrSetLayoutCache.DestroyLayouts();
+
+		for (uint32_t i = 0; i < GetFDDSize(); i++)
+		{
+			auto frameData = GetFDDAtIndex(i);
+			for (auto& iter : frameData->assetDescriptorDataMap)
+			{
+				iter.second.transformUBO.Destroy();
+				iter.second.projUBO.Destroy();
+				iter.second.viewUBO.Destroy();
+				iter.second.cameraDataUBO.Destroy();
+			}
+
+		}
+
+		descriptorPool.Destroy();
+
+		for (uint32_t i = 0; i < GetFDDSize(); i++)
+		{
+			auto frameData = GetFDDAtIndex(i);
+			vkDestroySemaphore(logicalDevice, frameData->imageAvailableSemaphore, nullptr);
+			vkDestroySemaphore(logicalDevice, frameData->renderFinishedSemaphore, nullptr);
+			vkDestroyFence(logicalDevice, frameData->inFlightFence, nullptr);
+		}
+
+		CommandPoolRegistry::Get().DestroyPools();
+
+		pbrPipeline.Destroy();
+		pbrRenderPass.Destroy();
+
+		vkDestroyDevice(logicalDevice, nullptr);
+		DeviceCache::Get().InvalidateCache();
+
+		vkDestroySurfaceKHR(vkInstance, surface, nullptr);
+
+		if (enableValidationLayers)
+		{
+			DestroyDebugUtilsMessengerEXT(vkInstance, debugMessenger, nullptr);
+		}
+
+		vkDestroyInstance(vkInstance, nullptr);
 	}
 
 	// Loads an asset which implies grabbing the vertices and indices from the asset container
@@ -211,7 +291,7 @@ namespace TANG
 			Mesh& currMesh = asset->meshes[i];
 
 			// Create the vertex buffer
-			uint64_t numBytes = currMesh.vertices.size() * sizeof(VertexType);
+			uint64_t numBytes = currMesh.vertices.size() * sizeof(PBRVertex);
 
 			VertexBuffer& vb = resources.vertexBuffers[i];
 			vb.Create(numBytes);
@@ -475,86 +555,6 @@ namespace TANG
 		CreateDepthTexture();
 		CreateFramebuffers();
 		RecreateAllSecondaryCommandBuffers();
-	}
-
-	void Renderer::Initialize(GLFWwindow* windowHandle, uint32_t windowWidth, uint32_t windowHeight)
-	{
-		frameDependentData.resize(MAX_FRAMES_IN_FLIGHT);
-		framebufferWidth = windowWidth;
-		framebufferHeight = windowHeight;
-
-		// Initialize Vulkan-related objects
-		CreateInstance();
-		SetupDebugMessenger();
-		CreateSurface(windowHandle);
-		PickPhysicalDevice();
-		CreateLogicalDevice();
-		CreateSwapChain();
-		CreateDescriptorSetLayouts();
-		CreateDescriptorPool();
-		CreateRenderPass();
-		CreatePipelines();
-		CreateCommandPools();
-		CreateColorAttachmentTexture();
-		CreateDepthTexture();
-		CreateFramebuffers();
-		CreatePrimaryCommandBuffers(QueueType::GRAPHICS);
-		CreateSyncObjects();
-	}
-
-	void Renderer::Shutdown()
-	{
-		VkDevice logicalDevice = DeviceCache::Get().GetLogicalDevice();
-
-		vkDeviceWaitIdle(logicalDevice);
-
-		DestroyAllAssetResources();
-
-		CleanupSwapChain();
-
-		randomTexture.Destroy();
-
-		setLayoutCache.DestroyLayouts();
-
-		for (uint32_t i = 0; i < GetFDDSize(); i++)
-		{
-			auto frameData = GetFDDAtIndex(i);
-			for (auto& iter : frameData->assetDescriptorDataMap)
-			{
-				iter.second.transformUBO.Destroy();
-				iter.second.projUBO.Destroy();
-				iter.second.viewUBO.Destroy();
-				iter.second.cameraDataUBO.Destroy();
-			}
-
-		}
-
-		descriptorPool.Destroy();
-
-		for (uint32_t i = 0; i < GetFDDSize(); i++)
-		{
-			auto frameData = GetFDDAtIndex(i);
-			vkDestroySemaphore(logicalDevice, frameData->imageAvailableSemaphore, nullptr);
-			vkDestroySemaphore(logicalDevice, frameData->renderFinishedSemaphore, nullptr);
-			vkDestroyFence(logicalDevice, frameData->inFlightFence, nullptr);
-		}
-
-		CommandPoolRegistry::Get().DestroyPools();
-
-		pbrPipeline.Destroy();
-		pbrRenderPass.Destroy();
-
-		vkDestroyDevice(logicalDevice, nullptr);
-		DeviceCache::Get().InvalidateCache();
-
-		vkDestroySurfaceKHR(vkInstance, surface, nullptr);
-
-		if (enableValidationLayers)
-		{
-			DestroyDebugUtilsMessengerEXT(vkInstance, debugMessenger, nullptr);
-		}
-
-		vkDestroyInstance(vkInstance, nullptr);
 	}
 
 	void Renderer::SetAssetDrawState(UUID uuid)
@@ -1083,11 +1083,14 @@ namespace TANG
 
 	void Renderer::CreatePipelines()
 	{
-		pbrPipeline.SetData(pbrRenderPass, setLayoutCache, swapChainExtent);
+		cubemapPreprocessingPipeline.SetData(cubemapPreprocessingRenderPass, cubemapPreprocessingSetLayoutCache, swapChainExtent);
+		cubemapPreprocessingPipeline.Create();
+
+		pbrPipeline.SetData(pbrRenderPass, pbrSetLayoutCache, swapChainExtent);
 		pbrPipeline.Create();
 	}
 
-	void Renderer::CreateRenderPass()
+	void Renderer::CreateRenderPasses()
 	{
 		// Some terminology about render passes from Reddit thread (https://www.reddit.com/r/vulkan/comments/a27cid/what_is_an_attachment_in_the_render_passes/):
 		//
@@ -1100,6 +1103,8 @@ namespace TANG
 		// Attachments which hold information about Multisampling are called Resolve Attachments.
 		// 
 		// Attachments with RGB/Depth/Stencil information are called Color/Depth/Stencil Attachments respectively.
+
+		cubemapPreprocessingRenderPass.Create();
 
 		pbrRenderPass.SetData(swapChainImageFormat, FindDepthFormat());
 		pbrRenderPass.Create();
@@ -1215,20 +1220,20 @@ namespace TANG
 		persistentLayout.AddBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Metallic texture
 		persistentLayout.AddBinding(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Roughness texture
 		persistentLayout.AddBinding(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Lightmap texture
-		setLayoutCache.CreateSetLayout(persistentLayout, 0);
+		pbrSetLayoutCache.CreateSetLayout(persistentLayout, 0);
 
 		// Holds ProjUBO
 		SetLayoutSummary unstableLayout;
 		unstableLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);           // Projection matrix
 		unstableLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT);         // Camera exposure
-		setLayoutCache.CreateSetLayout(unstableLayout, 0);
+		pbrSetLayoutCache.CreateSetLayout(unstableLayout, 0);
 
 		// Holds TransformUBO + ViewUBO + CameraDataUBO
 		SetLayoutSummary volatileLayout;
 		volatileLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);   // Transform matrix
 		volatileLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT); // Camera data
 		volatileLayout.AddBinding(2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);   // View matrix
-		setLayoutCache.CreateSetLayout(volatileLayout, 0);
+		pbrSetLayoutCache.CreateSetLayout(volatileLayout, 0);
 	}
 
 	void Renderer::CreateDescriptorPool()
@@ -1263,7 +1268,7 @@ namespace TANG
 			currentFDD->assetDescriptorDataMap.insert({uuid, AssetDescriptorData()});
 			AssetDescriptorData& assetDescriptorData = currentFDD->assetDescriptorDataMap[uuid];
 
-			const LayoutCache& cache = setLayoutCache.GetLayoutCache();
+			const LayoutCache& cache = pbrSetLayoutCache.GetLayoutCache();
 			for (auto iter : cache)
 			{
 				assetDescriptorData.descriptorSets.push_back(DescriptorSet());
@@ -1310,6 +1315,28 @@ namespace TANG
 		ImageViewCreateInfo imageViewInfo{ VK_IMAGE_ASPECT_COLOR_BIT };
 
 		colorAttachment.Create(&imageInfo, &imageViewInfo);
+	}
+
+	void Renderer::LoadSkybox()
+	{
+		BaseImageCreateInfo baseImageInfo{};
+		baseImageInfo.width = 0; // Unused
+		baseImageInfo.height = 0; // Unused
+		baseImageInfo.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+		baseImageInfo.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+		baseImageInfo.mipLevels = 0; // Unused
+		baseImageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+
+		ImageViewCreateInfo viewCreateInfo{};
+		viewCreateInfo.aspect = VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
+
+		SamplerCreateInfo samplerInfo{};
+		samplerInfo.minificationFilter = VK_FILTER_LINEAR;
+		samplerInfo.magnificationFilter = VK_FILTER_LINEAR;
+		samplerInfo.addressModeUVW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerInfo.maxAnisotropy = 1.0f; // Is this an appropriate value??
+
+		skyboxTexture.CreateFromFile(SkyboxTextureFilePath, &baseImageInfo, &viewCreateInfo, &samplerInfo);
 	}
 
 	void Renderer::RecordPrimaryCommandBuffer(uint32_t frameBufferIndex)

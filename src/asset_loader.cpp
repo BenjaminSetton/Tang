@@ -164,7 +164,7 @@ namespace TANG
 					const aiVector3D& importedBitangent = importedMesh->mBitangents[j];
 					const aiVector3D& importedUVs = importedMesh->HasTextureCoords(0) ? importedMesh->mTextureCoords[0][j] : aiVector3D(0, 0, 0);
 
-					VertexType vertex{};
+					PBRVertex vertex{};
 					vertex.pos = { importedPos.x, importedPos.y, importedPos.z };
 					vertex.normal = { importedNormal.x, importedNormal.y, importedNormal.z };
 					vertex.tangent = { importedTangent.x, importedTangent.y, importedTangent.z };

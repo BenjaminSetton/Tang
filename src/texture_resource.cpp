@@ -234,20 +234,33 @@ namespace TANG
 		CreateBaseImage_Helper(baseImageInfo);
 	}
 
-	void TextureResource::CreateBaseImageFromFile(std::string_view fileName, const BaseImageCreateInfo* createInfo)
+	void TextureResource::CreateBaseImageFromFile(std::string_view filePath, const BaseImageCreateInfo* createInfo)
 	{
 		int _width, _height, _channels;
-		stbi_uc* data = stbi_load(fileName.data(), &_width, &_height, &_channels, STBI_rgb_alpha);
+		void* data;
+		if (stbi_is_hdr(filePath.data()))
+		{
+			data = stbi_loadf(filePath.data(), &_width, &_height, &_channels, STBI_rgb_alpha);
+		}
+		else
+		{
+			data = stbi_load(filePath.data(), &_width, &_height, &_channels, STBI_rgb_alpha);
+		}
+
 		if (data == nullptr)
 		{
-			LogError("Failed to create texture from file '%s'!", fileName.data());
+			LogError("Failed to create texture from file '%s'!", filePath.data());
+			return;
 		}
+
+		// Get the fileName from the path
+		name = filePath.substr(filePath.rfind("/") + 1, filePath.size());
 
 		// Calculate amount of mipmaps
 		double exactMips = log2(std::min(_width, _height));
 		if ((exactMips - std::trunc(exactMips)) != 0)
 		{
-			LogWarning("Texture '%s' has dimensions which are not a power-of-two (%u, %u)! This will generate inefficient mip-maps", fileName.data(), _width, _height);
+			LogWarning("Texture '%s' has dimensions which are not a power-of-two (%u, %u)! This will generate inefficient mip-maps", name.c_str(), _width, _height);
 		}
 
 		BaseImageCreateInfo baseImageInfo{};
@@ -266,7 +279,6 @@ namespace TANG
 		stbi_image_free(data);
 
 		GenerateMipmaps(); // This sets the usage to SHADER_READ_ONLY after it's done
-
 	}
 
 	void TextureResource::CreateImageView(const ImageViewCreateInfo* viewInfo)
@@ -367,7 +379,7 @@ namespace TANG
 		height = baseImageInfo->height;
 		mipLevels = baseImageInfo->mipLevels;
 		format = baseImageInfo->format;
-		bytesPerPixel = 4; // We're assuming a texture format of 4 bytes per pixel. No HDR support or support for any texture with size less than 4 bytes per pixel
+		bytesPerPixel = GetBytesPerPixelFromFormat(baseImageInfo->format);
 		isValid = true;
 	}
 
@@ -595,6 +607,30 @@ namespace TANG
 
 		TNG_ASSERT_MSG(false, "Failed to find suitable memory type!");
 		return std::numeric_limits<uint32_t>::max();
+	}
+
+	uint32_t TextureResource::GetBytesPerPixelFromFormat(VkFormat texFormat)
+	{
+		switch (texFormat)
+		{
+		case VK_FORMAT_R8G8B8A8_UNORM:
+		case VK_FORMAT_B8G8R8A8_UNORM:
+		case VK_FORMAT_R8G8B8A8_SRGB:
+		case VK_FORMAT_B8G8R8A8_SRGB:
+		case VK_FORMAT_D32_SFLOAT:
+		case VK_FORMAT_D24_UNORM_S8_UINT:
+		{
+			return 4;
+		}
+		case VK_FORMAT_R32G32B32A32_SFLOAT:
+		{
+			// HDR
+			return 16;
+		}
+		}
+
+		TNG_ASSERT_MSG(false, "Attempting to get bytes per pixel from format, but texture format is not yet supported!");
+		return 0;
 	}
 
 }

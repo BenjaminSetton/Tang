@@ -7,24 +7,24 @@
 #include "../utils/sanity_check.h"
 #include "../utils/logger.h"
 #include "../vertex_types.h"
-#include "pbr_pipeline.h"
+#include "cubemap_preprocessing_pipeline.h"
 
 static VkVertexInputBindingDescription GetVertexBindingDescription()
 {
 	VkVertexInputBindingDescription bindingDesc{};
 	bindingDesc.binding = 0;
-	bindingDesc.stride = sizeof(TANG::PBRVertex);
+	bindingDesc.stride = sizeof(TANG::UVVertex);
 	bindingDesc.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 	return bindingDesc;
 }
 
-static constexpr uint32_t VERTEX_ATTRIBUTE_COUNT = 5;
+static constexpr uint32_t VERTEX_ATTRIBUTE_COUNT = 2;
 
 // Ensure that whenever we update the Vertex layout, we fail to compile unless
 // the attribute descriptions below are updated. Note in this case we won't
 // assert if the byte usage remains the same but we switch to a different format
 // (like switching the order of two attributes)
-TNG_ASSERT_COMPILE(sizeof(TANG::PBRVertex) == 56);
+TNG_ASSERT_COMPILE(sizeof(TANG::UVVertex) == 20);
 
 static std::array<VkVertexInputAttributeDescription, VERTEX_ATTRIBUTE_COUNT> GetVertexAttributeDescriptions()
 {
@@ -34,53 +34,35 @@ static std::array<VkVertexInputAttributeDescription, VERTEX_ATTRIBUTE_COUNT> Get
 	attributeDescriptions[0].binding = 0;
 	attributeDescriptions[0].location = 0;
 	attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT; // vec3 (12 bytes)
-	attributeDescriptions[0].offset = offsetof(TANG::PBRVertex, pos);
-
-	// NORMAL
-	attributeDescriptions[1].binding = 0;
-	attributeDescriptions[1].location = 1;
-	attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT; // vec3 (12 bytes)
-	attributeDescriptions[1].offset = offsetof(TANG::PBRVertex, normal);
-
-	// TANGENT
-	attributeDescriptions[2].binding = 0;
-	attributeDescriptions[2].location = 2;
-	attributeDescriptions[2].format = VK_FORMAT_R32G32B32_SFLOAT; // vec3 (12 bytes)
-	attributeDescriptions[2].offset = offsetof(TANG::PBRVertex, tangent);
-
-	// BITANGENT
-	attributeDescriptions[3].binding = 0;
-	attributeDescriptions[3].location = 3;
-	attributeDescriptions[3].format = VK_FORMAT_R32G32B32_SFLOAT; // vec3 (12 bytes)
-	attributeDescriptions[3].offset = offsetof(TANG::PBRVertex, tangent);
+	attributeDescriptions[0].offset = offsetof(TANG::UVVertex, pos);
 
 	// UV
-	attributeDescriptions[4].binding = 0;
-	attributeDescriptions[4].location = 4;
-	attributeDescriptions[4].format = VK_FORMAT_R32G32_SFLOAT; // vec2 (8 bytes)
-	attributeDescriptions[4].offset = offsetof(TANG::PBRVertex, uv);
+	attributeDescriptions[1].binding = 0;
+	attributeDescriptions[1].location = 1;
+	attributeDescriptions[1].format = VK_FORMAT_R32G32_SFLOAT; // vec2 (8 bytes)
+	attributeDescriptions[1].offset = offsetof(TANG::UVVertex, uv);
 
 	return attributeDescriptions;
 }
 
 namespace TANG
 {
-	PBRPipeline::PBRPipeline()
+	CubemapPreprocessingPipeline::CubemapPreprocessingPipeline()
 	{
 		FlushData();
 	}
 
-	PBRPipeline::~PBRPipeline()
+	CubemapPreprocessingPipeline::~CubemapPreprocessingPipeline()
 	{
 		FlushData();
 	}
 
-	PBRPipeline::PBRPipeline(PBRPipeline&& other) noexcept : BasePipeline(std::move(other))
+	CubemapPreprocessingPipeline::CubemapPreprocessingPipeline(CubemapPreprocessingPipeline&& other) noexcept : BasePipeline(std::move(other))
 	{
 	}
 
 	// Get references to the data required in Create(), it's not needed
-	void PBRPipeline::SetData(const PBRRenderPass& _renderPass, const SetLayoutCache& _setLayoutCache, VkExtent2D _viewportSize)
+	void CubemapPreprocessingPipeline::SetData(const CubemapPreprocessingRenderPass& _renderPass, const SetLayoutCache& _setLayoutCache, VkExtent2D _viewportSize)
 	{
 		renderPass = &_renderPass;
 		setLayoutCache = &_setLayoutCache;
@@ -89,17 +71,17 @@ namespace TANG
 		wasDataSet = true;
 	}
 
-	void PBRPipeline::Create()
+	void CubemapPreprocessingPipeline::Create()
 	{
 		if (!wasDataSet)
 		{
-			LogError("Failed to create PBR pipeline! Create data has not been set correctly");
+			LogError("Failed to create cubemap preprocessing pipeline! Create data has not been set correctly");
 			return;
 		}
 
 		// Read the compiled shaders
-		Shader vertexShader("vert.spv", ShaderType::PBR);
-		Shader fragmentShader("frag.spv", ShaderType::PBR);
+		Shader vertexShader("vert.spv", ShaderType::CUBEMAP_PREPROCESSING);
+		Shader fragmentShader("frag.spv", ShaderType::CUBEMAP_PREPROCESSING);
 
 		VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
 		vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -171,11 +153,8 @@ namespace TANG
 		rasterizer.depthClampEnable = VK_FALSE;
 		rasterizer.rasterizerDiscardEnable = VK_FALSE;
 		rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-		// For the polygonMode it's possible to use LINE or POINT as well
-		// In this case the following line is required:
 		rasterizer.lineWidth = 1.0f;
-		// Any line thicker than 1.0 requires the "wideLines" GPU feature
-		rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+		rasterizer.cullMode = VK_CULL_MODE_BACK_BIT; // Do we need to cull front faces??
 		rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 		rasterizer.depthBiasEnable = VK_FALSE;
 		rasterizer.depthBiasConstantFactor = 0.0f; // Optional
@@ -186,7 +165,7 @@ namespace TANG
 		VkPipelineMultisampleStateCreateInfo multisampling{};
 		multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 		multisampling.sampleShadingEnable = VK_FALSE;
-		multisampling.rasterizationSamples = DeviceCache::Get().GetMaxMSAA();
+		multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 		multisampling.minSampleShading = 1.0f; // Optional
 		multisampling.pSampleMask = nullptr; // Optional
 		multisampling.alphaToCoverageEnable = VK_FALSE; // Optional
@@ -221,8 +200,8 @@ namespace TANG
 		// Depth stencil
 		VkPipelineDepthStencilStateCreateInfo depthStencil{};
 		depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-		depthStencil.depthTestEnable = VK_TRUE;
-		depthStencil.depthWriteEnable = VK_TRUE;
+		depthStencil.depthTestEnable = VK_FALSE;
+		depthStencil.depthWriteEnable = VK_FALSE;
 		depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
 		depthStencil.depthBoundsTestEnable = VK_FALSE;
 		depthStencil.minDepthBounds = 0.0f; // Optional
@@ -275,7 +254,7 @@ namespace TANG
 		}
 	}
 
-	void PBRPipeline::FlushData()
+	void CubemapPreprocessingPipeline::FlushData()
 	{
 		renderPass = nullptr;
 		setLayoutCache = nullptr;

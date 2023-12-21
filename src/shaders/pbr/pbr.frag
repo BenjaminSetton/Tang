@@ -136,13 +136,6 @@ void main()
     normal = normal * 2.0 - 1.0;
     normal = normalize( inTBN * normal );
 
-    // DEBUG
-    //normal = normalize(inNormal);
-    //normal = normal * 0.5 + 0.5;
-    //outColor = vec4(normal, 1.0);
-    //return;
-    // DEBUG
-
     vec3 cameraPos = cameraData.position.xyz;
     vec3 light = -normalize(vec3(-0.4, -0.75, -1.0));
     vec3 view = normalize(cameraPos - inPosition);
@@ -173,9 +166,8 @@ void main()
     // HDR tone-mapping (exposure)
     pbrColor = vec3(1.0) - exp(-pbrColor * cameraData.exposure);
 
-    // Gamma correction
-    vec3 gammaPBR = pow( pbrColor, vec3( 1.0 / 2.2 ) );
+    // NOTE - Gamma correction is not necessary since render target uses sRGB which automatically applies tonemapping
 
-    vec4 finalColor = vec4( gammaPBR, 1.0 );
+    vec4 finalColor = vec4( pbrColor, 1.0 );
     outColor = finalColor;
 }

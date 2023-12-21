@@ -12,7 +12,7 @@
 
 #include "utils/logger.h"
 #include "utils/uuid.h"
-#include "vertex_type.h"
+#include "vertex_types.h"
 
 #include "data_buffer/vertex_buffer.h"
 #include "data_buffer/index_buffer.h"
@@ -236,7 +236,7 @@ namespace TANG
 
 	struct Mesh
 	{
-		std::vector<VertexType> vertices;
+		std::vector<PBRVertex> vertices;
 		std::vector<IndexType> indices;
 	};
 

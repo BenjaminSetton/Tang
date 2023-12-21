@@ -5,6 +5,15 @@
 #include "staging_buffer.h"
 #include "../device_cache.h"
 #include "../utils/logger.h"
+#include "../utils/sanity_check.h"
+
+// TODO - Move this to a utility file
+static bool IsMemoryOverlapping(void* _a, void* _b, size_t size)
+{
+	uint8_t* a = static_cast<uint8_t*>(_a);
+	uint8_t* b = static_cast<uint8_t*>(_b);
+	return ((a < b && a + size > b) || (b < a && b + size > a));
+}
 
 namespace TANG
 {
@@ -55,7 +64,19 @@ namespace TANG
 		{
 			LogError("Failed to map memory for staging buffer!");
 		}
-		memcpy(bufferPtr, sourceData, size);
+
+		if (IsMemoryOverlapping(bufferPtr, sourceData, size))
+		{
+			// Memory regions overlap, use memmove()
+			LogInfo("Overlapping memory regions when copying data into staging buffer, using memmove()");
+			memmove_s(bufferPtr, size, sourceData, size);
+		}
+		else
+		{
+			// Memory regions DON'T overlap, use memcpy()
+			memcpy_s(bufferPtr, size, sourceData, size);
+		}
+
 		vkUnmapMemory(logicalDevice, bufferMemory);
 	}
 

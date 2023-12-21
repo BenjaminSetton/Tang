@@ -13,8 +13,10 @@
 #include "descriptors/set_layout/set_layout_cache.h"
 #include "descriptors/set_layout/set_layout_summary.h"
 #include "pipelines/pbr_pipeline.h"
+#include "pipelines/cubemap_preprocessing_pipeline.h"
 #include "queue_types.h"
 #include "render_passes/pbr_render_pass.h"
+#include "render_passes/cubemap_preprocessing_render_pass.h"
 #include "texture_resource.h"
 #include "utils/sanity_check.h"
 
@@ -137,7 +139,7 @@ namespace TANG
 
 		void CreatePipelines();
 
-		void CreateRenderPass();
+		void CreateRenderPasses();
 
 		void CreateFramebuffers();
 
@@ -155,6 +157,8 @@ namespace TANG
 
 		void CreateDepthTexture();
 		void CreateColorAttachmentTexture();
+
+		void LoadSkybox();
 
 		void RecordPrimaryCommandBuffer(uint32_t frameBufferIndex);
 		void RecordSecondaryCommandBuffer(SecondaryCommandBuffer& commandBuffer, AssetResources* resources, uint32_t frameBufferIndex);
@@ -191,8 +195,6 @@ namespace TANG
 		PrimaryCommandBuffer* GetCurrentPrimaryBuffer();
 		SecondaryCommandBuffer* GetSecondaryCommandBufferAtIndex(uint32_t frameBufferIndex, UUID uuid);
 		VkFramebuffer GetFramebufferAtIndex(uint32_t frameBufferIndex);
-
-		/*VkShaderModule LoadShader(const std::string& fileName);*/
 
 	private:
 
@@ -278,11 +280,15 @@ namespace TANG
 		};
 		std::vector<SwapChainImageDependentData> swapChainImageDependentData;
 
-		SetLayoutCache setLayoutCache;
+		SetLayoutCache pbrSetLayoutCache;
 		std::vector<SetLayoutSummary> layoutSummaries;
 
 		PBRRenderPass pbrRenderPass;
 		PBRPipeline pbrPipeline;
+
+		CubemapPreprocessingRenderPass cubemapPreprocessingRenderPass;
+		CubemapPreprocessingPipeline cubemapPreprocessingPipeline;
+		TextureResource skyboxTexture;
 
 		uint32_t currentFrame;
 
@@ -293,7 +299,6 @@ namespace TANG
 
 		DescriptorPool descriptorPool;
 
-		TextureResource randomTexture;
 		TextureResource depthBuffer;
 		TextureResource colorAttachment;
 

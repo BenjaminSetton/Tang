@@ -74,7 +74,7 @@ namespace TANG
 	private:
 
 		void CreateBaseImage(const BaseImageCreateInfo* baseImageInfo);
-		void CreateBaseImageFromFile(std::string_view fileName, const BaseImageCreateInfo* createInfo);
+		void CreateBaseImageFromFile(std::string_view filePath, const BaseImageCreateInfo* createInfo);
 
 		// Create image view from a previously-created base image (through CreateBaseImage or CreateBaseImageFromFile)
 		void CreateImageView(const ImageViewCreateInfo* viewInfo);
@@ -92,6 +92,8 @@ namespace TANG
 		bool HasStencilComponent(VkFormat format);
 
 		uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+
+		uint32_t GetBytesPerPixelFromFormat(VkFormat format);
 
 	private:
 
