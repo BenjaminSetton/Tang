@@ -355,7 +355,7 @@ namespace TANG
 		BaseImageCreateInfo baseImageInfo{};
 		baseImageInfo.width = 0; // Unused
 		baseImageInfo.height = 0; // Unused
-		baseImageInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
+		baseImageInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
 		baseImageInfo.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 		baseImageInfo.mipLevels = 0; // Unused
 		baseImageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -365,15 +365,6 @@ namespace TANG
 			Material::TEXTURE_TYPE texType = static_cast<Material::TEXTURE_TYPE>(i);
 			if (material.HasTextureOfType(texType))
 			{
-				if (texType == Material::TEXTURE_TYPE::NORMAL)
-				{
-					baseImageInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
-				}
-				else
-				{
-					baseImageInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
-				}
-
 				Texture* matTexture = material.GetTextureOfType(texType);
 				TNG_ASSERT_MSG(matTexture != nullptr, "Why is this texture nullptr when we specifically checked against it?");
 
@@ -1083,8 +1074,8 @@ namespace TANG
 
 	void Renderer::CreatePipelines()
 	{
-		cubemapPreprocessingPipeline.SetData(cubemapPreprocessingRenderPass, cubemapPreprocessingSetLayoutCache, swapChainExtent);
-		cubemapPreprocessingPipeline.Create();
+		//cubemapPreprocessingPipeline.SetData(cubemapPreprocessingRenderPass, cubemapPreprocessingSetLayoutCache, swapChainExtent);
+		//cubemapPreprocessingPipeline.Create();
 
 		pbrPipeline.SetData(pbrRenderPass, pbrSetLayoutCache, swapChainExtent);
 		pbrPipeline.Create();

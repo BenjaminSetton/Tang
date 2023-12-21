@@ -1,3 +1,5 @@
+#ifndef BASE_PIPELINE_H
+#define BASE_PIPELINE_H
 
 #include <utility>
 
@@ -42,3 +44,5 @@ namespace TANG
 		VkPipelineLayout pipelineLayout;
 	};
 }
+
+#endif
