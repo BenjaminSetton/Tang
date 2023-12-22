@@ -13,8 +13,11 @@ A simple graphics framework that allows any project to quickly display stuff on 
 2. Install the latest release version
 
 NOTES:
-- The release download will come with two things: the .lib file and a folder containing the headers. Alternatively, you can clone the repository and compile the source code
-- If you wish to compile the project yourself, make sure you have CMake installed!
+- The release download will come with two things: the .lib file and a folder containing the headers. Alternatively, you can clone the repository and compile the source code yourself (look at "Compiling the sources")
+
+## COMPILING THE SOURCES
+
+1. TODO
 
 ## RESOURCES
 
@@ -45,12 +48,12 @@ NOTES:
 - [X] Create an abstraction for textures. These must be imported, loaded, and uploaded to the shaders
 - [X] Implement a PBR shader
 - [X] Re-organize the renderer code to allow a PBR pipeline
+- [X] Move project build scripts from CMake to Premake
+- [X] Create a default material so that assets with incomplete/missing PBR textures can be loaded
 - [ ] Make shader information more data-driven (e.g. pull shader's input uniform + texture information from a set of data)
 - [ ] Re-organize the renderer's frame-dependent data (FDD) and swap-chain-dependent data (SWIDD)
-- [ ] Create a default material so that assets with incomplete/missing PBR textures can be loaded
 - [ ] Add HDR support
 - [ ] Add cubemap support in preparation for IBL
 - [ ] Implement diffuse IBL
 - [ ] Implement specular IBL
-- [ ] Move project build scripts from CMake to Premake
 - [ ] Clarify boundary between asset loader and renderer (especially in naming convention)
