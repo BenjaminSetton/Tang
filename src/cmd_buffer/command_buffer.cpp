@@ -1,8 +1,10 @@
 
-#include "command_buffer.h"
+#include "../asset_types.h" // AssetResources
+#include "../data_buffer/index_buffer.h" // GetIndexType()
 #include "../device_cache.h"
 #include "../utils/logger.h"
 #include "../utils/sanity_check.h"
+#include "command_buffer.h"
 
 namespace TANG
 {
@@ -116,6 +118,115 @@ namespace TANG
 		vkEndCommandBuffer(commandBuffer);
 
 		cmdBufferState = COMMAND_BUFFER_STATE::SEALED;
+	}
+
+	void CommandBuffer::CMD_BindMesh(AssetResources* resources)
+	{
+		if (!IsCommandBufferValid() || !IsRecording() || (resources == nullptr))
+		{
+			LogWarning("Failed to bind mesh! Command buffer is not recording");
+			return;
+		}
+
+		uint32_t numVertexBuffers = static_cast<uint32_t>(resources->vertexBuffers.size());
+
+		std::vector<VkBuffer> vertexBuffers(numVertexBuffers);
+		std::vector<VkDeviceSize> offsets(numVertexBuffers);
+		for (uint32_t i = 0; i < numVertexBuffers; i++)
+		{
+			vertexBuffers[i] = resources->vertexBuffers[i].GetBuffer();
+			offsets[i] = resources->offsets[i]; // Conversion from uint32_t to uint64_t!
+		}
+
+		vkCmdBindVertexBuffers(commandBuffer, 0, numVertexBuffers, vertexBuffers.data(), offsets.data());
+		vkCmdBindIndexBuffer(commandBuffer, resources->indexBuffer.GetBuffer(), 0, resources->indexBuffer.GetIndexType());
+	}
+
+	void CommandBuffer::CMD_BindDescriptorSets(VkPipelineLayout pipelineLayout, uint32_t descriptorSetCount, VkDescriptorSet* descriptorSets)
+	{
+		if (!IsCommandBufferValid() || !IsRecording())
+		{
+			LogWarning("Failed to bind descriptor sets! Command buffer is not recording");
+			return;
+		}
+
+		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, descriptorSetCount, descriptorSets, 0, nullptr);
+	}
+
+	void CommandBuffer::CMD_BindGraphicsPipeline(VkPipeline graphicsPipeline)
+	{
+		if (!IsCommandBufferValid() || !IsRecording())
+		{
+			LogWarning("Failed to bind pipeline command! Command buffer is not recording or command buffer is null");
+			return;
+		}
+
+		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+	}
+
+	void CommandBuffer::CMD_SetViewport(float width, float height)
+	{
+		if (!IsCommandBufferValid() || !IsRecording())
+		{
+			LogWarning("Failed to bind set-viewport command! Command buffer is not recording or command buffer is null");
+			return;
+		}
+
+		VkViewport viewport{};
+		viewport.x = 0.0f;
+		viewport.y = 0.0f;
+		viewport.width = width;
+		viewport.height = height;
+		viewport.minDepth = 0.0f;
+		viewport.maxDepth = 1.0f;
+		vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+	}
+
+	void CommandBuffer::CMD_SetScissor(VkOffset2D scissorOffset, VkExtent2D scissorExtent)
+	{
+		if (!IsCommandBufferValid() || !IsRecording())
+		{
+			LogWarning("Failed to bind set-scissor command! Command buffer is not recording or command buffer is null");
+			return;
+		}
+
+		VkRect2D scissor{};
+		scissor.offset = scissorOffset;
+		scissor.extent = scissorExtent;
+		vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+	}
+
+	void CommandBuffer::CMD_Draw(uint32_t vertexCount)
+	{
+		if (!IsCommandBufferValid() || !IsRecording())
+		{
+			LogWarning("Failed to bind draw command! Command buffer is not recording");
+			return;
+		}
+
+		vkCmdDraw(commandBuffer, vertexCount, 1, 0, 0);
+	}
+
+	void CommandBuffer::CMD_DrawIndexed(uint32_t indexCount)
+	{
+		if (!IsCommandBufferValid() || !IsRecording())
+		{
+			LogWarning("Failed to bind draw indexed command! Command buffer is not recording");
+			return;
+		}
+
+		vkCmdDrawIndexed(commandBuffer, indexCount, 1, 0, 0, 0);
+	}
+
+	void CommandBuffer::CMD_DrawIndexedInstanced(uint32_t indexCount, uint32_t instanceCount)
+	{
+		if (!IsCommandBufferValid() || !IsRecording())
+		{
+			LogWarning("Failed to bind draw indexed instanced command! Command buffer is not recording");
+			return;
+		}
+
+		vkCmdDrawIndexed(commandBuffer, indexCount, instanceCount, 0, 0, 0);
 	}
 
 	void CommandBuffer::Reset(bool releaseMemory)

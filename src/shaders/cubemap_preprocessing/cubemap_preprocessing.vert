@@ -12,14 +12,16 @@ layout (location = 0) in vec3 modelPos;
 
 layout (location = 0) out vec3 localPos;
 
-layout(set = 0, binding = 0) uniform ViewProjUBO 
-{
-    mat4 view;
+layout(set = 0, binding = 0) uniform ProjObject {
     mat4 proj;
-} viewProjUBO;
+} projUBO;
+
+layout(set = 0, binding = 1) uniform ViewObject {
+    mat4 view;
+} viewUBO;
 
 void main()
 {
     localPos = modelPos;
-    gl_Position =  viewProjUBO.proj * viewProjUBO.view * vec4(localPos, 1.0);
+    gl_Position =  projUBO.proj * viewUBO.view * vec4(localPos, 1.0);
 }

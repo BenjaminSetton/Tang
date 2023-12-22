@@ -67,10 +67,10 @@ namespace TANG
 
 		// The following functions provide different ways of modifying the internal transform data of the provided asset
 		// NOTE - No getters are defined on purpose, the data should only be received from the API and kept in the renderer
-		void SetAssetTransform(UUID uuid, Transform& transform);
-		void SetAssetPosition(UUID uuid, glm::vec3& position);
-		void SetAssetRotation(UUID uuid, glm::vec3& rotation);
-		void SetAssetScale(UUID uuid, glm::vec3& scale);
+		void SetAssetTransform(UUID uuid, const Transform& transform);
+		void SetAssetPosition(UUID uuid, const glm::vec3& position);
+		void SetAssetRotation(UUID uuid, const glm::vec3& rotation);
+		void SetAssetScale(UUID uuid, const glm::vec3& scale);
 
 		// Loads an asset which implies grabbing the vertices and indices from the asset container
 		// and creating vertex/index buffers to contain them. It also includes creating all other
@@ -113,11 +113,6 @@ namespace TANG
 
 		bool CheckDeviceExtensionSupport(VkPhysicalDevice device);
 
-		////////////////////////////////////////
-		//
-		//  PHYSICAL DEVICE
-		//
-		////////////////////////////////////////
 		void PickPhysicalDevice();
 
 		bool IsDeviceSuitable(VkPhysicalDevice device);
@@ -142,6 +137,8 @@ namespace TANG
 		void CreateRenderPasses();
 
 		void CreateFramebuffers();
+		void CreatePBRFramebuffer();
+		void CreateCubemapPreprocessingFramebuffer();
 
 		void CreatePrimaryCommandBuffers(QueueType poolType);
 
@@ -150,6 +147,8 @@ namespace TANG
 		void CreateAssetUniformBuffers(UUID uuid);
 
 		void CreateDescriptorSetLayouts();
+		void CreatePBRSetLayouts();
+		void CreateCubemapPreprocessingSetLayouts();
 
 		void CreateDescriptorPool();
 
@@ -158,7 +157,7 @@ namespace TANG
 		void CreateDepthTexture();
 		void CreateColorAttachmentTexture();
 
-		void LoadSkybox();
+		void LoadSkyboxResources();
 
 		void RecordPrimaryCommandBuffer(uint32_t frameBufferIndex);
 		void RecordSecondaryCommandBuffer(SecondaryCommandBuffer& commandBuffer, AssetResources* resources, uint32_t frameBufferIndex);
@@ -179,8 +178,12 @@ namespace TANG
 		void UpdateCameraDataUniformBuffers(UUID uuid, uint32_t frameIndex, const glm::vec3& position, const glm::mat4& viewMatrix);
 		void UpdateProjectionUniformBuffer(UUID uuid, uint32_t frameIndex);
 
+		void CalculateSkyboxCubemap();
+
 		// Submits the provided queue type, along with the provided command buffer. Return value should _not_ be ignored
 		[[nodiscard]] VkResult SubmitQueue(QueueType type, VkSubmitInfo* info, uint32_t submitCount, VkFence fence, bool waitUntilIdle = false);
+
+		AssetResources* GetAssetResourcesFromUUID(UUID uuid);
 
 		void CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
 
@@ -190,7 +193,7 @@ namespace TANG
 
 		bool HasStencilComponent(VkFormat format);
 
-		void DestroyAssetBuffersHelper(AssetResources& resources);
+		void DestroyAssetBuffersHelper(AssetResources* resources);
 
 		PrimaryCommandBuffer* GetCurrentPrimaryBuffer();
 		SecondaryCommandBuffer* GetSecondaryCommandBufferAtIndex(uint32_t frameBufferIndex, UUID uuid);
@@ -280,15 +283,18 @@ namespace TANG
 		};
 		std::vector<SwapChainImageDependentData> swapChainImageDependentData;
 
-		SetLayoutCache pbrSetLayoutCache;
-		std::vector<SetLayoutSummary> layoutSummaries;
 
-		PBRRenderPass pbrRenderPass;
 		PBRPipeline pbrPipeline;
+		PBRRenderPass pbrRenderPass;
+		SetLayoutCache pbrSetLayoutCache;
 
-		CubemapPreprocessingRenderPass cubemapPreprocessingRenderPass;
 		CubemapPreprocessingPipeline cubemapPreprocessingPipeline;
+		CubemapPreprocessingRenderPass cubemapPreprocessingRenderPass;
+		SetLayoutCache cubemapPreprocessingSetLayoutCache;
 		TextureResource skyboxTexture;
+		TextureResource cubemapFaces[6];
+		VkFramebuffer cubemapPreprocessingFramebuffer;
+		UUID cubeMeshUUID;
 
 		uint32_t currentFrame;
 

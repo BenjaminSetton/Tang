@@ -151,8 +151,9 @@ namespace TANG
 	Renderer::Renderer() : 
 		vkInstance(VK_NULL_HANDLE), debugMessenger(VK_NULL_HANDLE), surface(VK_NULL_HANDLE), queues(), swapChain(VK_NULL_HANDLE), 
 		swapChainImageFormat(VK_FORMAT_UNDEFINED), swapChainExtent({ 0, 0 }), frameDependentData(), swapChainImageDependentData(),
-		pbrSetLayoutCache(), layoutSummaries(), pbrRenderPass(), pbrPipeline(), currentFrame(0), resourcesMap(), assetResources(), descriptorPool(),
-		depthBuffer(), colorAttachment(), framebufferWidth(0), framebufferHeight(0)
+		pbrSetLayoutCache(), pbrRenderPass(), pbrPipeline(), currentFrame(0), resourcesMap(), assetResources(), descriptorPool(),
+		depthBuffer(), colorAttachment(), framebufferWidth(0), framebufferHeight(0), cubemapPreprocessingPipeline(), 
+		cubemapPreprocessingRenderPass(), cubemapPreprocessingSetLayoutCache()
 	{ }
 
 	void Renderer::Initialize(GLFWwindow* windowHandle, uint32_t windowWidth, uint32_t windowHeight)
@@ -173,12 +174,15 @@ namespace TANG
 		CreateRenderPasses();
 		CreatePipelines();
 		CreateCommandPools();
-		LoadSkybox();
+		LoadSkyboxResources();
 		CreateColorAttachmentTexture();
 		CreateDepthTexture();
 		CreateFramebuffers();
 		CreatePrimaryCommandBuffers(QueueType::GRAPHICS);
 		CreateSyncObjects();
+
+		// After initializing the renderer, let's do some pre-processing...
+		CalculateSkyboxCubemap();
 	}
 
 	void Renderer::Update(float deltaTime)
@@ -218,6 +222,7 @@ namespace TANG
 		CleanupSwapChain();
 
 		pbrSetLayoutCache.DestroyLayouts();
+		cubemapPreprocessingSetLayoutCache.DestroyLayouts();
 
 		for (uint32_t i = 0; i < GetFDDSize(); i++)
 		{
@@ -229,7 +234,6 @@ namespace TANG
 				iter.second.viewUBO.Destroy();
 				iter.second.cameraDataUBO.Destroy();
 			}
-
 		}
 
 		descriptorPool.Destroy();
@@ -244,8 +248,17 @@ namespace TANG
 
 		CommandPoolRegistry::Get().DestroyPools();
 
+		// Destroy skybox cubemap
+		for (uint32_t i = 0; i < 6; i++)
+		{
+			cubemapFaces[i].Destroy();
+		}
+
 		pbrPipeline.Destroy();
+		cubemapPreprocessingPipeline.Destroy();
+
 		pbrRenderPass.Destroy();
+		cubemapPreprocessingRenderPass.Destroy();
 
 		vkDestroyDevice(logicalDevice, nullptr);
 		DeviceCache::Get().InvalidateCache();
@@ -445,19 +458,19 @@ namespace TANG
 		}
 	}
 
-	void Renderer::DestroyAssetBuffersHelper(AssetResources& resources)
+	void Renderer::DestroyAssetBuffersHelper(AssetResources* resources)
 	{
 		// Destroy all vertex buffers
-		for (auto& vb : resources.vertexBuffers)
+		for (auto& vb : resources->vertexBuffers)
 		{
 			vb.Destroy();
 		}
 
 		// Destroy the index buffer
-		resources.indexBuffer.Destroy();
+		resources->indexBuffer.Destroy();
 
 		// Destroy textures
-		for (auto& tex : resources.material)
+		for (auto& tex : resources->material)
 		{
 			tex.Destroy();
 		}
@@ -480,13 +493,18 @@ namespace TANG
 
 	void Renderer::DestroyAssetResources(UUID uuid)
 	{
-		TNG_ASSERT_MSG(resourcesMap.find(uuid) != resourcesMap.end(), "Failed to find asset resources!");
+		AssetResources* asset = GetAssetResourcesFromUUID(cubeMeshUUID);
+		if (asset == nullptr)
+		{
+			LogError("Failed to find asset resources for asset with uuid %ull!", uuid);
+			return;
+		}
 
 		// Destroy the resources
-		DestroyAssetBuffersHelper(assetResources[resourcesMap[uuid]]);
+		DestroyAssetBuffersHelper(asset);
 
 		// Remove resources from the vector
-		uint32_t resourceIndex = static_cast<uint32_t>((&assetResources[resourcesMap[uuid]] - &assetResources[0]) / sizeof(assetResources));
+		uint32_t resourceIndex = static_cast<uint32_t>((asset - &assetResources[0]) / sizeof(assetResources));
 		assetResources.erase(assetResources.begin() + resourceIndex);
 
 		// Destroy reference to resources
@@ -499,7 +517,7 @@ namespace TANG
 
 		for (uint32_t i = 0; i < numAssetResources; i++)
 		{
-			DestroyAssetBuffersHelper(assetResources[i]);
+			DestroyAssetBuffersHelper(&assetResources[i]);
 		}
 
 		assetResources.clear();
@@ -550,35 +568,61 @@ namespace TANG
 
 	void Renderer::SetAssetDrawState(UUID uuid)
 	{
-		if (resourcesMap.find(uuid) == resourcesMap.end())
+		AssetResources* resources = GetAssetResourcesFromUUID(uuid);
+		if (resources == nullptr)
 		{
-			// Undefined behavior. Maybe the asset resources were deleted but we somehow forgot to remove it from the assetDrawStates map?
-			LogError(false, "Attempted to set asset draw state, but draw state doesn't exist in the map!");
+			// Maybe the asset resources were deleted but we somehow forgot to remove it from the assetDrawStates map?
+			LogError(false, "Attempted to set asset draw state, but asset does not exist or UUID is invalid!");
+			return;
 		}
 
-		assetResources[resourcesMap[uuid]].shouldDraw = true;
+		resources->shouldDraw = true;
 	}
 
-	void Renderer::SetAssetTransform(UUID uuid, Transform& transform)
+	void Renderer::SetAssetTransform(UUID uuid, const Transform& transform)
 	{
-		assetResources[resourcesMap[uuid]].transform = transform;
+		AssetResources* asset = GetAssetResourcesFromUUID(uuid);
+		if (asset == nullptr)
+		{
+			return;
+		}
+
+		asset->transform = transform;
 	}
 
-	void Renderer::SetAssetPosition(UUID uuid, glm::vec3& position)
+	void Renderer::SetAssetPosition(UUID uuid, const glm::vec3& position)
 	{
-		Transform& transform = assetResources[resourcesMap[uuid]].transform;
+		AssetResources* asset = GetAssetResourcesFromUUID(uuid);
+		if (asset == nullptr)
+		{
+			return;
+		}
+
+		Transform& transform = asset->transform;
 		transform.position = position;
 	}
 
-	void Renderer::SetAssetRotation(UUID uuid, glm::vec3& rotation)
+	void Renderer::SetAssetRotation(UUID uuid, const glm::vec3& rotation)
 	{
-		Transform& transform = assetResources[resourcesMap[uuid]].transform;
+		AssetResources* asset = GetAssetResourcesFromUUID(uuid);
+		if (asset == nullptr)
+		{
+			return;
+		}
+
+		Transform& transform = asset->transform;
 		transform.rotation = rotation;
 	}
 
-	void Renderer::SetAssetScale(UUID uuid, glm::vec3& scale)
+	void Renderer::SetAssetScale(UUID uuid, const glm::vec3& scale)
 	{
-		Transform& transform = assetResources[resourcesMap[uuid]].transform;
+		AssetResources* asset = GetAssetResourcesFromUUID(uuid);
+		if (asset == nullptr)
+		{
+			return;
+		}
+
+		Transform& transform = asset->transform;
 		transform.scale = scale;
 	}
 
@@ -1074,8 +1118,8 @@ namespace TANG
 
 	void Renderer::CreatePipelines()
 	{
-		//cubemapPreprocessingPipeline.SetData(cubemapPreprocessingRenderPass, cubemapPreprocessingSetLayoutCache, swapChainExtent);
-		//cubemapPreprocessingPipeline.Create();
+		cubemapPreprocessingPipeline.SetData(cubemapPreprocessingRenderPass, cubemapPreprocessingSetLayoutCache, swapChainExtent);
+		cubemapPreprocessingPipeline.Create();
 
 		pbrPipeline.SetData(pbrRenderPass, pbrSetLayoutCache, swapChainExtent);
 		pbrPipeline.Create();
@@ -1103,6 +1147,12 @@ namespace TANG
 
 	void Renderer::CreateFramebuffers()
 	{
+		CreatePBRFramebuffer();
+		CreateCubemapPreprocessingFramebuffer();
+	}
+
+	void Renderer::CreatePBRFramebuffer()
+	{
 		auto& swidd = swapChainImageDependentData;
 
 		for (size_t i = 0; i < GetSWIDDSize(); i++)
@@ -1125,8 +1175,31 @@ namespace TANG
 
 			if (vkCreateFramebuffer(GetLogicalDevice(), &framebufferInfo, nullptr, &(swidd[i].swapChainFramebuffer)) != VK_SUCCESS)
 			{
-				TNG_ASSERT_MSG(false, "Failed to create framebuffer!");
+				TNG_ASSERT_MSG(false, "Failed to create PBR framebuffer!");
 			}
+		}
+	}
+
+	void Renderer::CreateCubemapPreprocessingFramebuffer()
+	{
+		// Do we need to make 6 framebuffers?
+		std::array<VkImageView, 1> attachments =
+		{
+			cubemapFaces[0].GetImageView()
+		};
+
+		VkFramebufferCreateInfo framebufferInfo{};
+		framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+		framebufferInfo.renderPass = cubemapPreprocessingRenderPass.GetRenderPass();
+		framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+		framebufferInfo.pAttachments = attachments.data();
+		framebufferInfo.width = framebufferWidth;
+		framebufferInfo.height = framebufferHeight;
+		framebufferInfo.layers = 1;
+
+		if (vkCreateFramebuffer(GetLogicalDevice(), &framebufferInfo, nullptr, &cubemapPreprocessingFramebuffer) != VK_SUCCESS)
+		{
+			TNG_ASSERT_MSG(false, "Failed to create cubemap preprocessing framebuffer!");
 		}
 	}
 
@@ -1198,6 +1271,12 @@ namespace TANG
 
 	void Renderer::CreateDescriptorSetLayouts()
 	{
+		CreateCubemapPreprocessingSetLayouts();
+		CreatePBRSetLayouts();
+	}
+
+	void Renderer::CreatePBRSetLayouts()
+	{
 		//	DIFFUSE = 0,
 		//	NORMAL,
 		//	METALLIC,
@@ -1225,6 +1304,17 @@ namespace TANG
 		volatileLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT); // Camera data
 		volatileLayout.AddBinding(2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);   // View matrix
 		pbrSetLayoutCache.CreateSetLayout(volatileLayout, 0);
+	}
+
+	void Renderer::CreateCubemapPreprocessingSetLayouts()
+	{
+		// NOTE - We're only separating the view/proj matrices because we can re-use the structs that the PBR view/proj uniforms use
+		SetLayoutSummary volatileLayout;
+		volatileLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT); // View matrix
+		volatileLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT); // Projection matrix
+		volatileLayout.AddBinding(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Equirectangular map
+
+		cubemapPreprocessingSetLayoutCache.CreateSetLayout(volatileLayout, 0);
 	}
 
 	void Renderer::CreateDescriptorPool()
@@ -1308,12 +1398,16 @@ namespace TANG
 		colorAttachment.Create(&imageInfo, &imageViewInfo);
 	}
 
-	void Renderer::LoadSkybox()
+	void Renderer::LoadSkyboxResources()
 	{
+		//
+		// Load the skybox texture from file
+		//
+
 		BaseImageCreateInfo baseImageInfo{};
 		baseImageInfo.width = 0; // Unused
 		baseImageInfo.height = 0; // Unused
-		baseImageInfo.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+		baseImageInfo.format = VK_FORMAT_R16G16B16A16_SFLOAT;
 		baseImageInfo.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 		baseImageInfo.mipLevels = 0; // Unused
 		baseImageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -1328,6 +1422,35 @@ namespace TANG
 		samplerInfo.maxAnisotropy = 1.0f; // Is this an appropriate value??
 
 		skyboxTexture.CreateFromFile(SkyboxTextureFilePath, &baseImageInfo, &viewCreateInfo, &samplerInfo);
+
+		//
+		// Create the offscreen textures that we'll use to render the cube faces to
+		//
+
+		baseImageInfo.width = 512; // Doing 512x512 for now
+		baseImageInfo.height = 512;
+		baseImageInfo.format = VK_FORMAT_R16G16B16A16_SFLOAT;
+		baseImageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+		baseImageInfo.mipLevels = 0; // Unused?
+		baseImageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+
+		viewCreateInfo.aspect = VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT;
+
+		samplerInfo.minificationFilter = VK_FILTER_LINEAR;
+		samplerInfo.magnificationFilter = VK_FILTER_LINEAR;
+		samplerInfo.addressModeUVW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerInfo.maxAnisotropy = 1.0f; // Is this an appropriate value??
+
+		for (uint32_t i = 0; i < 6; i++)
+		{
+			cubemapFaces[i].Create(&baseImageInfo, &viewCreateInfo, &samplerInfo);
+		}
+
+		//
+		// Load the skybox mesh (unit cube) from file
+		//
+
+
 	}
 
 	void Renderer::RecordPrimaryCommandBuffer(uint32_t frameBufferIndex)
@@ -1350,11 +1473,11 @@ namespace TANG
 		{
 			UUID& uuid = iter.uuid;
 
-			if (assetResources[resourcesMap[uuid]].shouldDraw)
+			if (iter.shouldDraw)
 			{
 				SecondaryCommandBuffer* secondaryCmdBuffer = GetSecondaryCommandBufferAtIndex(frameBufferIndex, uuid);
 
-				UpdateTransformUniformBuffer(assetResources[resourcesMap[uuid]].transform, uuid);
+				UpdateTransformUniformBuffer(iter.transform, uuid);
 				UpdateTransformDescriptorSet(uuid);
 
 				secondaryCmdBuffer->Reset();
@@ -1388,7 +1511,7 @@ namespace TANG
 		VkCommandBufferInheritanceInfo inheritanceInfo{};
 		inheritanceInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
 		inheritanceInfo.pNext = nullptr;
-		inheritanceInfo.renderPass = pbrRenderPass.GetRenderPass(); // NOTE - We only have one render pass for now, if that changes we must change it here too
+		inheritanceInfo.renderPass = pbrRenderPass.GetRenderPass();
 		inheritanceInfo.subpass = 0;
 		inheritanceInfo.framebuffer = GetSWIDDAtIndex(frameBufferIndex)->swapChainFramebuffer;
 
@@ -1487,15 +1610,19 @@ namespace TANG
 		DescriptorSet& descSet = currentAssetDataMap.descriptorSets[0];
 
 		// Get the asset resources so we can retrieve the textures
-		AssetResources& resources = assetResources[resourcesMap[uuid]];
+		AssetResources* asset = GetAssetResourcesFromUUID(cubeMeshUUID);
+		if (asset == nullptr)
+		{
+			return;
+		}
 
 		// Update PBR textures
 		WriteDescriptorSets writeDescSets(0, 5);
-		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 0, resources.material[static_cast<uint32_t>(Material::TEXTURE_TYPE::DIFFUSE)]);
-		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 1, resources.material[static_cast<uint32_t>(Material::TEXTURE_TYPE::NORMAL)]);
-		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 2, resources.material[static_cast<uint32_t>(Material::TEXTURE_TYPE::METALLIC)]);
-		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 3, resources.material[static_cast<uint32_t>(Material::TEXTURE_TYPE::ROUGHNESS)]);
-		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 4, resources.material[static_cast<uint32_t>(Material::TEXTURE_TYPE::LIGHTMAP)]);
+		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 0, asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::DIFFUSE)]);
+		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 1, asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::NORMAL)]);
+		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 2, asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::METALLIC)]);
+		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 3, asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::ROUGHNESS)]);
+		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 4, asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::LIGHTMAP)]);
 
 		descSet.Update(writeDescSets);
 	}
@@ -1566,6 +1693,59 @@ namespace TANG
 		UpdatePBRTextureDescriptorSet(uuid, frameIndex);
 	}
 
+	void Renderer::CalculateSkyboxCubemap()
+	{
+		AssetResources* asset = GetAssetResourcesFromUUID(cubeMeshUUID);
+		if (asset == nullptr)
+		{
+			LogError("Failed to calculate the skybox cubemap, for some reason the cube mesh is not loaded!");
+			return;
+		}
+
+		// Load the cube mesh somewhere else, and use it in this function
+		TNG_TODO();
+
+		PrimaryCommandBuffer cmdBuffer;
+		cmdBuffer.Create(CommandPoolRegistry::Get().GetCommandPool(QueueType::GRAPHICS));
+		cmdBuffer.BeginRecording(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, nullptr);
+
+		cmdBuffer.CMD_BeginRenderPass(cubemapPreprocessingRenderPass.GetRenderPass(), cubemapPreprocessingFramebuffer, swapChainExtent, false);
+		cmdBuffer.CMD_BindGraphicsPipeline(cubemapPreprocessingPipeline.GetPipeline());
+		cmdBuffer.CMD_SetScissor({ 0, 0 }, swapChainExtent);
+		cmdBuffer.CMD_SetViewport(static_cast<float>(swapChainExtent.width), static_cast<float>(swapChainExtent.height));
+		cmdBuffer.CMD_BindMesh(asset);
+
+		// For every face of the cube, we must change our camera's view direction, change the framebuffer (since we're rendering to
+		// a different texture each pass)
+		for (uint32_t i = 0; i < 6; i++)
+		{
+			cmdBuffer.CMD_BindDescriptorSets(cubemapPreprocessingPipeline.GetPipelineLayout(), static_cast<uint32_t>(vkDescSets.size()), vkDescSets.data());
+			cmdBuffer.CMD_DrawIndexed(static_cast<uint32_t>(resources->indexCount));
+		}
+
+		cmdBuffer.CMD_EndRenderPass();
+
+		cmdBuffer.EndRecording();
+
+		VkCommandBuffer commandBuffers[1] = { cmdBuffer.GetBuffer() };
+
+		VkSubmitInfo submitInfo{};
+		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		submitInfo.waitSemaphoreCount = 0;
+		submitInfo.pWaitSemaphores = nullptr;
+		submitInfo.pWaitDstStageMask = 0;
+		submitInfo.commandBufferCount = 1;
+		submitInfo.pCommandBuffers = commandBuffers;
+
+		if (SubmitQueue(QueueType::GRAPHICS, &submitInfo, 1, currentFDD->inFlightFence, true) != VK_SUCCESS)
+		{
+			return;
+		}
+
+		// Now that the equirectangular texture has been mapped to a cubemap, we don't need the original texture anymore
+		skyboxTexture.Destroy();
+	}
+
 	VkResult Renderer::SubmitQueue(QueueType type, VkSubmitInfo* info, uint32_t submitCount, VkFence fence, bool waitUntilIdle)
 	{
 		VkResult res;
@@ -1587,6 +1767,23 @@ namespace TANG
 		}
 
 		return res;
+	}
+
+	AssetResources* Renderer::GetAssetResourcesFromUUID(UUID uuid)
+	{
+		auto resourceIndexIter = resourcesMap.find(uuid);
+		if (resourceIndexIter == resourcesMap.end())
+		{
+			return nullptr;
+		}
+
+		uint32_t resourceIndex = resourceIndexIter->second;
+		if (resourceIndex >= assetResources.size())
+		{
+			return nullptr;
+		}
+
+		return &assetResources[resourceIndex];
 	}
 
 	void Renderer::CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)
