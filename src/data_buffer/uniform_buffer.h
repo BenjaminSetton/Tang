@@ -19,7 +19,7 @@ namespace TANG
 
 		void Destroy() override;
 
-		void MapMemory(VkDeviceSize bufferSize);
+		void MapMemory(VkDeviceSize bufferSize = 0);
 		void UnMapMemory();
 
 		void UpdateData(void* data, uint32_t numBytes);
@@ -29,6 +29,7 @@ namespace TANG
 	private:
 
 		void* mappedData;
+		VkDeviceSize bufferSize;
 	};
 }
 

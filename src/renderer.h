@@ -12,8 +12,9 @@
 #include "descriptors/descriptor_set.h"
 #include "descriptors/set_layout/set_layout_cache.h"
 #include "descriptors/set_layout/set_layout_summary.h"
-#include "pipelines/pbr_pipeline.h"
 #include "pipelines/cubemap_preprocessing_pipeline.h"
+#include "pipelines/pbr_pipeline.h"
+#include "pipelines/skybox_pipeline.h"
 #include "queue_types.h"
 #include "render_passes/pbr_render_pass.h"
 #include "render_passes/cubemap_preprocessing_render_pass.h"
@@ -28,12 +29,6 @@ namespace TANG
 	struct SwapChainSupportDetails;
 	class QueueFamilyIndices;
 	class DisposableCommand;
-
-	enum class PipelineType
-	{
-		PBR,
-		CUBEMAP_PREPROCESSING
-	};
 
 	class Renderer
 	{
@@ -89,7 +84,7 @@ namespace TANG
 		AssetResources* CreateAssetResources(AssetDisk* asset, PipelineType pipelineType);
 
 		void CreatePBRAssetResources(AssetDisk* asset, AssetResources& out_resources);
-		void CreateCubemapPreprocessingAssetResources(AssetDisk* asset, AssetResources& out_resources);
+		void CreateSkyboxAssetResources(AssetDisk* asset, AssetResources& out_resources);
 
 		// Creates a secondary command buffer, given the asset resources. After an asset is loaded and it's asset resources
 		// are loaded, this function must be called to create the secondary command buffer that holds the commands to render
@@ -156,13 +151,16 @@ namespace TANG
 
 		void CreateAssetUniformBuffers(UUID uuid);
 		void CreateCubemapPreprocessingUniformBuffer();
+		void CreateSkyboxUniformBuffers();
 
 		void CreateAssetDescriptorSets(UUID uuid);
 		void CreateCubemapPreprocessingDescriptorSet();
+		void CreateSkyboxDescriptorSets();
 
 		void CreateDescriptorSetLayouts();
 		void CreatePBRSetLayouts();
 		void CreateCubemapPreprocessingSetLayouts();
+		void CreateSkyboxSetLayouts();
 
 		void CreateDescriptorPool();
 
@@ -181,6 +179,8 @@ namespace TANG
 		void CleanupSwapChain();
 
 		void InitializeDescriptorSets(UUID uuid, uint32_t frameIndex);
+		void InitializeSkyboxUniformsAndDescriptor();
+
 		void UpdateTransformDescriptorSet(UUID uuid);
 		void UpdateCameraDataDescriptorSet(UUID uuid, uint32_t frameIndex);
 		void UpdateProjectionDescriptorSet(UUID uuid, uint32_t frameIndex);
@@ -190,7 +190,7 @@ namespace TANG
 		void UpdateCameraDataUniformBuffers(UUID uuid, uint32_t frameIndex, const glm::vec3& position, const glm::mat4& viewMatrix);
 		void UpdateProjectionUniformBuffer(UUID uuid, uint32_t frameIndex);
 
-		void UpdateCameraPreprocessingCameraData(uint32_t i);
+		void UpdateCubemapPreprocessingCameraData(uint32_t i);
 
 		void CalculateSkyboxCubemap(AssetResources* resources);
 
@@ -313,7 +313,20 @@ namespace TANG
 		VkFence cubemapPreprocessingFence;
 		VkExtent2D cubemapFaceSize;
 
+		// I think rendering the skybox can use the same render pass as regular PBR asset rendering?
+		SkyboxPipeline skyboxPipeline;
+		SetLayoutCache skyboxSetLayoutCache;
+		UniformBuffer skyboxViewUBO;
+		UniformBuffer skyboxProjUBO;
+		UniformBuffer skyboxExposureUBO;
+		std::array<DescriptorSet, 3> skyboxDescriptorSets;
+
 		uint32_t currentFrame;
+
+		// TODO - Rework this garbage
+		glm::vec3 startingCameraPosition;
+		glm::mat4 startingCameraViewMatrix;
+		glm::mat4 startingProjectionMatrix;
 
 		// The assetResources vector contains all the vital information that we need for every asset in order to render it
 		// The resourcesMap maps an asset's UUID to a location within the assetResources vector

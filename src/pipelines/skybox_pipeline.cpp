@@ -1,32 +1,32 @@
 
-#include <array>
-#include <vector>
-
 #include "../device_cache.h"
 #include "../shader.h"
 #include "../utils/sanity_check.h"
 #include "../utils/logger.h"
 #include "../vertex_types.h"
-#include "pbr_pipeline.h"
+#include "skybox_pipeline.h"
+
+#include <array>
+#include <vector>
 
 namespace TANG
 {
-	PBRPipeline::PBRPipeline()
+	SkyboxPipeline::SkyboxPipeline()
 	{
 		FlushData();
 	}
 
-	PBRPipeline::~PBRPipeline()
+	SkyboxPipeline::~SkyboxPipeline()
 	{
 		FlushData();
 	}
 
-	PBRPipeline::PBRPipeline(PBRPipeline&& other) noexcept : BasePipeline(std::move(other))
+	SkyboxPipeline::SkyboxPipeline(SkyboxPipeline&& other) noexcept : BasePipeline(std::move(other))
 	{
 	}
 
 	// Get references to the data required in Create(), it's not needed
-	void PBRPipeline::SetData(const PBRRenderPass& _renderPass, const SetLayoutCache& _setLayoutCache, VkExtent2D _viewportSize)
+	void SkyboxPipeline::SetData(const PBRRenderPass& _renderPass, const SetLayoutCache& _setLayoutCache, VkExtent2D _viewportSize)
 	{
 		renderPass = &_renderPass;
 		setLayoutCache = &_setLayoutCache;
@@ -35,7 +35,7 @@ namespace TANG
 		wasDataSet = true;
 	}
 
-	void PBRPipeline::Create()
+	void SkyboxPipeline::Create()
 	{
 		if (!wasDataSet)
 		{
@@ -64,8 +64,8 @@ namespace TANG
 		// Vertex input
 		VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
 
-		auto bindingDescription = PBRVertex::GetBindingDescription();
-		auto attributeDescriptions = PBRVertex::GetAttributeDescriptions();
+		auto bindingDescription = CubemapVertex::GetBindingDescription();
+		auto attributeDescriptions = CubemapVertex::GetAttributeDescriptions();
 		vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 		vertexInputInfo.vertexBindingDescriptionCount = 1;
 		vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
@@ -120,8 +120,7 @@ namespace TANG
 		// For the polygonMode it's possible to use LINE or POINT as well
 		// In this case the following line is required:
 		rasterizer.lineWidth = 1.0f;
-		// Any line thicker than 1.0 requires the "wideLines" GPU feature
-		rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+		rasterizer.cullMode = VK_CULL_MODE_FRONT_BIT;
 		rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 		rasterizer.depthBiasEnable = VK_FALSE;
 		rasterizer.depthBiasConstantFactor = 0.0f; // Optional
@@ -169,7 +168,7 @@ namespace TANG
 		depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
 		depthStencil.depthTestEnable = VK_TRUE;
 		depthStencil.depthWriteEnable = VK_TRUE;
-		depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+		depthStencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
 		depthStencil.depthBoundsTestEnable = VK_FALSE;
 		depthStencil.minDepthBounds = 0.0f; // Optional
 		depthStencil.maxDepthBounds = 1.0f; // Optional
@@ -221,7 +220,7 @@ namespace TANG
 		}
 	}
 
-	void PBRPipeline::FlushData()
+	void SkyboxPipeline::FlushData()
 	{
 		renderPass = nullptr;
 		setLayoutCache = nullptr;

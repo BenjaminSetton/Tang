@@ -4,12 +4,12 @@ layout(location = 0) in vec3 localPos;
 
 layout(location = 0) out vec4 outColor;
 
-layout(set = 0, binding = 0) uniform CameraData
+layout(set = 1, binding = 0) uniform CameraData
 {
 	float exposure;
 } cameraData;
 
-layout(set = 0, binding = 1) uniform samplerCube skyboxSampler;
+layout(set = 0, binding = 0) uniform samplerCube skyboxSampler;
 
 void main()
 {

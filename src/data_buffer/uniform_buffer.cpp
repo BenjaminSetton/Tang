@@ -8,27 +8,17 @@
 
 namespace TANG
 {
-	UniformBuffer::UniformBuffer() : mappedData(nullptr)
-	{
-
-	}
+	UniformBuffer::UniformBuffer() : mappedData(nullptr), bufferSize(0)
+	{ }
 
 	UniformBuffer::~UniformBuffer()
-	{
-		// Nothing to do here
-	}
+	{ }
 
-	UniformBuffer::UniformBuffer(const UniformBuffer& other) : Buffer(other)
-	{
-		mappedData = other.mappedData;
-	}
+	UniformBuffer::UniformBuffer(const UniformBuffer& other) : Buffer(other), mappedData(other.mappedData), bufferSize(other.bufferSize)
+	{ }
 
-	UniformBuffer::UniformBuffer(UniformBuffer&& other) noexcept : Buffer(std::move(other))
-	{
-		mappedData = other.mappedData;
-
-		other.mappedData = nullptr;
-	}
+	UniformBuffer::UniformBuffer(UniformBuffer&& other) noexcept : Buffer(std::move(other)), mappedData(std::move(other.mappedData)), bufferSize(std::move(other.bufferSize))
+	{ }
 
 	UniformBuffer& UniformBuffer::operator=(const UniformBuffer& other)
 	{
@@ -39,12 +29,14 @@ namespace TANG
 		}
 
 		mappedData = other.mappedData;
+		bufferSize = other.bufferSize;
 		return *this;
 	}
 
 	void UniformBuffer::Create(VkDeviceSize size)
 	{
 		CreateBase(size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		bufferSize = size;
 	}
 
 	void UniformBuffer::Destroy()
@@ -56,6 +48,7 @@ namespace TANG
 			vkUnmapMemory(logicalDevice, bufferMemory);
 		}
 
+		bufferSize = 0;
 		mappedData = nullptr;
 
 		vkDestroyBuffer(logicalDevice, buffer, nullptr);
@@ -69,6 +62,12 @@ namespace TANG
 
 	void UniformBuffer::MapMemory(VkDeviceSize size)
 	{
+		// If a size of 0 is specified, then we assume the caller wants to map the entirety of the buffer size (as opposed to a portion)
+		if (size == 0)
+		{
+			size = bufferSize;
+		}
+
 		vkMapMemory(GetLogicalDevice(), bufferMemory, 0, size, 0, &mappedData);
 		bufferState = BUFFER_STATE::MAPPED;
 	}

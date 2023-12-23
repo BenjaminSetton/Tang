@@ -9,36 +9,6 @@
 #include "../vertex_types.h"
 #include "cubemap_preprocessing_pipeline.h"
 
-static VkVertexInputBindingDescription GetVertexBindingDescription()
-{
-	VkVertexInputBindingDescription bindingDesc{};
-	bindingDesc.binding = 0;
-	bindingDesc.stride = sizeof(TANG::CubemapVertex);
-	bindingDesc.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-	return bindingDesc;
-}
-
-static constexpr uint32_t VERTEX_ATTRIBUTE_COUNT = 1;
-
-// Ensure that whenever we update the Vertex layout, we fail to compile unless
-// the attribute descriptions below are updated. Note in this case we won't
-// assert if the byte usage remains the same but we switch to a different format
-// (like switching the order of two attributes)
-TNG_ASSERT_COMPILE(sizeof(TANG::CubemapVertex) == 12);
-
-static std::array<VkVertexInputAttributeDescription, VERTEX_ATTRIBUTE_COUNT> GetVertexAttributeDescriptions()
-{
-	std::array<VkVertexInputAttributeDescription, VERTEX_ATTRIBUTE_COUNT> attributeDescriptions{};
-
-	// POSITION
-	attributeDescriptions[0].binding = 0;
-	attributeDescriptions[0].location = 0;
-	attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT; // vec3 (12 bytes)
-	attributeDescriptions[0].offset = offsetof(TANG::CubemapVertex, pos);
-
-	return attributeDescriptions;
-}
-
 namespace TANG
 {
 	CubemapPreprocessingPipeline::CubemapPreprocessingPipeline()
@@ -94,8 +64,8 @@ namespace TANG
 		// Vertex input
 		VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
 
-		auto bindingDescription = GetVertexBindingDescription();
-		auto attributeDescriptions = GetVertexAttributeDescriptions();
+		auto bindingDescription = CubemapVertex::GetBindingDescription();
+		auto attributeDescriptions = CubemapVertex::GetAttributeDescriptions();
 		vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 		vertexInputInfo.vertexBindingDescriptionCount = 1;
 		vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;

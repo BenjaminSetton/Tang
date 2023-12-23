@@ -186,6 +186,16 @@ namespace TANG
 		CreateFramebuffers();
 		CreatePrimaryCommandBuffers(QueueType::GRAPHICS);
 		CreateSyncObjects();
+
+		// Calculate the starting view direction and position of the camera
+		glm::vec3 eye = { 0.0f, 0.0f, 1.0f };
+		startingCameraPosition = { 0.0f, 5.0f, 15.0f };
+		startingCameraViewMatrix = glm::inverse(glm::lookAt(startingCameraPosition, startingCameraPosition + eye, { 0.0f, 1.0f, 0.0f })); 
+
+		// Calculate the starting projection matrix
+		float aspectRatio = swapChainExtent.width / static_cast<float>(swapChainExtent.height);
+		startingProjectionMatrix = glm::perspective(glm::radians(45.0f), aspectRatio, 0.1f, 1000.0f);
+		startingProjectionMatrix[1][1] *= -1; // NOTE - GLM was originally designed for OpenGL, where the Y coordinate of the clip coordinates is inverted
 	}
 
 	void Renderer::Update(float deltaTime)
@@ -224,8 +234,9 @@ namespace TANG
 
 		CleanupSwapChain();
 
-		pbrSetLayoutCache.DestroyLayouts();
+		skyboxSetLayoutCache.DestroyLayouts();
 		cubemapPreprocessingSetLayoutCache.DestroyLayouts();
+		pbrSetLayoutCache.DestroyLayouts();
 
 		for (uint32_t i = 0; i < GetFDDSize(); i++)
 		{
@@ -260,10 +271,14 @@ namespace TANG
 			cubemapFaces[i].Destroy();
 		}
 
+		skyboxViewUBO.Destroy();
+		skyboxProjUBO.Destroy();
+		skyboxExposureUBO.Destroy();
 		cubemapPreprocessingViewProjUBO.Destroy();
 
-		pbrPipeline.Destroy();
+		skyboxPipeline.Destroy();
 		cubemapPreprocessingPipeline.Destroy();
+		pbrPipeline.Destroy();
 
 		pbrRenderPass.Destroy();
 		cubemapPreprocessingRenderPass.Destroy();
@@ -300,8 +315,9 @@ namespace TANG
 			break;
 		}
 		case PipelineType::CUBEMAP_PREPROCESSING:
+		case PipelineType::SKYBOX:
 		{
-			CreateCubemapPreprocessingAssetResources(asset, resources);
+			CreateSkyboxAssetResources(asset, resources);
 			break;
 		}
 		default:
@@ -451,19 +467,16 @@ namespace TANG
 		// Note that we're operating under the assumption that assets will only be created before
 		// we hit the update loop, simply because we're updating all frames in flight here. If this changes in the future, another
 		// solution must be implemented
-		glm::vec3 pos = { 0.0f, 5.0f, 15.0f };
-		glm::vec3 eye = { 0.0f, 0.0f, 1.0f };
-		glm::mat4 viewMat = glm::inverse(glm::lookAt(pos, pos + eye, { 0.0f, 1.0f, 0.0f }));  // TODO - Remove this hard-coded stuff
 		for (uint32_t i = 0; i < GetFDDSize(); i++)
 		{
-			UpdateCameraDataUniformBuffers(out_resources.uuid, i, pos, viewMat);
+			UpdateCameraDataUniformBuffers(out_resources.uuid, i, startingCameraPosition, startingCameraViewMatrix);
 			UpdateProjectionUniformBuffer(out_resources.uuid, i);
 
 			InitializeDescriptorSets(out_resources.uuid, i);
 		}
 	}
 
-	void Renderer::CreateCubemapPreprocessingAssetResources(AssetDisk* asset, AssetResources& out_resources)
+	void Renderer::CreateSkyboxAssetResources(AssetDisk* asset, AssetResources& out_resources)
 	{
 		uint32_t meshCount = static_cast<uint32_t>(asset->meshes.size());
 		TNG_ASSERT_MSG(meshCount == 1, "Why does the cubemap mesh have more than 1 mesh?");
@@ -518,8 +531,14 @@ namespace TANG
 		CreateCubemapPreprocessingUniformBuffer();
 		CreateCubemapPreprocessingDescriptorSet();
 
-		// Finally convert the HDR texture into a cubemap so we can use it later
+		// Convert the HDR texture into a cubemap so we can use it later
 		CalculateSkyboxCubemap(&out_resources);
+
+		// Create and initialize the skybox uniforms + descriptor set
+		CreateSkyboxUniformBuffers();
+		CreateSkyboxDescriptorSets();
+
+		InitializeSkyboxUniformsAndDescriptor();
 	}
 
 	void Renderer::CreateAssetCommandBuffer(AssetResources* resources)
@@ -634,6 +653,9 @@ namespace TANG
 			UpdateCameraDataUniformBuffers(assetData.first, currentFrame, position, viewMatrix);
 			UpdateCameraDataDescriptorSet(assetData.first, currentFrame);
 		}
+
+		// Update the view matrix for the skybox as well
+		
 	}
 
 	void Renderer::RecreateSwapChain()
@@ -1203,11 +1225,14 @@ namespace TANG
 
 	void Renderer::CreatePipelines()
 	{
+		pbrPipeline.SetData(pbrRenderPass, pbrSetLayoutCache, swapChainExtent);
+		pbrPipeline.Create();
+
 		cubemapPreprocessingPipeline.SetData(cubemapPreprocessingRenderPass, cubemapPreprocessingSetLayoutCache, swapChainExtent);
 		cubemapPreprocessingPipeline.Create();
 
-		pbrPipeline.SetData(pbrRenderPass, pbrSetLayoutCache, swapChainExtent);
-		pbrPipeline.Create();
+		skyboxPipeline.SetData(pbrRenderPass, skyboxSetLayoutCache, swapChainExtent);
+		skyboxPipeline.Create();
 	}
 
 	void Renderer::CreateRenderPasses()
@@ -1343,22 +1368,22 @@ namespace TANG
 			// Create the TransformUBO
 			UniformBuffer& transUBO = assetDescriptorData.transformUBO;
 			transUBO.Create(transformUBOSize);
-			transUBO.MapMemory(transformUBOSize);
+			transUBO.MapMemory();
 				
 			// Create the ViewUBO
 			UniformBuffer& vpUBO = assetDescriptorData.viewUBO;
 			vpUBO.Create(viewUBOSize);
-			vpUBO.MapMemory(viewUBOSize);
+			vpUBO.MapMemory();
 
 			// Create the ProjUBO
 			UniformBuffer& projUBO = assetDescriptorData.projUBO;
 			projUBO.Create(projUBOSize);
-			projUBO.MapMemory(projUBOSize);
+			projUBO.MapMemory();
 
 			// Create the camera data UBO
 			UniformBuffer& cameraDataUBO = assetDescriptorData.cameraDataUBO;
 			cameraDataUBO.Create(cameraDataSize);
-			cameraDataUBO.MapMemory(cameraDataSize);
+			cameraDataUBO.MapMemory();
 		}
 	}
 
@@ -1366,7 +1391,23 @@ namespace TANG
 	{
 		VkDeviceSize viewProjSize = sizeof(ViewProjUBO);
 		cubemapPreprocessingViewProjUBO.Create(viewProjSize);
-		cubemapPreprocessingViewProjUBO.MapMemory(viewProjSize);
+		cubemapPreprocessingViewProjUBO.MapMemory();
+	}
+
+	void Renderer::CreateSkyboxUniformBuffers()
+	{
+		VkDeviceSize skyboxViewUBOSize = sizeof(ViewUBO);
+		VkDeviceSize skyboxProjUBOSize = sizeof(ProjUBO);
+		VkDeviceSize skyboxExposureUBOSize = sizeof(float);
+
+		skyboxViewUBO.Create(skyboxViewUBOSize);
+		skyboxViewUBO.MapMemory();
+
+		skyboxProjUBO.Create(skyboxProjUBOSize);
+		skyboxProjUBO.MapMemory();
+
+		skyboxExposureUBO.Create(skyboxExposureUBOSize);
+		skyboxExposureUBO.MapMemory();
 	}
 
 	void Renderer::CreateAssetDescriptorSets(UUID uuid)
@@ -1405,10 +1446,28 @@ namespace TANG
 		}
 	}
 
+	void Renderer::CreateSkyboxDescriptorSets()
+	{
+		const LayoutCache& cache = skyboxSetLayoutCache.GetLayoutCache();
+		if (skyboxSetLayoutCache.GetLayoutCount() != 3)
+		{
+			TNG_ASSERT_MSG(false, "Failed to create skybox descriptor set!");
+			return;
+		}
+
+		uint32_t i = 0;
+		for (auto& iter : cache)
+		{
+			skyboxDescriptorSets[i].Create(descriptorPool, iter.second);
+			i++;
+		}
+	}
+
 	void Renderer::CreateDescriptorSetLayouts()
 	{
-		CreateCubemapPreprocessingSetLayouts();
 		CreatePBRSetLayouts();
+		CreateCubemapPreprocessingSetLayouts();
+		CreateSkyboxSetLayouts();
 	}
 
 	void Renderer::CreatePBRSetLayouts()
@@ -1451,6 +1510,22 @@ namespace TANG
 		cubemapPreprocessingSetLayoutCache.CreateSetLayout(volatileLayout, 0);
 	}
 
+	void Renderer::CreateSkyboxSetLayouts()
+	{
+		SetLayoutSummary persistentLayout;
+		persistentLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Skybox texture
+		skyboxSetLayoutCache.CreateSetLayout(persistentLayout, 0);
+
+		SetLayoutSummary unstableLayout;
+		unstableLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT); // Camera exposure
+		skyboxSetLayoutCache.CreateSetLayout(unstableLayout, 0);
+
+		SetLayoutSummary volatileLayout;
+		volatileLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT); // View matrix
+		volatileLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT); // Projection matrix
+		skyboxSetLayoutCache.CreateSetLayout(volatileLayout, 0);
+	}
+
 	void Renderer::CreateDescriptorPool()
 	{
 		// We will create a descriptor pool that can allocate a large number of descriptor sets using the following logic:
@@ -1461,8 +1536,8 @@ namespace TANG
 		//        don't know what I'm doing.
 		const uint32_t fddSize = GetFDDSize();
 
-		const uint32_t numUniformBuffers = 5;
-		const uint32_t numImageSamplers = 6;
+		const uint32_t numUniformBuffers = 8;
+		const uint32_t numImageSamplers = 7;
 
 		std::array<VkDescriptorPoolSize, 2> poolSizes{};
 		poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -1678,14 +1753,11 @@ namespace TANG
 	{
 		using namespace glm;
 
-		float aspectRatio = swapChainExtent.width / static_cast<float>(swapChainExtent.height);
+		// We assume that ProjUBO only has a projection matrix. If that changes we need to change the code below too
+		TNG_ASSERT_COMPILE(sizeof(ProjUBO) == 64);
 
-		// Construct the ProjUBO
 		ProjUBO projUBO;
-		projUBO.proj = perspective(radians(45.0f), aspectRatio, 0.1f, 1000.0f);
-
-		// NOTE - GLM was originally designed for OpenGL, where the Y coordinate of the clip coordinates is inverted
-		projUBO.proj[1][1] *= -1;
+		projUBO.proj = startingProjectionMatrix;
 
 		FrameDependentData* currentFDD = GetFDDAtIndex(frameIndex);
 		auto& currentAssetDataMap = currentFDD->assetDescriptorDataMap[uuid];
@@ -1797,7 +1869,31 @@ namespace TANG
 		UpdatePBRTextureDescriptorSet(uuid, frameIndex);
 	}
 
-	void Renderer::UpdateCameraPreprocessingCameraData(uint32_t i)
+	void Renderer::InitializeSkyboxUniformsAndDescriptor()
+	{
+		// Initialize uniform buffers
+		float exposure = 1.0f; // Temporary, we do the same for CameraData
+
+		skyboxViewUBO.UpdateData(&startingCameraViewMatrix, sizeof(startingCameraViewMatrix));
+		skyboxProjUBO.UpdateData(&startingProjectionMatrix, sizeof(startingProjectionMatrix));
+		skyboxExposureUBO.UpdateData(&exposure, sizeof(float));
+
+		// Initialize the descriptor
+		WriteDescriptorSets writeSetPersistent(0, 1);
+		writeSetPersistent.AddImageSampler(skyboxDescriptorSets[0].GetDescriptorSet(), 0, cubemapFaces); // How do???
+		skyboxDescriptorSets[0].Update(writeSetPersistent);
+
+		WriteDescriptorSets writeSetUnstable(1, 0);
+		writeSetUnstable.AddUniformBuffer(skyboxDescriptorSets[1].GetDescriptorSet(), 0, skyboxExposureUBO);
+		skyboxDescriptorSets[1].Update(writeSetUnstable);
+
+		WriteDescriptorSets writeSetVolatile(2, 0);
+		writeSetVolatile.AddUniformBuffer(skyboxDescriptorSets[2].GetDescriptorSet(), 0, skyboxViewUBO);
+		writeSetVolatile.AddUniformBuffer(skyboxDescriptorSets[2].GetDescriptorSet(), 0, skyboxProjUBO);
+		skyboxDescriptorSets[2].Update(writeSetVolatile);
+	}
+
+	void Renderer::UpdateCubemapPreprocessingCameraData(uint32_t i)
 	{
 		static const glm::mat4 projMatrix = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 10.0f);
 		static const glm::mat4 viewMatrices[] =
@@ -1849,7 +1945,7 @@ namespace TANG
 			cmdBuffer.CMD_BeginRenderPass(cubemapPreprocessingRenderPass.GetRenderPass(), cubemapPreprocessingFramebuffers[i], cubemapFaceSize, false);
 
 			// Update the camera's view direction, then update the uniform buffer and it's corresponding descriptor set
-			UpdateCameraPreprocessingCameraData(i);
+			UpdateCubemapPreprocessingCameraData(i);
 			cmdBuffer.CMD_BindDescriptorSets(cubemapPreprocessingPipeline.GetPipelineLayout(), 1, descriptors);
 
 			cmdBuffer.CMD_DrawIndexed(static_cast<uint32_t>(resources->indexCount));

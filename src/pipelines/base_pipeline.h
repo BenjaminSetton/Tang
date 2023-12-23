@@ -8,6 +8,13 @@
 
 namespace TANG
 {
+	enum class PipelineType
+	{
+		PBR,
+		CUBEMAP_PREPROCESSING,
+		SKYBOX
+	};
+
 	class BasePipeline
 	{
 	public:
