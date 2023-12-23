@@ -24,7 +24,7 @@ namespace TANG
 		out_builder.PreAllocateAttachmentReferences(1);
 
 		VkAttachmentDescription colorAttachmentDesc{};
-		colorAttachmentDesc.format = VK_FORMAT_R16G16B16_SFLOAT; // Using 16-bit float components for cubemap faces
+		colorAttachmentDesc.format = VK_FORMAT_R16G16B16A16_SFLOAT; // Using 16-bit float components for cubemap faces
 		colorAttachmentDesc.samples = VK_SAMPLE_COUNT_1_BIT;
 		colorAttachmentDesc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 		colorAttachmentDesc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;

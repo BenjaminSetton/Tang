@@ -1,3 +1,5 @@
+#ifndef CUBEMAP_PREPROCESSING_PIPELINE_H
+#define CUBEMAP_PREPROCESSING_PIPELINE_H
 
 #include "../render_passes/cubemap_preprocessing_render_pass.h"
 #include "base_pipeline.h"
@@ -27,3 +29,5 @@ namespace TANG
 
 	};
 }
+
+#endif

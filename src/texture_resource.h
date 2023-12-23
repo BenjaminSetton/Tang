@@ -95,6 +95,8 @@ namespace TANG
 
 		uint32_t GetBytesPerPixelFromFormat(VkFormat format);
 
+		uint32_t CalculateMipLevelsFromSize(uint32_t width, uint32_t height);
+
 	private:
 
 		std::string name;

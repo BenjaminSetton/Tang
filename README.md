@@ -29,6 +29,8 @@ NOTES:
 - PBR explanation + walk-through (Victor Gordan) - https://www.youtube.com/watch?v=RRE-F57fbXw&t=10s
 - PBR explanation + walk-through (OGL Dev) - https://www.youtube.com/watch?v=XK_p2MxGBQs&t=126s
 - Normal mapping (LearnOpenGL) - https://learnopengl.com/Advanced-Lighting/Normal-Mapping
+- Shader resource bindings - https://developer.nvidia.com/vulkan-shader-resource-binding
+- Sync objects - https://vulkan-tutorial.com/Drawing_a_triangle/Drawing/Rendering_and_presentation
 
 ## DEPENDENCIES
 

@@ -15,6 +15,7 @@ namespace TANG
 	// TODO - Maybe move this to a config?
 	static constexpr uint32_t WINDOW_WIDTH = 1920;
 	static constexpr uint32_t WINDOW_HEIGHT = 1080;
+	static const std::string SkyboxCubeMeshFilePath = "../src/data/assets/cube.fbx";
 	static FreeflyCamera camera;
 
 	///////////////////////////////////////////////////////////
@@ -25,11 +26,15 @@ namespace TANG
 	void Initialize()
 	{
 		MainWindow& window = MainWindow::GetInstance();
+		Renderer& renderer = Renderer::GetInstance();
 
 		window.Create(WINDOW_WIDTH, WINDOW_HEIGHT);
 		InputManager::GetInstance().Initialize(window.GetHandle());
-		Renderer::GetInstance().Initialize(window.GetHandle(), WINDOW_WIDTH, WINDOW_HEIGHT);
+		renderer.Initialize(window.GetHandle(), WINDOW_WIDTH, WINDOW_HEIGHT);
 		camera.Initialize({ 0.0f, 5.0f, 15.0f }, { 0.0f, 0.0f, 0.0f }); // Start the camera facing towards negative Z
+
+		// Load the skybox's cube mesh
+		LoadAsset(SkyboxCubeMeshFilePath.c_str());
 	}
 
 	void Update(float deltaTime)
@@ -96,7 +101,10 @@ namespace TANG
 			return INVALID_UUID;
 		}
 
-		AssetResources* resources = renderer.CreateAssetResources(asset);
+		// TODO - Find a better way to determine which pipeline type to use
+		PipelineType pipelineType = std::string(filepath) == SkyboxCubeMeshFilePath ? PipelineType::CUBEMAP_PREPROCESSING : PipelineType::PBR;
+
+		AssetResources* resources = renderer.CreateAssetResources(asset, pipelineType);
 		if (resources == nullptr)
 		{
 			LogError("Failed to create asset resources for asset '%s'", filepath);

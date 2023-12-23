@@ -1,3 +1,5 @@
+#ifndef PBR_PIPELINE_H
+#define PBR_PIPELINE_H
 
 #include "../render_passes/pbr_render_pass.h"
 #include "base_pipeline.h"
@@ -27,3 +29,5 @@ namespace TANG
 
 	};
 }
+
+#endif

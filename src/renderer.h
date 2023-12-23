@@ -24,9 +24,16 @@ struct GLFWwindow;
 
 namespace TANG
 {
+	// Forward declarations
 	struct SwapChainSupportDetails;
 	class QueueFamilyIndices;
 	class DisposableCommand;
+
+	enum class PipelineType
+	{
+		PBR,
+		CUBEMAP_PREPROCESSING
+	};
 
 	class Renderer
 	{
@@ -74,12 +81,15 @@ namespace TANG
 
 		// Loads an asset which implies grabbing the vertices and indices from the asset container
 		// and creating vertex/index buffers to contain them. It also includes creating all other
-		// API objects necessary for rendering.
+		// API objects necessary for rendering. This resources created depend entirely on the pipeline
 		// 
 		// Before calling this function, make sure you've called LoaderUtils::LoadAsset() and have
 		// successfully loaded an asset from file! This functions assumes this, and if it can't retrieve
 		// the loaded asset data it will return prematurely
-		AssetResources* CreateAssetResources(AssetDisk* asset);
+		AssetResources* CreateAssetResources(AssetDisk* asset, PipelineType pipelineType);
+
+		void CreatePBRAssetResources(AssetDisk* asset, AssetResources& out_resources);
+		void CreateCubemapPreprocessingAssetResources(AssetDisk* asset, AssetResources& out_resources);
 
 		// Creates a secondary command buffer, given the asset resources. After an asset is loaded and it's asset resources
 		// are loaded, this function must be called to create the secondary command buffer that holds the commands to render
@@ -145,14 +155,16 @@ namespace TANG
 		void CreateSyncObjects();
 
 		void CreateAssetUniformBuffers(UUID uuid);
+		void CreateCubemapPreprocessingUniformBuffer();
+
+		void CreateAssetDescriptorSets(UUID uuid);
+		void CreateCubemapPreprocessingDescriptorSet();
 
 		void CreateDescriptorSetLayouts();
 		void CreatePBRSetLayouts();
 		void CreateCubemapPreprocessingSetLayouts();
 
 		void CreateDescriptorPool();
-
-		void CreateDescriptorSets(UUID uuid);
 
 		void CreateDepthTexture();
 		void CreateColorAttachmentTexture();
@@ -178,7 +190,9 @@ namespace TANG
 		void UpdateCameraDataUniformBuffers(UUID uuid, uint32_t frameIndex, const glm::vec3& position, const glm::mat4& viewMatrix);
 		void UpdateProjectionUniformBuffer(UUID uuid, uint32_t frameIndex);
 
-		void CalculateSkyboxCubemap();
+		void UpdateCameraPreprocessingCameraData(uint32_t i);
+
+		void CalculateSkyboxCubemap(AssetResources* resources);
 
 		// Submits the provided queue type, along with the provided command buffer. Return value should _not_ be ignored
 		[[nodiscard]] VkResult SubmitQueue(QueueType type, VkSubmitInfo* info, uint32_t submitCount, VkFence fence, bool waitUntilIdle = false);
@@ -293,8 +307,11 @@ namespace TANG
 		SetLayoutCache cubemapPreprocessingSetLayoutCache;
 		TextureResource skyboxTexture;
 		TextureResource cubemapFaces[6];
-		VkFramebuffer cubemapPreprocessingFramebuffer;
-		UUID cubeMeshUUID;
+		VkFramebuffer cubemapPreprocessingFramebuffers[6];
+		UniformBuffer cubemapPreprocessingViewProjUBO;
+		DescriptorSet cubemapPreprocessingDescriptorSets[6];
+		VkFence cubemapPreprocessingFence;
+		VkExtent2D cubemapFaceSize;
 
 		uint32_t currentFrame;
 

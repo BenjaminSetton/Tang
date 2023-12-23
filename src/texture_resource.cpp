@@ -257,18 +257,14 @@ namespace TANG
 		name = filePath.substr(filePath.rfind("/") + 1, filePath.size());
 
 		// Calculate amount of mipmaps
-		double exactMips = log2(std::min(_width, _height));
-		if ((exactMips - std::trunc(exactMips)) != 0)
-		{
-			LogWarning("Texture '%s' has dimensions which are not a power-of-two (%u, %u)! This will generate inefficient mip-maps", name.c_str(), _width, _height);
-		}
+		uint32_t exactMips = CalculateMipLevelsFromSize(_width, _height);
 
 		BaseImageCreateInfo baseImageInfo{};
 		baseImageInfo.width = _width;
 		baseImageInfo.height = _height;
 		baseImageInfo.format = createInfo->format;
 		baseImageInfo.usage = createInfo->usage;
-		baseImageInfo.mipLevels = static_cast<uint32_t>(exactMips);
+		baseImageInfo.mipLevels = exactMips;
 		baseImageInfo.samples = createInfo->samples;
 		CreateBaseImage_Helper(&baseImageInfo);
 
@@ -340,6 +336,7 @@ namespace TANG
 	{
 		VkDevice logicalDevice = GetLogicalDevice();
 
+
 		VkImageCreateInfo imageInfo{};
 		imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 		imageInfo.imageType = VK_IMAGE_TYPE_2D;
@@ -355,6 +352,16 @@ namespace TANG
 		imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 		imageInfo.samples = baseImageInfo->samples;
 
+		// Calculate mip count if baseImageInfo->mipLevels is equal to 0. The Vulkan spec disallows this, so this is a valid alternative
+		if (imageInfo.mipLevels == 0)
+		{
+			uint32_t calculatedMips = CalculateMipLevelsFromSize(imageInfo.extent.width, imageInfo.extent.height);
+			LogInfo("Texture resource specified an invalid 0 mip levels for a %ux%u, using %u mip levels instead", imageInfo.extent.width, imageInfo.extent.height, calculatedMips);
+			
+			imageInfo.mipLevels = calculatedMips;
+		}
+
+		// Create the image
 		if (vkCreateImage(logicalDevice, &imageInfo, nullptr, &baseImage) != VK_SUCCESS)
 		{
 			TNG_ASSERT_MSG(false, "Failed to create image!");
@@ -622,6 +629,10 @@ namespace TANG
 		{
 			return 4;
 		}
+		case VK_FORMAT_R16G16B16A16_SFLOAT:
+		{
+			return 8;
+		}
 		case VK_FORMAT_R32G32B32A32_SFLOAT:
 		{
 			// HDR
@@ -633,4 +644,16 @@ namespace TANG
 		return 0;
 	}
 
+	uint32_t TextureResource::CalculateMipLevelsFromSize(uint32_t _width, uint32_t _height)
+	{
+		double dWidth = static_cast<double>(_width);
+		double dHeight = static_cast<double>(_height);
+		double exactMips = log2(std::min(dWidth, dHeight));
+		if ((exactMips - std::trunc(exactMips)) != 0)
+		{
+			LogWarning("Texture '%s' has dimensions which are not a power-of-two (%u, %u)! This will generate inefficient mip-maps", name.c_str(), _width, _height);
+		}
+
+		return static_cast<uint32_t>(exactMips);
+	}
 }

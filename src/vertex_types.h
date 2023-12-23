@@ -9,6 +9,42 @@
 
 namespace TANG
 {
+	// A special vertex type used when pre-processing the skybox from an equirectangular 2D texture to a cubemap
+	struct CubemapVertex
+	{
+		CubemapVertex() : pos(0.0f, 0.0f, 0.0f)
+		{ }
+
+		~CubemapVertex()
+		{ }
+
+		CubemapVertex(const CubemapVertex& other) : pos(other.pos)
+		{ }
+
+		CubemapVertex(CubemapVertex&& other) noexcept : pos(std::move(other.pos))
+		{ }
+
+		CubemapVertex& operator=(const CubemapVertex& other)
+		{
+			if (this == &other)
+			{
+				return *this;
+			}
+
+			pos = other.pos;
+
+			return *this;
+		}
+
+		// Utility functions / operator overloads
+		bool operator==(const CubemapVertex& other) const
+		{
+			return pos == other.pos;
+		}
+
+		glm::vec3 pos;
+	};
+
 	struct UVVertex
 	{
 		UVVertex() : pos(0.0f, 0.0f, 0.0f), uv(0.0f, 0.0f)

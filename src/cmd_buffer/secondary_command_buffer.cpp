@@ -4,6 +4,8 @@
 #include "../utils/logger.h"
 #include "secondary_command_buffer.h"
 
+#include <utility> // std::move
+
 namespace TANG
 {
 

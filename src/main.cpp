@@ -63,6 +63,7 @@ int main(uint32_t argc, const char** argv)
             MyAsset asset(assetName, id);
 
 			float scale = 5.0f;
+            //float scale = 1.0f;
 			asset.scale[0] = scale;
 			asset.scale[1] = scale;
 			asset.scale[2] = scale;

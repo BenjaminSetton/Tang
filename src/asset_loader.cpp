@@ -270,7 +270,7 @@ namespace TANG
 				// it was exported incorrectly
 				if (currentMaterial.GetTextureCount() == 0)
 				{
-					LogWarning("Material '%s' has no supported textures! Deleting empty material...", currentMaterial.GetName().data());
+					LogWarning("Material '%s' in asset '%s' has no supported textures! Deleting empty material...", currentMaterial.GetName().data(), filePath.data());
 					asset->materials.erase(asset->materials.begin() + i);
 				}
 			}

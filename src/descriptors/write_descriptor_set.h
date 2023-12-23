@@ -8,6 +8,9 @@
 
 namespace TANG
 {
+	// Forward declarations
+	class UniformBuffer;
+
 	// Encapsulates the data and functionality for creating a WriteDescriptorSet
 	// Note that it's not allowed to copy an object of this class, it should only be moved
 	class WriteDescriptorSets
@@ -20,7 +23,7 @@ namespace TANG
 		WriteDescriptorSets(WriteDescriptorSets&& other);
 		WriteDescriptorSets& operator=(const WriteDescriptorSets& other) = delete;
 
-		void AddUniformBuffer(VkDescriptorSet descriptorSet, uint32_t binding, VkBuffer buffer, VkDeviceSize bufferSize, VkDeviceSize offset);
+		void AddUniformBuffer(VkDescriptorSet descriptorSet, uint32_t binding, UniformBuffer& uniformBuffer, VkDeviceSize offset = 0);
 		void AddImageSampler(VkDescriptorSet descriptorSet, uint32_t binding, const TextureResource& texResource);
 
 		uint32_t GetWriteDescriptorSetCount() const;
