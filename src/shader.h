@@ -8,7 +8,14 @@ namespace TANG
 	enum class ShaderType
 	{
 		PBR,
-		CUBEMAP_PREPROCESSING
+		CUBEMAP_PREPROCESSING,
+		SKYBOX
+	};
+
+	enum class ShaderStage
+	{
+		VERTEX_SHADER,
+		FRAGMENT_SHADER
 	};
 
 	// Shaders instances are short-lived objects. They're exclusively used to create pipelines, and deleted immediately
@@ -18,7 +25,7 @@ namespace TANG
 	{
 	public:
 
-		explicit Shader(const std::string_view& fileName, const ShaderType& type);
+		explicit Shader(const ShaderType& type, const ShaderStage& stage);
 		~Shader();
 		Shader(Shader&& other) noexcept;
 
@@ -29,7 +36,7 @@ namespace TANG
 
 	private:
 
-		void Create(const std::string_view& fileName, const ShaderType& type);
+		void Create(const ShaderType& type, const ShaderStage& stage);
 		void Destroy();
 
 		VkShaderModule shaderObject;

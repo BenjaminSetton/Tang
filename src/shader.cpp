@@ -13,14 +13,21 @@ static const std::unordered_map<TANG::ShaderType, std::string> ShaderTypeToFolde
 {
 	{ TANG::ShaderType::PBR, "pbr" },
 	{ TANG::ShaderType::CUBEMAP_PREPROCESSING, "cubemap_preprocessing" },
+	{ TANG::ShaderType::SKYBOX, "skybox" }
+};
+
+static const std::unordered_map<TANG::ShaderStage, std::string> ShaderStageToFileName =
+{
+	{ TANG::ShaderStage::VERTEX_SHADER, "vert.spv" },
+	{ TANG::ShaderStage::FRAGMENT_SHADER, "frag.spv" },
 };
 
 namespace TANG
 {
 
-	Shader::Shader(const std::string_view& fileName, const ShaderType& type) : shaderObject(VK_NULL_HANDLE)
+	Shader::Shader(const ShaderType& type, const ShaderStage& stage) : shaderObject(VK_NULL_HANDLE)
 	{
-		Create(fileName, type);
+		Create(type, stage);
 	}
 
 	Shader::~Shader()
@@ -31,9 +38,10 @@ namespace TANG
 	Shader::Shader(Shader&& other) noexcept : shaderObject(std::move(other.shaderObject))
 	{ }
 
-	void Shader::Create(const std::string_view& fileName, const ShaderType& type)
+	void Shader::Create(const ShaderType& type, const ShaderStage& stage)
 	{
 		VkDevice logicalDevice = GetLogicalDevice();
+		const std::string& fileName = ShaderStageToFileName.at(stage);
 
 		namespace fs = std::filesystem;
 		const std::string defaultShaderCompiledPath = (fs::path(CompiledShaderOutputPath) / fs::path(ShaderTypeToFolderName.at(type)) / fs::path(fileName.data())).generic_string();

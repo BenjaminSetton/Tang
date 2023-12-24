@@ -44,8 +44,8 @@ namespace TANG
 		}
 
 		// Read the compiled shaders
-		Shader vertexShader("vert.spv", ShaderType::CUBEMAP_PREPROCESSING);
-		Shader fragmentShader("frag.spv", ShaderType::CUBEMAP_PREPROCESSING);
+		Shader vertexShader(ShaderType::CUBEMAP_PREPROCESSING, ShaderStage::VERTEX_SHADER);
+		Shader fragmentShader(ShaderType::CUBEMAP_PREPROCESSING, ShaderStage::FRAGMENT_SHADER);
 
 		VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
 		vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;

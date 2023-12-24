@@ -44,8 +44,8 @@ namespace TANG
 		}
 
 		// Read the compiled shaders
-		Shader vertexShader("vert.spv", ShaderType::PBR);
-		Shader fragmentShader("frag.spv", ShaderType::PBR);
+		Shader vertexShader(ShaderType::PBR, ShaderStage::VERTEX_SHADER);
+		Shader fragmentShader(ShaderType::PBR, ShaderStage::FRAGMENT_SHADER);
 
 		VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
 		vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
