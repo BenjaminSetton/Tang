@@ -44,7 +44,7 @@ namespace TANG
 		LogInfo("Texture resource shallow-copied (copy-constructor)");
 	}
 
-	TextureResource::TextureResource(TextureResource&& other) : name(std::move(other.name)), width(std::move(other.width)),
+	TextureResource::TextureResource(TextureResource&& other) noexcept : name(std::move(other.name)), width(std::move(other.width)),
 		height(std::move(other.height)), mipLevels(std::move(other.mipLevels)), baseImage(std::move(other.baseImage)),
 		imageMemory(std::move(other.imageMemory)), imageView(std::move(other.imageView)), sampler(std::move(other.sampler)),
 		format(std::move(other.format)), layout(std::move(other.layout))
@@ -290,7 +290,7 @@ namespace TANG
 		VkImageViewCreateInfo createInfo{};
 		createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 		createInfo.image = baseImage;
-		createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		createInfo.viewType = viewInfo->viewType;
 		createInfo.format = format;
 		createInfo.subresourceRange.aspectMask = viewInfo->aspect;
 		createInfo.subresourceRange.baseMipLevel = 0;
@@ -344,13 +344,14 @@ namespace TANG
 		imageInfo.extent.height = baseImageInfo->height;
 		imageInfo.extent.depth = 1;
 		imageInfo.mipLevels = baseImageInfo->mipLevels;
-		imageInfo.arrayLayers = 1;
+		imageInfo.arrayLayers = baseImageInfo->arrayLayers;
 		imageInfo.format = baseImageInfo->format;
 		imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
 		imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 		imageInfo.usage = baseImageInfo->usage;
 		imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 		imageInfo.samples = baseImageInfo->samples;
+		imageInfo.flags = baseImageInfo->flags;
 
 		// Calculate mip count if baseImageInfo->mipLevels is equal to 0. The Vulkan spec disallows this, so this is a valid alternative
 		if (imageInfo.mipLevels == 0)

@@ -1,3 +1,7 @@
+#ifndef VERTEX_TYPES_H
+#define VERTEX_TYPES_H
+
+#include <array>
 
 // DISABLE WARNINGS FROM GLM
 #pragma warning(push)
@@ -7,6 +11,7 @@
 
 #pragma warning(pop)
 
+#include "utils/sanity_check.h"
 #include "vulkan/vulkan.h"
 
 namespace TANG
@@ -209,3 +214,5 @@ namespace TANG
 	};
 
 }
+
+#endif

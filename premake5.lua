@@ -67,7 +67,7 @@ project "TANG"
 		-- Copy assimp debug DLL into exe folder
 		postbuildcommands
 		{
-			("{COPYFILE} %{Libraries.assimp_debug_dll} %{cfg.targetdir}")
+			("{COPYFILE} \"%{Libraries.assimp_debug_dll}\" \"%{cfg.targetdir}\"")
 		}
 	
 	filter "configurations:Release"
@@ -83,5 +83,7 @@ project "TANG"
 		-- Copy assimp release DLL into exe folder
 		postbuildcommands
 		{
-			("{COPYFILE} %{Libraries.assimp_release_dll} %{cfg.targetdir}")
+			("{COPYFILE} \"%{Libraries.assimp_release_dll}\" \"%{cfg.targetdir}\"")
 		}
+		
+		

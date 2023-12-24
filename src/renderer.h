@@ -143,7 +143,7 @@ namespace TANG
 
 		void CreateFramebuffers();
 		void CreatePBRFramebuffer();
-		void CreateCubemapPreprocessingFramebuffer();
+		void CreateCubemapPreprocessingFramebuffers();
 
 		void CreatePrimaryCommandBuffers(QueueType poolType);
 
@@ -306,7 +306,7 @@ namespace TANG
 		CubemapPreprocessingRenderPass cubemapPreprocessingRenderPass;
 		SetLayoutCache cubemapPreprocessingSetLayoutCache;
 		TextureResource skyboxTexture;
-		TextureResource cubemapFaces[6];
+		TextureResource skyboxCubemap;
 		VkFramebuffer cubemapPreprocessingFramebuffers[6];
 		UniformBuffer cubemapPreprocessingViewProjUBO;
 		DescriptorSet cubemapPreprocessingDescriptorSets[6];

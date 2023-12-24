@@ -14,6 +14,7 @@ namespace TANG
 	struct ImageViewCreateInfo
 	{
 		VkImageAspectFlags aspect;
+		VkImageViewType viewType		= VK_IMAGE_VIEW_TYPE_2D;
 	};
 
 	// Holds all the information necessary to create a sampler for a TextureResource object.
@@ -31,9 +32,11 @@ namespace TANG
 		uint32_t width					= 0;
 		uint32_t height					= 0;
 		VkFormat format					= VK_FORMAT_R8G8B8A8_SRGB;
-		VkImageUsageFlags usage			= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+		VkImageUsageFlags usage			= VK_IMAGE_USAGE_TRANSFER_DST_BIT; 
 		uint32_t mipLevels				= 1;
 		VkSampleCountFlagBits samples	= VK_SAMPLE_COUNT_1_BIT;
+		uint32_t arrayLayers			= 1;
+		VkImageCreateFlags flags		= 0;
 	};
 
 	class TextureResource
@@ -43,7 +46,7 @@ namespace TANG
 		TextureResource();
 		~TextureResource();
 		TextureResource(const TextureResource& other);
-		TextureResource(TextureResource&& other);
+		TextureResource(TextureResource&& other) noexcept;
 		TextureResource& operator=(const TextureResource& other);
 
 		void Create(const BaseImageCreateInfo* baseImageInfo, const ImageViewCreateInfo* viewInfo = nullptr, const SamplerCreateInfo* samplerInfo = nullptr);

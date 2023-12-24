@@ -1,8 +1,9 @@
 
 #include "asset_loader.h"
+#include "camera/freefly_camera.h"
+#include "config.h"
 #include "renderer.h"
 #include "main_window.h"
-#include "camera/freefly_camera.h"
 #include "tang.h"
 #include "utils/sanity_check.h"
 
@@ -12,10 +13,6 @@ namespace TANG
 	// works exactly as expected
 	TNG_ASSERT_COMPILE(sizeof(glm::vec3) == 3 * sizeof(float));
 
-	// TODO - Maybe move this to a config?
-	static constexpr uint32_t WINDOW_WIDTH = 1920;
-	static constexpr uint32_t WINDOW_HEIGHT = 1080;
-	static const std::string SkyboxCubeMeshFilePath = "../src/data/assets/cube.fbx";
 	static FreeflyCamera camera;
 
 	///////////////////////////////////////////////////////////
@@ -28,13 +25,13 @@ namespace TANG
 		MainWindow& window = MainWindow::GetInstance();
 		Renderer& renderer = Renderer::GetInstance();
 
-		window.Create(WINDOW_WIDTH, WINDOW_HEIGHT);
+		window.Create(CONFIG::WindowWidth, CONFIG::WindowHeight);
 		InputManager::GetInstance().Initialize(window.GetHandle());
-		renderer.Initialize(window.GetHandle(), WINDOW_WIDTH, WINDOW_HEIGHT);
+		renderer.Initialize(window.GetHandle(), CONFIG::WindowWidth, CONFIG::WindowHeight);
 		camera.Initialize({ 0.0f, 5.0f, 15.0f }, { 0.0f, 0.0f, 0.0f }); // Start the camera facing towards negative Z
 
 		// Load the skybox's cube mesh
-		LoadAsset(SkyboxCubeMeshFilePath.c_str());
+		LoadAsset(CONFIG::SkyboxCubeMeshFilePath.c_str());
 	}
 
 	void Update(float deltaTime)
@@ -102,7 +99,7 @@ namespace TANG
 		}
 
 		// TODO - Find a better way to determine which pipeline type to use
-		PipelineType pipelineType = std::string(filepath) == SkyboxCubeMeshFilePath ? PipelineType::CUBEMAP_PREPROCESSING : PipelineType::PBR;
+		PipelineType pipelineType = std::string(filepath) == CONFIG::SkyboxCubeMeshFilePath ? PipelineType::CUBEMAP_PREPROCESSING : PipelineType::PBR;
 
 		AssetResources* resources = renderer.CreateAssetResources(asset, pipelineType);
 		if (resources == nullptr)

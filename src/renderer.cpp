@@ -40,6 +40,7 @@
 #include "asset_loader.h"
 #include "cmd_buffer/disposable_command.h"
 #include "command_pool_registry.h"
+#include "config.h"
 #include "data_buffer/vertex_buffer.h"
 #include "data_buffer/index_buffer.h"
 #include "default_material.h"
@@ -47,9 +48,6 @@
 #include "device_cache.h"
 #include "queue_family_indices.h"
 #include "utils/file_utils.h"
-
-static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
-static constexpr uint32_t MAX_ASSET_COUNT = 100;
 
 static std::vector<const char*> validationLayers = {
 	"VK_LAYER_KHRONOS_validation"
@@ -164,7 +162,7 @@ namespace TANG
 
 	void Renderer::Initialize(GLFWwindow* windowHandle, uint32_t windowWidth, uint32_t windowHeight)
 	{
-		frameDependentData.resize(MAX_FRAMES_IN_FLIGHT);
+		frameDependentData.resize(CONFIG::MaxFramesInFlight);
 		framebufferWidth = windowWidth;
 		framebufferHeight = windowHeight;
 
@@ -221,7 +219,7 @@ namespace TANG
 			resources.shouldDraw = false;
 		}
 
-		currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+		currentFrame = (currentFrame + 1) % CONFIG::MaxFramesInFlight;
 	}
 
 	void Renderer::Shutdown()
@@ -268,9 +266,9 @@ namespace TANG
 		for (uint32_t i = 0; i < 6; i++)
 		{
 			vkDestroyFramebuffer(logicalDevice, cubemapPreprocessingFramebuffers[i], nullptr);
-			cubemapFaces[i].Destroy();
 		}
 
+		skyboxCubemap.Destroy();
 		skyboxViewUBO.Destroy();
 		skyboxProjUBO.Destroy();
 		skyboxExposureUBO.Destroy();
@@ -647,15 +645,25 @@ namespace TANG
 		FrameDependentData* currentFDD = GetCurrentFDD();
 		auto& assetDescriptorMap = currentFDD->assetDescriptorDataMap;
 
-		// Update the view matrix and camera position UBOs for all assets, as well as the descriptor sets
+		// Update the view matrix and camera position UBOs for all assets, as well as the descriptor sets unless they're not being drawn this frame
 		for (auto& assetData : assetDescriptorMap)
 		{
-			UpdateCameraDataUniformBuffers(assetData.first, currentFrame, position, viewMatrix);
-			UpdateCameraDataDescriptorSet(assetData.first, currentFrame);
-		}
+			UUID assetUUID = assetData.first;
+			AssetResources* resources = GetAssetResourcesFromUUID(assetUUID);
+			if (resources == nullptr)
+			{
+				continue;
+			}
 
-		// Update the view matrix for the skybox as well
-		
+			// Don't update asset resources that are not being drawn this frame
+			if (!resources->shouldDraw)
+			{
+				continue;
+			}
+
+			UpdateCameraDataUniformBuffers(assetUUID, currentFrame, position, viewMatrix);
+			UpdateCameraDataDescriptorSet(assetUUID, currentFrame);
+		}
 	}
 
 	void Renderer::RecreateSwapChain()
@@ -1258,7 +1266,7 @@ namespace TANG
 	void Renderer::CreateFramebuffers()
 	{
 		CreatePBRFramebuffer();
-		CreateCubemapPreprocessingFramebuffer();
+		CreateCubemapPreprocessingFramebuffers();
 	}
 
 	void Renderer::CreatePBRFramebuffer()
@@ -1290,13 +1298,13 @@ namespace TANG
 		}
 	}
 
-	void Renderer::CreateCubemapPreprocessingFramebuffer()
+	void Renderer::CreateCubemapPreprocessingFramebuffers()
 	{
 		for (uint32_t i = 0; i < 6; i++)
 		{
 			std::array<VkImageView, 1> attachments =
 			{
-				cubemapFaces[i].GetImageView()
+				skyboxCubemap.GetImageView()
 			};
 
 			VkFramebufferCreateInfo framebufferInfo{};
@@ -1545,7 +1553,7 @@ namespace TANG
 		poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 		poolSizes[1].descriptorCount = numImageSamplers * GetFDDSize();
 
-		descriptorPool.Create(poolSizes.data(), static_cast<uint32_t>(poolSizes.size()), static_cast<uint32_t>(poolSizes.size()) * fddSize * MAX_ASSET_COUNT, 0);
+		descriptorPool.Create(poolSizes.data(), static_cast<uint32_t>(poolSizes.size()), static_cast<uint32_t>(poolSizes.size()) * fddSize * CONFIG::MaxAssetCount, 0);
 	}
 
 	void Renderer::CreateDepthTexture()
@@ -1618,18 +1626,18 @@ namespace TANG
 		baseImageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 		baseImageInfo.mipLevels = 1;
 		baseImageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+		baseImageInfo.arrayLayers = 6;
+		baseImageInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
 
 		viewCreateInfo.aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+		viewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
 
 		samplerInfo.minificationFilter = VK_FILTER_LINEAR;
 		samplerInfo.magnificationFilter = VK_FILTER_LINEAR;
 		samplerInfo.addressModeUVW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 		samplerInfo.maxAnisotropy = 1.0f; // Is this an appropriate value??
 
-		for (uint32_t i = 0; i < 6; i++)
-		{
-			cubemapFaces[i].Create(&baseImageInfo, &viewCreateInfo, &samplerInfo);
-		}
+		skyboxCubemap.Create(&baseImageInfo, &viewCreateInfo, &samplerInfo);
 	}
 
 	void Renderer::RecordPrimaryCommandBuffer(uint32_t frameBufferIndex)
@@ -1880,7 +1888,7 @@ namespace TANG
 
 		// Initialize the descriptor
 		WriteDescriptorSets writeSetPersistent(0, 1);
-		writeSetPersistent.AddImageSampler(skyboxDescriptorSets[0].GetDescriptorSet(), 0, cubemapFaces); // How do???
+		writeSetPersistent.AddImageSampler(skyboxDescriptorSets[0].GetDescriptorSet(), 0, skyboxCubemap);
 		skyboxDescriptorSets[0].Update(writeSetPersistent);
 
 		WriteDescriptorSets writeSetUnstable(1, 0);
