@@ -26,6 +26,7 @@ project "TANG"
 		"src/**.h",
 		"src/**.cpp",
 		"src/**.vert",
+		"src/**.geo",
 		"src/**.frag",
 	}
 	

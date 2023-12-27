@@ -71,21 +71,21 @@ namespace TANG
 		cmdBufferState = COMMAND_BUFFER_STATE::ALLOCATED;
 	}
 
-	void PrimaryCommandBuffer::SubmitToQueue(VkQueue queue)
-	{
-		if (!IsCommandBufferValid() || IsRecording())
-		{
-			LogWarning("Failed to submit primary command buffer to queue. Primary command buffer is still recording or command buffer is null");
-			return;
-		}
+	//void PrimaryCommandBuffer::SubmitToQueue(VkQueue queue)
+	//{
+	//	if (!IsCommandBufferValid() || IsRecording())
+	//	{
+	//		LogWarning("Failed to submit primary command buffer to queue. Primary command buffer is still recording or command buffer is null");
+	//		return;
+	//	}
 
-		VkSubmitInfo submitInfo = {};
-		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		submitInfo.commandBufferCount = 1;
-		submitInfo.pCommandBuffers = &commandBuffer;
-		vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
-		vkQueueWaitIdle(queue);
-	}
+	//	VkSubmitInfo submitInfo = {};
+	//	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	//	submitInfo.commandBufferCount = 1;
+	//	submitInfo.pCommandBuffers = &commandBuffer;
+	//	vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
+	//	vkQueueWaitIdle(queue);
+	//}
 
 	void PrimaryCommandBuffer::CMD_BeginRenderPass(VkRenderPass renderPass, VkFramebuffer frameBuffer, VkExtent2D renderAreaExtent, bool usingSecondaryCmdBuffers)
 	{

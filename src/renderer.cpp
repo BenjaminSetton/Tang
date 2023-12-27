@@ -32,7 +32,6 @@
 #include <glm/glm.hpp>
 #include <iostream>
 #include <limits>
-#include <optional>
 #include <set>
 #include <unordered_map>
 #include <vector>
@@ -62,8 +61,6 @@ static const bool enableValidationLayers = false;
 #else
 static const bool enableValidationLayers = true;
 #endif
-
-static const std::string SkyboxTextureFilePath = "../src/data/textures/cubemaps/skybox_sunny.hdr";
 
 VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
 	VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
@@ -157,7 +154,7 @@ namespace TANG
 		swapChainImageFormat(VK_FORMAT_UNDEFINED), swapChainExtent({ 0, 0 }), frameDependentData(), swapChainImageDependentData(),
 		pbrSetLayoutCache(), pbrRenderPass(), pbrPipeline(), currentFrame(0), resourcesMap(), assetResources(), descriptorPool(),
 		depthBuffer(), colorAttachment(), framebufferWidth(0), framebufferHeight(0), cubemapPreprocessingPipeline(), 
-		cubemapPreprocessingRenderPass(), cubemapPreprocessingSetLayoutCache(), cubemapFaceSize({512, 512})
+		cubemapPreprocessingRenderPass(), cubemapPreprocessingSetLayoutCache()
 	{ }
 
 	void Renderer::Initialize(GLFWwindow* windowHandle, uint32_t windowWidth, uint32_t windowHeight)
@@ -410,6 +407,7 @@ namespace TANG
 
 		ImageViewCreateInfo viewCreateInfo{};
 		viewCreateInfo.aspect = VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
+		viewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
 
 		BaseImageCreateInfo baseImageInfo{};
 		baseImageInfo.width = 0; // Unused
@@ -418,6 +416,8 @@ namespace TANG
 		baseImageInfo.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 		baseImageInfo.mipLevels = 0; // Unused
 		baseImageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+		baseImageInfo.arrayLayers = 1;
+		baseImageInfo.flags = 0;
 
 		for (uint32_t i = 0; i < static_cast<uint32_t>(Material::TEXTURE_TYPE::_COUNT); i++)
 		{
@@ -440,6 +440,8 @@ namespace TANG
 				fallbackBaseImageInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
 				fallbackBaseImageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 				fallbackBaseImageInfo.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+				fallbackBaseImageInfo.arrayLayers = 1;
+				fallbackBaseImageInfo.flags = 0;
 
 				uint32_t data = DEFAULT_MATERIAL.at(texType);
 
@@ -532,11 +534,18 @@ namespace TANG
 		// Convert the HDR texture into a cubemap so we can use it later
 		CalculateSkyboxCubemap(&out_resources);
 
+		// Transition cubemap layout so we can read from it in the skybox shaders
+		skyboxCubemap.TransitionLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
 		// Create and initialize the skybox uniforms + descriptor set
 		CreateSkyboxUniformBuffers();
 		CreateSkyboxDescriptorSets();
 
 		InitializeSkyboxUniformsAndDescriptor();
+
+		// Cache the skybox mesh UUID. We used it to convert the HDR equirectangular map to a cubemap, but we can
+		// reuse the cube mesh to draw the skybox in future frames as well
+		skyboxAssetUUID = asset->uuid;
 	}
 
 	void Renderer::CreateAssetCommandBuffer(AssetResources* resources)
@@ -767,6 +776,9 @@ namespace TANG
 		// Only reset the fence if we're submitting work, otherwise we might deadlock
 		vkResetFences(logicalDevice, 1, &(currentFDD->inFlightFence));
 
+		// Record skybox commands
+		auto skyboxCommands = DrawSkybox(imageIndex);
+
 		///////////////////////////////////////
 		// 
 		// Record and submit primary command buffer
@@ -774,7 +786,7 @@ namespace TANG
 		///////////////////////////////////////
 		RecordPrimaryCommandBuffer(imageIndex);
 
-		VkCommandBuffer commandBuffers[] = { GetCurrentPrimaryBuffer()->GetBuffer() };
+		std::array<VkCommandBuffer, 2> commandBuffers = { skyboxCommands->GetBuffer(), GetCurrentPrimaryBuffer()->GetBuffer() };
 		VkSemaphore waitSemaphores[] = { currentFDD->imageAvailableSemaphore };
 
 		VkSubmitInfo submitInfo{};
@@ -783,8 +795,8 @@ namespace TANG
 		submitInfo.waitSemaphoreCount = 1;
 		submitInfo.pWaitSemaphores = waitSemaphores;
 		submitInfo.pWaitDstStageMask = waitStages;
-		submitInfo.commandBufferCount = 1;
-		submitInfo.pCommandBuffers = commandBuffers;
+		submitInfo.commandBufferCount = static_cast<uint32_t>(commandBuffers.size());
+		submitInfo.pCommandBuffers = commandBuffers.data();
 
 		VkSemaphore signalSemaphores[] = { currentFDD->renderFinishedSemaphore };
 		submitInfo.signalSemaphoreCount = 1;
@@ -821,6 +833,37 @@ namespace TANG
 		{
 			LogError("Failed to present swap chain image!");
 		}
+	}
+
+	std::optional<PrimaryCommandBuffer> Renderer::DrawSkybox(uint32_t frameBufferIndex)
+	{
+		AssetResources* skyboxAsset = GetAssetResourcesFromUUID(skyboxAssetUUID);
+		if (skyboxAsset == nullptr)
+		{
+			TNG_ASSERT_MSG(false, "Skybox asset is not loaded! Failed to draw skybox");
+			return {};
+		}
+
+		PrimaryCommandBuffer cmdBuffer;
+		cmdBuffer.Create(CommandPoolRegistry::Get().GetCommandPool(QueueType::GRAPHICS));
+		cmdBuffer.BeginRecording(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, nullptr);
+
+		cmdBuffer.CMD_BindGraphicsPipeline(skyboxPipeline.GetPipeline());
+		cmdBuffer.CMD_SetScissor({ 0, 0 }, swapChainExtent);
+		cmdBuffer.CMD_SetViewport(static_cast<float>(swapChainExtent.width), static_cast<float>(swapChainExtent.height));
+		cmdBuffer.CMD_BindMesh(skyboxAsset);
+
+		cmdBuffer.CMD_BeginRenderPass(pbrRenderPass.GetRenderPass(), GetFramebufferAtIndex(frameBufferIndex), swapChainExtent, false);
+
+		cmdBuffer.CMD_BindDescriptorSets(skyboxPipeline.GetPipelineLayout(), 3, reinterpret_cast<VkDescriptorSet*>(skyboxDescriptorSets.data()));
+
+		cmdBuffer.CMD_DrawIndexed(static_cast<uint32_t>(skyboxAsset->indexCount));
+
+		cmdBuffer.CMD_EndRenderPass();
+
+		cmdBuffer.EndRecording();
+		
+		return cmdBuffer;
 	}
 
 	void Renderer::CreateInstance()
@@ -1111,6 +1154,7 @@ namespace TANG
 
 		VkPhysicalDeviceFeatures deviceFeatures{};
 		deviceFeatures.samplerAnisotropy = VK_TRUE;
+		deviceFeatures.geometryShader = VK_TRUE;
 
 		VkDeviceCreateInfo createInfo{};
 		createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -1312,8 +1356,8 @@ namespace TANG
 			framebufferInfo.renderPass = cubemapPreprocessingRenderPass.GetRenderPass();
 			framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
 			framebufferInfo.pAttachments = attachments.data();
-			framebufferInfo.width = cubemapFaceSize.width;
-			framebufferInfo.height = cubemapFaceSize.height;
+			framebufferInfo.width = CONFIG::SkyboxResolutionSize;
+			framebufferInfo.height = CONFIG::SkyboxResolutionSize;
 			framebufferInfo.layers = 1;
 
 			if (vkCreateFramebuffer(GetLogicalDevice(), &framebufferInfo, nullptr, &cubemapPreprocessingFramebuffers[i]) != VK_SUCCESS)
@@ -1359,6 +1403,12 @@ namespace TANG
 		{
 			TNG_ASSERT_MSG(false, "Failed to create cubemap preprocessing fence!");
 		}
+
+		// Create skybox fence
+		if (vkCreateFence(logicalDevice, &fenceInfo, nullptr, &skyboxFence) != VK_SUCCESS)
+		{
+			TNG_ASSERT_MSG(false, "Failed to create skybox fence!");
+		}
 	}
 
 	void Renderer::CreateAssetUniformBuffers(UUID uuid)
@@ -1400,6 +1450,10 @@ namespace TANG
 		VkDeviceSize viewProjSize = sizeof(ViewProjUBO);
 		cubemapPreprocessingViewProjUBO.Create(viewProjSize);
 		cubemapPreprocessingViewProjUBO.MapMemory();
+
+		VkDeviceSize cubemapLayerSize = sizeof(uint32_t);
+		cubemapPreprocessingCubemapLayerUBO.Create(cubemapLayerSize);
+		cubemapPreprocessingCubemapLayerUBO.MapMemory();
 	}
 
 	void Renderer::CreateSkyboxUniformBuffers()
@@ -1513,8 +1567,8 @@ namespace TANG
 	{
 		SetLayoutSummary volatileLayout;
 		volatileLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT); // View/proj matrix
-		volatileLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Equirectangular map
-
+		volatileLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_GEOMETRY_BIT); // Cubemap layer
+		volatileLayout.AddBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Equirectangular map
 		cubemapPreprocessingSetLayoutCache.CreateSetLayout(volatileLayout, 0);
 	}
 
@@ -1525,7 +1579,7 @@ namespace TANG
 		skyboxSetLayoutCache.CreateSetLayout(persistentLayout, 0);
 
 		SetLayoutSummary unstableLayout;
-		unstableLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT); // Camera exposure
+		unstableLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT); // Camera exposure
 		skyboxSetLayoutCache.CreateSetLayout(unstableLayout, 0);
 
 		SetLayoutSummary volatileLayout;
@@ -1598,7 +1652,7 @@ namespace TANG
 		//
 		// Load the skybox texture from file
 		//
-		BaseImageCreateInfo baseImageInfo{};
+		BaseImageCreateInfo baseImageInfo{}; 
 		baseImageInfo.width = 0; // Unused
 		baseImageInfo.height = 0; // Unused
 		baseImageInfo.format = VK_FORMAT_R16G16B16A16_SFLOAT;
@@ -1615,15 +1669,15 @@ namespace TANG
 		samplerInfo.addressModeUVW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 		samplerInfo.maxAnisotropy = 1.0f; // Is this an appropriate value??
 
-		skyboxTexture.CreateFromFile(SkyboxTextureFilePath, &baseImageInfo, &viewCreateInfo, &samplerInfo);
+		skyboxTexture.CreateFromFile(CONFIG::SkyboxTextureFilePath, &baseImageInfo, &viewCreateInfo, &samplerInfo);
 
 		//
 		// Create the offscreen textures that we'll use to render the cube faces to
 		//
-		baseImageInfo.width = cubemapFaceSize.width;
-		baseImageInfo.height = cubemapFaceSize.height;
+		baseImageInfo.width = CONFIG::SkyboxResolutionSize;
+		baseImageInfo.height = CONFIG::SkyboxResolutionSize;
 		baseImageInfo.format = VK_FORMAT_R16G16B16A16_SFLOAT;
-		baseImageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+		baseImageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 		baseImageInfo.mipLevels = 1;
 		baseImageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 		baseImageInfo.arrayLayers = 6;
@@ -1888,7 +1942,7 @@ namespace TANG
 
 		// Initialize the descriptor
 		WriteDescriptorSets writeSetPersistent(0, 1);
-		writeSetPersistent.AddImageSampler(skyboxDescriptorSets[0].GetDescriptorSet(), 0, skyboxCubemap);
+		writeSetPersistent.AddImageSampler(skyboxDescriptorSets[0].GetDescriptorSet(), 0, skyboxCubemap); 
 		skyboxDescriptorSets[0].Update(writeSetPersistent);
 
 		WriteDescriptorSets writeSetUnstable(1, 0);
@@ -1897,11 +1951,11 @@ namespace TANG
 
 		WriteDescriptorSets writeSetVolatile(2, 0);
 		writeSetVolatile.AddUniformBuffer(skyboxDescriptorSets[2].GetDescriptorSet(), 0, skyboxViewUBO);
-		writeSetVolatile.AddUniformBuffer(skyboxDescriptorSets[2].GetDescriptorSet(), 0, skyboxProjUBO);
+		writeSetVolatile.AddUniformBuffer(skyboxDescriptorSets[2].GetDescriptorSet(), 1, skyboxProjUBO);
 		skyboxDescriptorSets[2].Update(writeSetVolatile);
 	}
 
-	void Renderer::UpdateCubemapPreprocessingCameraData(uint32_t i)
+	void Renderer::UpdateCubemapPreprocessingUniforms(uint32_t i)
 	{
 		static const glm::mat4 projMatrix = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 10.0f);
 		static const glm::mat4 viewMatrices[] =
@@ -1920,8 +1974,13 @@ namespace TANG
 
 		cubemapPreprocessingViewProjUBO.UpdateData(&viewProj, sizeof(ViewProjUBO));
 
-		WriteDescriptorSets writeDescSets(1, 0);
+		uint32_t cubemapLayer = i;
+		cubemapPreprocessingCubemapLayerUBO.UpdateData(&cubemapLayer, sizeof(cubemapLayer));
+
+		// Update camera data descritor set
+		WriteDescriptorSets writeDescSets(2, 0);
 		writeDescSets.AddUniformBuffer(cubemapPreprocessingDescriptorSets[i].GetDescriptorSet(), 0, cubemapPreprocessingViewProjUBO);
+		writeDescSets.AddUniformBuffer(cubemapPreprocessingDescriptorSets[i].GetDescriptorSet(), 1, cubemapPreprocessingCubemapLayerUBO);
 		cubemapPreprocessingDescriptorSets[i].Update(writeDescSets);
 	}
 
@@ -1931,7 +1990,7 @@ namespace TANG
 		for (uint32_t i = 0; i < 6; i++)
 		{
 			WriteDescriptorSets writeDescSets(0, 1);
-			writeDescSets.AddImageSampler(cubemapPreprocessingDescriptorSets[i].GetDescriptorSet(), 1, skyboxTexture);
+			writeDescSets.AddImageSampler(cubemapPreprocessingDescriptorSets[i].GetDescriptorSet(), 2, skyboxTexture);
 			cubemapPreprocessingDescriptorSets[i].Update(writeDescSets);
 		}
 
@@ -1940,8 +1999,8 @@ namespace TANG
 		cmdBuffer.BeginRecording(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, nullptr);
 
 		cmdBuffer.CMD_BindGraphicsPipeline(cubemapPreprocessingPipeline.GetPipeline());
-		cmdBuffer.CMD_SetScissor({ 0, 0 }, swapChainExtent);
-		cmdBuffer.CMD_SetViewport(static_cast<float>(swapChainExtent.width), static_cast<float>(swapChainExtent.height));
+		cmdBuffer.CMD_SetScissor({ 0, 0 }, { CONFIG::SkyboxResolutionSize, CONFIG::SkyboxResolutionSize });
+		cmdBuffer.CMD_SetViewport(static_cast<float>(CONFIG::SkyboxResolutionSize), static_cast<float>(CONFIG::SkyboxResolutionSize));
 		cmdBuffer.CMD_BindMesh(resources);
 
 		// For every face of the cube, we must change our camera's view direction, change the framebuffer (since we're rendering to
@@ -1950,10 +2009,10 @@ namespace TANG
 		{
 			VkDescriptorSet descriptors[1] = { cubemapPreprocessingDescriptorSets[i].GetDescriptorSet() };
 
-			cmdBuffer.CMD_BeginRenderPass(cubemapPreprocessingRenderPass.GetRenderPass(), cubemapPreprocessingFramebuffers[i], cubemapFaceSize, false);
+			cmdBuffer.CMD_BeginRenderPass(cubemapPreprocessingRenderPass.GetRenderPass(), cubemapPreprocessingFramebuffers[i], {CONFIG::SkyboxResolutionSize, CONFIG::SkyboxResolutionSize }, false);
 
 			// Update the camera's view direction, then update the uniform buffer and it's corresponding descriptor set
-			UpdateCubemapPreprocessingCameraData(i);
+			UpdateCubemapPreprocessingUniforms(i);
 			cmdBuffer.CMD_BindDescriptorSets(cubemapPreprocessingPipeline.GetPipelineLayout(), 1, descriptors);
 
 			cmdBuffer.CMD_DrawIndexed(static_cast<uint32_t>(resources->indexCount));

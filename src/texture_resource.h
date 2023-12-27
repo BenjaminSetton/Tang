@@ -2,6 +2,7 @@
 #define TEXTURE_RESOURCE_H
 
 #include <string_view>
+#include <vector>
 #include <vulkan/vulkan.h>
 
 namespace TANG
@@ -107,6 +108,7 @@ namespace TANG
 		uint32_t width;
 		uint32_t height;
 		uint32_t bytesPerPixel;
+		uint32_t arrayLayers;
 		bool isValid;
 
 		VkImage baseImage;

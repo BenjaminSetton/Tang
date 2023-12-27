@@ -6,6 +6,7 @@
 #include "shader.h"
 #include "utils/file_utils.h"
 #include "utils/sanity_check.h"
+#include "utils/logger.h"
 
 static const std::string CompiledShaderOutputPath = "./shaders";
 
@@ -19,6 +20,7 @@ static const std::unordered_map<TANG::ShaderType, std::string> ShaderTypeToFolde
 static const std::unordered_map<TANG::ShaderStage, std::string> ShaderStageToFileName =
 {
 	{ TANG::ShaderStage::VERTEX_SHADER, "vert.spv" },
+	{ TANG::ShaderStage::GEOMETRY_SHADER, "geom.spv" },
 	{ TANG::ShaderStage::FRAGMENT_SHADER, "frag.spv" },
 };
 
@@ -47,6 +49,11 @@ namespace TANG
 		const std::string defaultShaderCompiledPath = (fs::path(CompiledShaderOutputPath) / fs::path(ShaderTypeToFolderName.at(type)) / fs::path(fileName.data())).generic_string();
 
 		auto shaderCode = ReadFile(defaultShaderCompiledPath);
+		if (shaderCode.empty())
+		{
+			LogError("Failed to create shader of type %u for stage %u", type, stage);
+			return;
+		}
 
 		VkShaderModuleCreateInfo createInfo{};
 		createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;

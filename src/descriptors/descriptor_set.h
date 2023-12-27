@@ -37,6 +37,8 @@ namespace TANG
 		VkDescriptorSet descriptorSet;
 
 	};
+
+	TNG_ASSERT_COMPILE(sizeof(DescriptorSet) == sizeof(VkDescriptorSet));
 }
 
 #endif

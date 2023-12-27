@@ -15,6 +15,7 @@ namespace TANG
 	enum class ShaderStage
 	{
 		VERTEX_SHADER,
+		GEOMETRY_SHADER,
 		FRAGMENT_SHADER
 	};
 

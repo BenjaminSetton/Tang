@@ -26,7 +26,7 @@ namespace TANG
 		void Create(VkCommandPool commandPool) override;
 
 		// Submits all currently written commands to the provided queue
-		void SubmitToQueue(VkQueue queue);
+		//void SubmitToQueue(VkQueue queue);
 
 		// Begin and end commands for a render pass
 		void CMD_BeginRenderPass(VkRenderPass renderPass, VkFramebuffer frameBuffer, VkExtent2D renderAreaExtent, bool usingSecondaryCmdBuffers);

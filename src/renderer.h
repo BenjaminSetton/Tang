@@ -1,6 +1,7 @@
 #ifndef RENDERER_H
 #define RENDERER_H
 
+#include <optional>
 #include <unordered_map>
 #include <vector>
 
@@ -108,6 +109,8 @@ namespace TANG
 
 		void DrawFrame();
 
+		std::optional<PrimaryCommandBuffer> DrawSkybox(uint32_t frameBufferIndex);
+
 		void PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo);
 
 		void SetupDebugMessenger();
@@ -190,7 +193,7 @@ namespace TANG
 		void UpdateCameraDataUniformBuffers(UUID uuid, uint32_t frameIndex, const glm::vec3& position, const glm::mat4& viewMatrix);
 		void UpdateProjectionUniformBuffer(UUID uuid, uint32_t frameIndex);
 
-		void UpdateCubemapPreprocessingCameraData(uint32_t i);
+		void UpdateCubemapPreprocessingUniforms(uint32_t i);
 
 		void CalculateSkyboxCubemap(AssetResources* resources);
 
@@ -309,9 +312,9 @@ namespace TANG
 		TextureResource skyboxCubemap;
 		VkFramebuffer cubemapPreprocessingFramebuffers[6];
 		UniformBuffer cubemapPreprocessingViewProjUBO;
+		UniformBuffer cubemapPreprocessingCubemapLayerUBO;
 		DescriptorSet cubemapPreprocessingDescriptorSets[6];
 		VkFence cubemapPreprocessingFence;
-		VkExtent2D cubemapFaceSize;
 
 		// I think rendering the skybox can use the same render pass as regular PBR asset rendering?
 		SkyboxPipeline skyboxPipeline;
@@ -320,6 +323,8 @@ namespace TANG
 		UniformBuffer skyboxProjUBO;
 		UniformBuffer skyboxExposureUBO;
 		std::array<DescriptorSet, 3> skyboxDescriptorSets;
+		UUID skyboxAssetUUID;
+		VkFence skyboxFence;
 
 		uint32_t currentFrame;
 

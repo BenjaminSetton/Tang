@@ -95,7 +95,9 @@ namespace TANG
 		VkDevice logicalDevice = GetLogicalDevice();
 
 		if (sampler != VK_NULL_HANDLE) vkDestroySampler(logicalDevice, sampler, nullptr);
-		if (imageView != VK_NULL_HANDLE) vkDestroyImageView(logicalDevice, imageView, nullptr);
+
+		DestroyImageView();
+
 		if (baseImage != VK_NULL_HANDLE) vkDestroyImage(logicalDevice, baseImage, nullptr);
 		if (imageMemory != VK_NULL_HANDLE) vkFreeMemory(logicalDevice, imageMemory, nullptr);
 
@@ -104,11 +106,9 @@ namespace TANG
 
 	void TextureResource::DestroyImageView()
 	{
-		VkDevice logicalDevice = GetLogicalDevice();
-
 		if (imageView != VK_NULL_HANDLE)
 		{
-			vkDestroyImageView(logicalDevice, imageView, nullptr);
+			vkDestroyImageView(GetLogicalDevice(), imageView, nullptr);
 			imageView = VK_NULL_HANDLE;
 		}
 	}
@@ -132,7 +132,7 @@ namespace TANG
 		barrier.subresourceRange.baseMipLevel = 0;
 		barrier.subresourceRange.levelCount = mipLevels;
 		barrier.subresourceRange.baseArrayLayer = 0;
-		barrier.subresourceRange.layerCount = 1;
+		barrier.subresourceRange.layerCount = arrayLayers;
 		barrier.srcAccessMask = 0; // TODO
 		barrier.dstAccessMask = 0; // TODO
 
@@ -154,7 +154,8 @@ namespace TANG
 			barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 		}
 
-		if (layout == VK_IMAGE_LAYOUT_UNDEFINED && destinationLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+		if (layout == VK_IMAGE_LAYOUT_UNDEFINED && destinationLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+		{
 			barrier.srcAccessMask = 0;
 			barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 
@@ -163,7 +164,18 @@ namespace TANG
 
 			commandQueueType = QueueType::TRANSFER;
 		}
-		else if (layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && destinationLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+		else if (layout == VK_IMAGE_LAYOUT_UNDEFINED && destinationLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+		{
+			barrier.srcAccessMask = 0;
+			barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+			sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+			destinationStage = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT; // Let's block on the vertex shader for now...
+
+			commandQueueType = QueueType::GRAPHICS;
+		}
+		else if (layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && destinationLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+		{
 			barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 			barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
@@ -204,7 +216,7 @@ namespace TANG
 		layout = destinationLayout;
 	}
 
-	VkImageView TextureResource::GetImageView() const
+	VkImageView TextureResource::GetImageView() const 
 	{
 		return imageView;
 	}
@@ -298,6 +310,11 @@ namespace TANG
 		createInfo.subresourceRange.baseArrayLayer = 0;
 		createInfo.subresourceRange.layerCount = 1;
 
+		if (viewInfo->viewType == VK_IMAGE_VIEW_TYPE_CUBE)
+		{
+			createInfo.subresourceRange.layerCount = 6;
+		}
+
 		if (vkCreateImageView(logicalDevice, &createInfo, nullptr, &imageView) != VK_SUCCESS)
 		{
 			LogError(false, "Failed to create texture image view!");
@@ -368,6 +385,14 @@ namespace TANG
 			TNG_ASSERT_MSG(false, "Failed to create image!");
 		}
 
+		// Cache some of the image data
+		width = baseImageInfo->width;
+		height = baseImageInfo->height;
+		mipLevels = baseImageInfo->mipLevels;
+		format = baseImageInfo->format;
+		bytesPerPixel = GetBytesPerPixelFromFormat(baseImageInfo->format);
+		arrayLayers = baseImageInfo->arrayLayers;
+
 		VkMemoryRequirements memRequirements;
 		vkGetImageMemoryRequirements(logicalDevice, baseImage, &memRequirements);
 
@@ -383,11 +408,6 @@ namespace TANG
 
 		vkBindImageMemory(logicalDevice, baseImage, imageMemory, 0);
 
-		width = baseImageInfo->width;
-		height = baseImageInfo->height;
-		mipLevels = baseImageInfo->mipLevels;
-		format = baseImageInfo->format;
-		bytesPerPixel = GetBytesPerPixelFromFormat(baseImageInfo->format);
 		isValid = true;
 	}
 
@@ -398,7 +418,7 @@ namespace TANG
 		VkImageViewCreateInfo createInfo{};
 		createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 		createInfo.image = _baseImage;
-		createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D; // NOTE - If we allow cubemaps here, we should also change layerCount to 6
 		createInfo.format = _format;
 		createInfo.subresourceRange.aspectMask = _aspect;
 		createInfo.subresourceRange.baseMipLevel = 0;
@@ -582,11 +602,14 @@ namespace TANG
 
 	void TextureResource::ResetMembers()
 	{
+		LogInfo("Resetting texture resource members. Ensure memory was cleaned up, otherwise this is a leak");
+
 		name = "";
 		mipLevels = 0;
 		width = 0;
 		height = 0;
 		bytesPerPixel = 0;
+		arrayLayers = 1;
 		isValid = false;
 		baseImage = VK_NULL_HANDLE;
 		imageMemory = VK_NULL_HANDLE;

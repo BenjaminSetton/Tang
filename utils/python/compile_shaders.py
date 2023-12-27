@@ -7,6 +7,7 @@ def main():
     vulkanSDK = os.environ["VULKAN_SDK"]
     sourceDir = "src/shaders"
     outputDir = "out/shaders"
+    shaderTypes = [ "vert", "geom", "frag" ]
     projectDir = str(Path(sys.argv[0]).parent.absolute().parent.parent) # This is ugly, but for some reason it won't let me do .parent 3 times...
     
     # Ensure the Vulkan SDK is installed
@@ -24,11 +25,9 @@ def main():
     
     # Get list of source shaders to compile
     shaderList = []
-    for path in Path(f"{projectDir}/{sourceDir}").rglob("*.vert"):
-        shaderList.append(path)
-        
-    for path in Path(f"{projectDir}/{sourceDir}").rglob("*.frag"):
-        shaderList.append(path)
+    for shaderType in shaderTypes:
+        for path in Path(f"{projectDir}/{sourceDir}").rglob(f"*.{shaderType}"):
+            shaderList.append(path)
     
     # TODO - Checksum shader sources and only compile those which are different from the ones
     #        we already compiled

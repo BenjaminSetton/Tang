@@ -45,6 +45,7 @@ namespace TANG
 
 		// Read the compiled shaders
 		Shader vertexShader(ShaderType::CUBEMAP_PREPROCESSING, ShaderStage::VERTEX_SHADER);
+		Shader geometryShader(ShaderType::CUBEMAP_PREPROCESSING, ShaderStage::GEOMETRY_SHADER);
 		Shader fragmentShader(ShaderType::CUBEMAP_PREPROCESSING, ShaderStage::FRAGMENT_SHADER);
 
 		VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
@@ -53,13 +54,24 @@ namespace TANG
 		vertShaderStageInfo.module = vertexShader.GetShaderObject();
 		vertShaderStageInfo.pName = "main";
 
+		VkPipelineShaderStageCreateInfo geoShaderStageInfo{};
+		geoShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		geoShaderStageInfo.stage = VK_SHADER_STAGE_GEOMETRY_BIT;
+		geoShaderStageInfo.module = geometryShader.GetShaderObject();
+		geoShaderStageInfo.pName = "main";
+
 		VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
 		fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 		fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
 		fragShaderStageInfo.module = fragmentShader.GetShaderObject();
 		fragShaderStageInfo.pName = "main";
 
-		VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
+		std::array<VkPipelineShaderStageCreateInfo, 3> shaderStages =
+		{ 
+			vertShaderStageInfo,
+			geoShaderStageInfo,
+			fragShaderStageInfo 
+		};
 
 		// Vertex input
 		VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
@@ -196,8 +208,8 @@ namespace TANG
 
 		VkGraphicsPipelineCreateInfo pipelineInfo{};
 		pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-		pipelineInfo.stageCount = 2;
-		pipelineInfo.pStages = shaderStages;
+		pipelineInfo.stageCount = shaderStages.size();
+		pipelineInfo.pStages = shaderStages.data();
 		pipelineInfo.pVertexInputState = &vertexInputInfo;
 		pipelineInfo.pInputAssemblyState = &inputAssembly;
 		pipelineInfo.pViewportState = &viewportState;
