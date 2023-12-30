@@ -128,17 +128,10 @@ namespace TANG
 			return;
 		}
 
-		uint32_t numVertexBuffers = static_cast<uint32_t>(resources->vertexBuffers.size());
+		VkBuffer vertexBuffer = resources->vertexBuffer.GetBuffer();
+		VkDeviceSize offset = resources->offset;
 
-		std::vector<VkBuffer> vertexBuffers(numVertexBuffers);
-		std::vector<VkDeviceSize> offsets(numVertexBuffers);
-		for (uint32_t i = 0; i < numVertexBuffers; i++)
-		{
-			vertexBuffers[i] = resources->vertexBuffers[i].GetBuffer();
-			offsets[i] = resources->offsets[i]; // Conversion from uint32_t to uint64_t!
-		}
-
-		vkCmdBindVertexBuffers(commandBuffer, 0, numVertexBuffers, vertexBuffers.data(), offsets.data());
+		vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertexBuffer, &offset);
 		vkCmdBindIndexBuffer(commandBuffer, resources->indexBuffer.GetBuffer(), 0, resources->indexBuffer.GetIndexType());
 	}
 

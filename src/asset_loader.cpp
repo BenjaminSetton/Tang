@@ -17,6 +17,7 @@
 #include "assimp/scene.h"
 #include "assimp/Importer.hpp"
 #include "assimp/postprocess.h"
+#include "config.h"
 #include "utils/logger.h"
 #include "utils/sanity_check.h"
 
@@ -25,9 +26,78 @@
 // fixes common errors on data and optimizes the asset data slightly
 //#define FAST_IMPORT
 
-// Stores the material textures file path, relative to the working directory.
-// TODO - Move this to a global config, along with the other project-relative paths
-static const std::string materialTexturesFilePath = "../src/data/textures/";
+template<typename T>
+void LoadMeshVertices(const aiMesh* importedMesh, TANG::Mesh<T>* mesh)
+{
+	TNG_ASSERT_MSG(false, "Vertex type specialization not found. Please add a template specialization for the new vertex type");
+}
+
+template<>
+void LoadMeshVertices<TANG::PBRVertex>(const aiMesh* importedMesh, TANG::Mesh<TANG::PBRVertex>* mesh)
+{
+	uint32_t vertexCount = importedMesh->mNumVertices;
+
+	for (uint32_t j = 0; j < vertexCount; j++)
+	{
+		const aiVector3D& importedPos = importedMesh->mVertices[j];
+		const aiVector3D& importedNormal = importedMesh->mNormals[j];
+		const aiVector3D& importedTangent = importedMesh->mTangents[j];
+		const aiVector3D& importedBitangent = importedMesh->mBitangents[j];
+		const aiVector3D& importedUVs = importedMesh->HasTextureCoords(0) ? importedMesh->mTextureCoords[0][j] : aiVector3D(0, 0, 0);
+
+		TANG::PBRVertex vertex{};
+		vertex.pos = { importedPos.x, importedPos.y, importedPos.z };
+		vertex.normal = { importedNormal.x, importedNormal.y, importedNormal.z };
+		vertex.tangent = { importedTangent.x, importedTangent.y, importedTangent.z };
+		vertex.bitangent = { importedBitangent.x, importedBitangent.y, importedBitangent.z };
+		vertex.uv = { importedUVs.x, importedUVs.y };
+
+		mesh->vertices[j] = vertex;
+	}
+}
+
+template<> 
+void LoadMeshVertices<TANG::CubemapVertex>(const aiMesh* importedMesh, TANG::Mesh<TANG::CubemapVertex>* mesh)
+{
+	uint32_t vertexCount = importedMesh->mNumVertices;
+
+	for (uint32_t j = 0; j < vertexCount; j++)
+	{
+		const aiVector3D& importedPos = importedMesh->mVertices[j];
+
+		TANG::CubemapVertex vertex{};
+		vertex.pos = { importedPos.x, importedPos.y, importedPos.z };
+
+		mesh->vertices[j] = vertex;
+	}
+}
+
+template<typename T>
+void LoadMesh(const aiMesh* importedMesh, TANG::AssetDisk* asset)
+{
+	uint32_t faceCount = importedMesh->mNumFaces;
+
+	TANG::Mesh<T>* mesh = new TANG::Mesh<T>();
+	mesh->vertices.resize(importedMesh->mNumVertices);
+	mesh->indices.resize(faceCount * 3);
+
+	// VERTICES
+	LoadMeshVertices<T>(importedMesh, mesh);
+
+	// INDICES
+	for (uint32_t j = 0; j < faceCount; j++)
+	{
+		uint32_t indexCount = j * 3;
+		const aiFace& importedFace = importedMesh->mFaces[j];
+
+		mesh->indices[indexCount    ] = importedFace.mIndices[0];
+		mesh->indices[indexCount + 1] = importedFace.mIndices[1];
+		mesh->indices[indexCount + 2] = importedFace.mIndices[2];
+	}
+
+	// Store the mesh pointer in the asset
+	asset->mesh = mesh;
+}
 
 namespace TANG
 {
@@ -117,7 +187,7 @@ namespace TANG
 #if defined(FAST_IMPORT)
 			uint32_t importFlags = aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_CalcTangentSpace;
 #else
-			uint32_t importFlags = aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_FixInfacingNormals | aiProcess_FindInvalidData | aiProcess_CalcTangentSpace;
+			uint32_t importFlags = aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_CalcTangentSpace | aiProcess_FixInfacingNormals | aiProcess_FindInvalidData;
 #endif
 			const aiScene* scene = importer.ReadFile(filePath.data(), importFlags);
 
@@ -131,59 +201,38 @@ namespace TANG
 			uint32_t numTextures = scene->mNumTextures;
 			uint32_t numMaterials = scene->mNumMaterials;
 
-			// Check that we have at least one mesh
+			// Check that we have at least one mesh, and warn if we have have more than one mesh
 			if (numMeshes < 1)
 			{
-				LogWarning("Failed to load asset from file '%s'! At least one mesh is required", filePath);
+				LogError("Failed to load asset from file '%s'! At least one mesh is required", filePath.data());
 				return nullptr;
+			}
+			else if (numMeshes > 1)
+			{
+				LogWarning("Multiple meshes detected for asset '%s', but multiple meshes are not supported!", filePath.data());
 			}
 
 			// Now we can create the Asset instance
 			AssetDisk* asset = new AssetDisk();
-			asset->meshes.resize(numMeshes);
 			asset->textures.resize(numTextures);
 			asset->materials.resize(numMaterials);
 
-			// Load the mesh(es)
-			for (uint32_t i = 0; i < numMeshes; i++)
+			// Load the mesh
+			// NOTE - Only one mesh per asset is supported currently
+			aiMesh* importedMesh = scene->mMeshes[0];
+
+			// Determine the mesh type
+			// TODO - Find a better way to do this
+			bool useSkyboxVertexType = filePath == CONFIG::SkyboxCubeMeshFilePath;
+			if (useSkyboxVertexType)
 			{
-				aiMesh* importedMesh = scene->mMeshes[i];
-
-				Mesh& mesh = asset->meshes[i];
-				uint32_t vertexCount = importedMesh->mNumVertices;
-				uint32_t faceCount = importedMesh->mNumFaces;
-				mesh.vertices.resize(vertexCount);
-				mesh.indices.resize(faceCount * 3);
-
-				// VERTICES
-				for (uint32_t j = 0; j < vertexCount; j++)
-				{
-					const aiVector3D& importedPos = importedMesh->mVertices[j];
-					const aiVector3D& importedNormal = importedMesh->mNormals[j];
-					const aiVector3D& importedTangent = importedMesh->mTangents[j];
-					const aiVector3D& importedBitangent = importedMesh->mBitangents[j];
-					const aiVector3D& importedUVs = importedMesh->HasTextureCoords(0) ? importedMesh->mTextureCoords[0][j] : aiVector3D(0, 0, 0);
-
-					PBRVertex vertex{};
-					vertex.pos = { importedPos.x, importedPos.y, importedPos.z };
-					vertex.normal = { importedNormal.x, importedNormal.y, importedNormal.z };
-					vertex.tangent = { importedTangent.x, importedTangent.y, importedTangent.z };
-					vertex.bitangent = { importedBitangent.x, importedBitangent.y, importedBitangent.z };
-					vertex.uv = { importedUVs.x, importedUVs.y };
-
-					mesh.vertices[j] = vertex;
-				}
-
-				// INDICES
-				for (uint32_t j = 0; j < faceCount; j++)
-				{
-					uint32_t indexCount = j * 3;
-					const aiFace& importedFace = importedMesh->mFaces[j];
-
-					mesh.indices[indexCount] = importedFace.mIndices[0];
-					mesh.indices[indexCount + 1] = importedFace.mIndices[1];
-					mesh.indices[indexCount + 2] = importedFace.mIndices[2];
-				}
+				LoadMesh<CubemapVertex>(importedMesh, asset);
+				LogInfo("Loaded mesh using CubemapVertex for asset '%s'", filePath.data());
+			}
+			else
+			{
+				LoadMesh<PBRVertex>(importedMesh, asset);
+				LogInfo("Loaded mesh using PBRVertex for asset '%s'", filePath.data());
 			}
 
 			// Load the standalone texture(s)
@@ -232,7 +281,7 @@ namespace TANG
 							std::filesystem::path textureFilePath = std::filesystem::path(texturePath.data);
 							std::filesystem::path textureName = textureFilePath.filename();
 							std::filesystem::path assetDirectoryName = std::filesystem::path(filePath).parent_path().filename();
-							std::filesystem::path textureSourceFilePath = std::filesystem::path(materialTexturesFilePath);
+							std::filesystem::path textureSourceFilePath = std::filesystem::path(CONFIG::MaterialTexturesFilePath);
 
 							textureSourceFilePath += assetDirectoryName;
 							textureSourceFilePath /= textureName;
@@ -303,7 +352,12 @@ namespace TANG
 			}
 
 			// Delete the Asset*
-			delete container.RemoveAsset(uuid);
+			AssetDisk* asset = container.RemoveAsset(uuid);
+			if (asset != nullptr)
+			{
+				delete asset->mesh;
+				delete asset;
+			}
 
 			return true;
 		}
@@ -314,7 +368,7 @@ namespace TANG
 			AssetDisk* asset = container.GetFirst();
 			while (asset != nullptr)
 			{
-				delete container.RemoveAsset(asset->uuid);
+				Unload(asset->uuid);
 				asset = container.GetFirst();
 			}
 		}

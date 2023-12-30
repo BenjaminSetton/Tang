@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "../device_cache.h"
+#include "../render_passes/pbr_render_pass.h"
 #include "../shader.h"
 #include "../utils/sanity_check.h"
 #include "../utils/logger.h"
@@ -26,10 +27,10 @@ namespace TANG
 	}
 
 	// Get references to the data required in Create(), it's not needed
-	void PBRPipeline::SetData(const PBRRenderPass& _renderPass, const SetLayoutCache& _setLayoutCache, VkExtent2D _viewportSize)
+	void PBRPipeline::SetData(const PBRRenderPass* _renderPass, const SetLayoutCache* _setLayoutCache, VkExtent2D _viewportSize)
 	{
-		renderPass = &_renderPass;
-		setLayoutCache = &_setLayoutCache;
+		renderPass = _renderPass;
+		setLayoutCache = _setLayoutCache;
 		viewportSize = _viewportSize;
 
 		wasDataSet = true;

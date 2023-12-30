@@ -17,6 +17,7 @@
 #include "pipelines/pbr_pipeline.h"
 #include "pipelines/skybox_pipeline.h"
 #include "queue_types.h"
+#include "render_passes/hdr_render_pass.h"
 #include "render_passes/pbr_render_pass.h"
 #include "render_passes/cubemap_preprocessing_render_pass.h"
 #include "texture_resource.h"
@@ -109,7 +110,7 @@ namespace TANG
 
 		void DrawFrame();
 
-		std::optional<PrimaryCommandBuffer> DrawSkybox(uint32_t frameBufferIndex);
+		void DrawSkybox();
 
 		void PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo);
 
@@ -146,7 +147,8 @@ namespace TANG
 
 		void CreateFramebuffers();
 		void CreatePBRFramebuffer();
-		void CreateCubemapPreprocessingFramebuffers();
+		void CreateCubemapPreprocessingFramebuffer();
+		void CreateHDRFramebuffers();
 
 		void CreatePrimaryCommandBuffers(QueueType poolType);
 
@@ -167,8 +169,8 @@ namespace TANG
 
 		void CreateDescriptorPool();
 
-		void CreateDepthTexture();
-		void CreateColorAttachmentTexture();
+		void CreateDepthTextures();
+		void CreateColorAttachmentTextures();
 
 		void LoadSkyboxResources();
 
@@ -252,7 +254,14 @@ namespace TANG
 		////////////////////////////////////////////////////////////////////
 		struct FrameDependentData
 		{
+			// Assets
 			std::unordered_map<UUID, AssetDescriptorData> assetDescriptorDataMap;
+
+			// Skybox
+			UniformBuffer skyboxViewUBO;
+			UniformBuffer skyboxProjUBO;
+			UniformBuffer skyboxExposureUBO;
+			std::array<DescriptorSet, 3> skyboxDescriptorSets;
 
 			VkSemaphore imageAvailableSemaphore;
 			VkSemaphore renderFinishedSemaphore;
@@ -261,6 +270,8 @@ namespace TANG
 			// We need one primary command buffer per frame in flight, since we can be rendering multiple frames at the same time and
 			// we want to still be able to reset and record a primary buffer
 			PrimaryCommandBuffer primaryCommandBuffer;
+
+			VkFramebuffer hdrFramebuffer;
 		};
 		std::vector<FrameDependentData> frameDependentData;
 		// We want to organize our descriptor sets as follows:
@@ -310,21 +321,19 @@ namespace TANG
 		SetLayoutCache cubemapPreprocessingSetLayoutCache;
 		TextureResource skyboxTexture;
 		TextureResource skyboxCubemap;
-		VkFramebuffer cubemapPreprocessingFramebuffers[6];
-		UniformBuffer cubemapPreprocessingViewProjUBO;
-		UniformBuffer cubemapPreprocessingCubemapLayerUBO;
+		VkFramebuffer cubemapPreprocessingFramebuffer;
+		UniformBuffer cubemapPreprocessingViewProjUBO[6];
+		UniformBuffer cubemapPreprocessingCubemapLayerUBO[6];
 		DescriptorSet cubemapPreprocessingDescriptorSets[6];
 		VkFence cubemapPreprocessingFence;
 
-		// I think rendering the skybox can use the same render pass as regular PBR asset rendering?
 		SkyboxPipeline skyboxPipeline;
 		SetLayoutCache skyboxSetLayoutCache;
-		UniformBuffer skyboxViewUBO;
-		UniformBuffer skyboxProjUBO;
-		UniformBuffer skyboxExposureUBO;
-		std::array<DescriptorSet, 3> skyboxDescriptorSets;
 		UUID skyboxAssetUUID;
-		VkFence skyboxFence;
+
+		TextureResource hdrDepthBuffer;
+		TextureResource hdrAttachment;
+		HDRRenderPass hdrRenderPass;
 
 		uint32_t currentFrame;
 

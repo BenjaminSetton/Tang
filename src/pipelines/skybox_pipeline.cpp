@@ -1,5 +1,6 @@
 
 #include "../device_cache.h"
+#include "../render_passes/hdr_render_pass.h"
 #include "../shader.h"
 #include "../utils/sanity_check.h"
 #include "../utils/logger.h"
@@ -26,10 +27,10 @@ namespace TANG
 	}
 
 	// Get references to the data required in Create(), it's not needed
-	void SkyboxPipeline::SetData(const PBRRenderPass& _renderPass, const SetLayoutCache& _setLayoutCache, VkExtent2D _viewportSize)
+	void SkyboxPipeline::SetData(const HDRRenderPass* _renderPass, const SetLayoutCache* _setLayoutCache, VkExtent2D _viewportSize)
 	{
-		renderPass = &_renderPass;
-		setLayoutCache = &_setLayoutCache;
+		renderPass = _renderPass;
+		setLayoutCache = _setLayoutCache;
 		viewportSize = _viewportSize;
 
 		wasDataSet = true;
@@ -135,7 +136,7 @@ namespace TANG
 		VkPipelineMultisampleStateCreateInfo multisampling{};
 		multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 		multisampling.sampleShadingEnable = VK_FALSE;
-		multisampling.rasterizationSamples = DeviceCache::Get().GetMaxMSAA();
+		multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 		multisampling.minSampleShading = 1.0f; // Optional
 		multisampling.pSampleMask = nullptr; // Optional
 		multisampling.alphaToCoverageEnable = VK_FALSE; // Optional
@@ -170,8 +171,8 @@ namespace TANG
 		// Depth stencil
 		VkPipelineDepthStencilStateCreateInfo depthStencil{};
 		depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-		depthStencil.depthTestEnable = VK_TRUE;
-		depthStencil.depthWriteEnable = VK_TRUE;
+		depthStencil.depthTestEnable = VK_FALSE;
+		depthStencil.depthWriteEnable = VK_FALSE;
 		depthStencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
 		depthStencil.depthBoundsTestEnable = VK_FALSE;
 		depthStencil.minDepthBounds = 0.0f; // Optional

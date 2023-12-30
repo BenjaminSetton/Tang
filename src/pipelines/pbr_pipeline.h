@@ -1,11 +1,13 @@
 #ifndef PBR_PIPELINE_H
 #define PBR_PIPELINE_H
 
-#include "../render_passes/pbr_render_pass.h"
 #include "base_pipeline.h"
 
 namespace TANG
 {
+	// Forward declarations
+	class PBRRenderPass;
+
 	class PBRPipeline : public BasePipeline
 	{
 	public:
@@ -14,8 +16,7 @@ namespace TANG
 		~PBRPipeline();
 		PBRPipeline(PBRPipeline&& other) noexcept;
 
-		// Get references to the data required in Create(), it's not needed
-		void SetData(const PBRRenderPass& renderPass, const SetLayoutCache& setLayoutCache, VkExtent2D viewportSize);
+		void SetData(const PBRRenderPass* renderPass, const SetLayoutCache* setLayoutCache, VkExtent2D viewportSize);
 
 		void Create() override;
 

@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "../device_cache.h"
+#include "../render_passes/cubemap_preprocessing_render_pass.h"
 #include "../shader.h"
 #include "../utils/sanity_check.h"
 #include "../utils/logger.h"
@@ -26,10 +27,10 @@ namespace TANG
 	}
 
 	// Get references to the data required in Create(), it's not needed
-	void CubemapPreprocessingPipeline::SetData(const CubemapPreprocessingRenderPass& _renderPass, const SetLayoutCache& _setLayoutCache, VkExtent2D _viewportSize)
+	void CubemapPreprocessingPipeline::SetData(const CubemapPreprocessingRenderPass* _renderPass, const SetLayoutCache* _setLayoutCache, VkExtent2D _viewportSize)
 	{
-		renderPass = &_renderPass;
-		setLayoutCache = &_setLayoutCache;
+		renderPass = _renderPass;
+		setLayoutCache = _setLayoutCache;
 		viewportSize = _viewportSize;
 
 		wasDataSet = true;
@@ -130,7 +131,7 @@ namespace TANG
 		rasterizer.rasterizerDiscardEnable = VK_FALSE;
 		rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
 		rasterizer.lineWidth = 1.0f;
-		rasterizer.cullMode = VK_CULL_MODE_FRONT_BIT; // Do we need to cull front faces??
+		rasterizer.cullMode = VK_CULL_MODE_FRONT_BIT;
 		rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 		rasterizer.depthBiasEnable = VK_FALSE;
 		rasterizer.depthBiasConstantFactor = 0.0f; // Optional
@@ -178,7 +179,7 @@ namespace TANG
 		depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
 		depthStencil.depthTestEnable = VK_FALSE;
 		depthStencil.depthWriteEnable = VK_FALSE;
-		depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+		depthStencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
 		depthStencil.depthBoundsTestEnable = VK_FALSE;
 		depthStencil.minDepthBounds = 0.0f; // Optional
 		depthStencil.maxDepthBounds = 1.0f; // Optional
@@ -208,7 +209,7 @@ namespace TANG
 
 		VkGraphicsPipelineCreateInfo pipelineInfo{};
 		pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-		pipelineInfo.stageCount = shaderStages.size();
+		pipelineInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
 		pipelineInfo.pStages = shaderStages.data();
 		pipelineInfo.pVertexInputState = &vertexInputInfo;
 		pipelineInfo.pInputAssemblyState = &inputAssembly;

@@ -1,25 +1,24 @@
 
-#include "../device_cache.h"
 #include "../utils/logger.h"
-#include "pbr_render_pass.h"
+#include "hdr_render_pass.h"
 
 namespace TANG
 {
-	PBRRenderPass::PBRRenderPass()
+	HDRRenderPass::HDRRenderPass()
 	{
 		FlushData();
 	}
 
-	PBRRenderPass::~PBRRenderPass()
+	HDRRenderPass::~HDRRenderPass()
 	{
 		FlushData();
 	}
 
-	PBRRenderPass::PBRRenderPass(PBRRenderPass&& other) noexcept : colorAttachmentFormat(std::move(other.colorAttachmentFormat)), depthAttachmentFormat(std::move(other.depthAttachmentFormat))
+	HDRRenderPass::HDRRenderPass(HDRRenderPass&& other) noexcept : colorAttachmentFormat(std::move(other.colorAttachmentFormat)), depthAttachmentFormat(std::move(other.depthAttachmentFormat))
 	{
 	}
 
-	void PBRRenderPass::SetData(VkFormat _colorAttachmentFormat, VkFormat _depthAttachmentFormat)
+	void HDRRenderPass::SetData(VkFormat _colorAttachmentFormat, VkFormat _depthAttachmentFormat)
 	{
 		colorAttachmentFormat = _colorAttachmentFormat;
 		depthAttachmentFormat = _depthAttachmentFormat;
@@ -27,20 +26,20 @@ namespace TANG
 		wasDataSet = true;
 	}
 
-	bool PBRRenderPass::Build(RenderPassBuilder& out_builder)
+	bool HDRRenderPass::Build(RenderPassBuilder& out_builder)
 	{
 		if (!wasDataSet)
 		{
-			LogWarning("PBR render pass data has not been set!");
+			LogWarning("HDR render pass data has not been set!");
 			return false;
 		}
 
-		// We're going to use 3 attachment references
-		out_builder.PreAllocateAttachmentReferences(3);
+		// We're going to use 2 attachment references
+		out_builder.PreAllocateAttachmentReferences(2);
 
 		VkAttachmentDescription colorAttachmentDesc{};
 		colorAttachmentDesc.format = colorAttachmentFormat;
-		colorAttachmentDesc.samples = DeviceCache::Get().GetMaxMSAA();
+		colorAttachmentDesc.samples = VK_SAMPLE_COUNT_1_BIT;
 		colorAttachmentDesc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 		colorAttachmentDesc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 		colorAttachmentDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
@@ -54,7 +53,7 @@ namespace TANG
 
 		VkAttachmentDescription depthAttachmentDesc{};
 		depthAttachmentDesc.format = depthAttachmentFormat;
-		depthAttachmentDesc.samples = DeviceCache::Get().GetMaxMSAA();
+		depthAttachmentDesc.samples = VK_SAMPLE_COUNT_1_BIT;
 		depthAttachmentDesc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 		depthAttachmentDesc.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 		depthAttachmentDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
@@ -66,26 +65,12 @@ namespace TANG
 		depthAttachmentRef.attachment = 1;
 		depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-		VkAttachmentDescription colorAttachmentResolve{};
-		colorAttachmentResolve.format = colorAttachmentFormat;
-		colorAttachmentResolve.samples = VK_SAMPLE_COUNT_1_BIT;
-		colorAttachmentResolve.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-		colorAttachmentResolve.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-		colorAttachmentResolve.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-		colorAttachmentResolve.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		colorAttachmentResolve.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		colorAttachmentResolve.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
-		VkAttachmentReference& colorAttachmentResolveRef = out_builder.GetNextAttachmentReference();
-		colorAttachmentResolveRef.attachment = 2;
-		colorAttachmentResolveRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
 		VkSubpassDescription subpass{};
 		subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 		subpass.colorAttachmentCount = 1;
 		subpass.pColorAttachments = &colorAttachmentRef;
 		subpass.pDepthStencilAttachment = &depthAttachmentRef;
-		subpass.pResolveAttachments = &colorAttachmentResolveRef;
+		subpass.pResolveAttachments = nullptr;
 
 		VkSubpassDependency dependency{};
 		dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
@@ -96,14 +81,13 @@ namespace TANG
 
 		// Push the objects into the render pass builder
 		out_builder.AddAttachment(colorAttachmentDesc)
-				   .AddAttachment(depthAttachmentDesc)
-				   .AddAttachment(colorAttachmentResolve)
-				   .AddSubpass(subpass, dependency);
+			.AddAttachment(depthAttachmentDesc)
+			.AddSubpass(subpass, dependency);
 
 		return out_builder.IsValid();
 	}
 
-	void PBRRenderPass::FlushData()
+	void HDRRenderPass::FlushData()
 	{
 		colorAttachmentFormat = VK_FORMAT_UNDEFINED;
 		depthAttachmentFormat = VK_FORMAT_UNDEFINED;

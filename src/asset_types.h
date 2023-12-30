@@ -234,10 +234,15 @@ namespace TANG
 		uint32_t textureCount;
 	};
 
-	struct Mesh
+	struct BaseMesh
 	{
-		std::vector<PBRVertex> vertices;
 		std::vector<IndexType> indices;
+	};
+
+	template<typename T>
+	struct Mesh : public BaseMesh
+	{
+		std::vector<T> vertices;
 	};
 
 	// The asset pipeline can be represented as follows: 
@@ -258,7 +263,7 @@ namespace TANG
 	{
 		UUID uuid;
 		std::string name;
-		std::vector<Mesh> meshes;
+		BaseMesh* mesh;
 		std::vector<Texture> textures;
 		std::vector<Material> materials;
 	};
@@ -268,8 +273,8 @@ namespace TANG
 	struct AssetResources
 	{
 		UUID uuid;
-		std::vector<VertexBuffer> vertexBuffers;
-		std::vector<uint32_t> offsets;				// Describes the offsets into a single combined buffer of vertex buffers, and the length of the offsets vector must match that of the vertex buffer vector!
+		VertexBuffer vertexBuffer;
+		uint32_t offset;							// Describes the offsets into a single combined buffer of vertex buffers, and the length of the offsets vector must match that of the vertex buffer vector!
 		IndexBuffer indexBuffer;
 		uint64_t indexCount = 0;					// Used when calling vkCmdDrawIndexed
 		std::vector<TextureResource> material;		// Every entry in this vector corresponds to a type of texture, specifically from Material::TEXTURE_TYPE

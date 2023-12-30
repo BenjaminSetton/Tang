@@ -16,6 +16,8 @@ namespace TANG
 
 		static constexpr uint32_t MaxFramesInFlight = 2;
 		static constexpr uint32_t MaxAssetCount = 100;
+
+		static const std::string MaterialTexturesFilePath = "../src/data/textures/";
 	}
 }
 

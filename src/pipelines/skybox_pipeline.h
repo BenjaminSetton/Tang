@@ -1,11 +1,13 @@
 #ifndef SKYBOX_PIPELINE_H
 #define SKYBOX_PIPELINE_H
 
-#include "../render_passes/pbr_render_pass.h"
 #include "base_pipeline.h"
 
 namespace TANG
 {
+	// Forward declarations
+	class HDRRenderPass;
+
 	class SkyboxPipeline : public BasePipeline
 	{
 	public:
@@ -15,7 +17,7 @@ namespace TANG
 		SkyboxPipeline(SkyboxPipeline&& other) noexcept;
 
 		// Get references to the data required in Create(), it's not needed
-		void SetData(const PBRRenderPass& renderPass, const SetLayoutCache& setLayoutCache, VkExtent2D viewportSize);
+		void SetData(const HDRRenderPass* renderPass, const SetLayoutCache* setLayoutCache, VkExtent2D viewportSize);
 
 		void Create() override;
 
@@ -23,7 +25,7 @@ namespace TANG
 
 		void FlushData() override;
 
-		const PBRRenderPass* renderPass;
+		const HDRRenderPass* renderPass;
 		const SetLayoutCache* setLayoutCache;
 		VkExtent2D viewportSize;
 
