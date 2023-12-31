@@ -18,6 +18,8 @@ namespace TANG
 		static constexpr uint32_t MaxAssetCount = 100;
 
 		static const std::string MaterialTexturesFilePath = "../src/data/textures/";
+
+		static const std::string FullscreenQuadMeshFilePath = "../src/data/assets/fullscreen_quad.fbx";
 	}
 }
 

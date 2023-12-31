@@ -2,31 +2,32 @@
 #include <array>
 #include <vector>
 
-#include "../render_passes/hdr_render_pass.h"
+#include "../device_cache.h"
+#include "../render_passes/ldr_render_pass.h"
 #include "../shader.h"
 #include "../utils/sanity_check.h"
 #include "../utils/logger.h"
 #include "../vertex_types.h"
-#include "pbr_pipeline.h"
+#include "ldr_pipeline.h"
 
 namespace TANG
 {
-	PBRPipeline::PBRPipeline()
+	LDRPipeline::LDRPipeline()
 	{
 		FlushData();
 	}
 
-	PBRPipeline::~PBRPipeline()
+	LDRPipeline::~LDRPipeline()
 	{
 		FlushData();
 	}
 
-	PBRPipeline::PBRPipeline(PBRPipeline&& other) noexcept : BasePipeline(std::move(other))
+	LDRPipeline::LDRPipeline(LDRPipeline&& other) noexcept : BasePipeline(std::move(other))
 	{
 	}
 
 	// Get references to the data required in Create(), it's not needed
-	void PBRPipeline::SetData(const HDRRenderPass* _renderPass, const SetLayoutCache* _setLayoutCache, VkExtent2D _viewportSize)
+	void LDRPipeline::SetData(const LDRRenderPass* _renderPass, const SetLayoutCache* _setLayoutCache, VkExtent2D _viewportSize)
 	{
 		renderPass = _renderPass;
 		setLayoutCache = _setLayoutCache;
@@ -35,7 +36,7 @@ namespace TANG
 		wasDataSet = true;
 	}
 
-	void PBRPipeline::Create()
+	void LDRPipeline::Create()
 	{
 		if (!wasDataSet)
 		{
@@ -44,8 +45,8 @@ namespace TANG
 		}
 
 		// Read the compiled shaders
-		Shader vertexShader(ShaderType::PBR, ShaderStage::VERTEX_SHADER);
-		Shader fragmentShader(ShaderType::PBR, ShaderStage::FRAGMENT_SHADER);
+		Shader vertexShader(ShaderType::LDR, ShaderStage::VERTEX_SHADER);
+		Shader fragmentShader(ShaderType::LDR, ShaderStage::FRAGMENT_SHADER);
 
 		VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
 		vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -59,17 +60,13 @@ namespace TANG
 		fragShaderStageInfo.module = fragmentShader.GetShaderObject();
 		fragShaderStageInfo.pName = "main";
 
-		std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages = 
-		{ 
-			vertShaderStageInfo, 
-			fragShaderStageInfo 
-		};
+		VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
 
 		// Vertex input
 		VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
 
-		auto bindingDescription = PBRVertex::GetBindingDescription();
-		auto attributeDescriptions = PBRVertex::GetAttributeDescriptions();
+		auto bindingDescription = UVVertex::GetBindingDescription();
+		auto attributeDescriptions = UVVertex::GetAttributeDescriptions();
 		vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 		vertexInputInfo.vertexBindingDescriptionCount = 1;
 		vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
@@ -136,7 +133,7 @@ namespace TANG
 		VkPipelineMultisampleStateCreateInfo multisampling{};
 		multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 		multisampling.sampleShadingEnable = VK_FALSE;
-		multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+		multisampling.rasterizationSamples = DeviceCache::Get().GetMaxMSAA();
 		multisampling.minSampleShading = 1.0f; // Optional
 		multisampling.pSampleMask = nullptr; // Optional
 		multisampling.alphaToCoverageEnable = VK_FALSE; // Optional
@@ -171,8 +168,8 @@ namespace TANG
 		// Depth stencil
 		VkPipelineDepthStencilStateCreateInfo depthStencil{};
 		depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-		depthStencil.depthTestEnable = VK_TRUE;
-		depthStencil.depthWriteEnable = VK_TRUE;
+		depthStencil.depthTestEnable = VK_FALSE;
+		depthStencil.depthWriteEnable = VK_FALSE;
 		depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
 		depthStencil.depthBoundsTestEnable = VK_FALSE;
 		depthStencil.minDepthBounds = 0.0f; // Optional
@@ -203,8 +200,8 @@ namespace TANG
 
 		VkGraphicsPipelineCreateInfo pipelineInfo{};
 		pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-		pipelineInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
-		pipelineInfo.pStages = shaderStages.data();
+		pipelineInfo.stageCount = 2;
+		pipelineInfo.pStages = shaderStages;
 		pipelineInfo.pVertexInputState = &vertexInputInfo;
 		pipelineInfo.pInputAssemblyState = &inputAssembly;
 		pipelineInfo.pViewportState = &viewportState;
@@ -225,7 +222,7 @@ namespace TANG
 		}
 	}
 
-	void PBRPipeline::FlushData()
+	void LDRPipeline::FlushData()
 	{
 		renderPass = nullptr;
 		setLayoutCache = nullptr;

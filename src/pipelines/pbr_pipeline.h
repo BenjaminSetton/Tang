@@ -6,7 +6,7 @@
 namespace TANG
 {
 	// Forward declarations
-	class PBRRenderPass;
+	class HDRRenderPass;
 
 	class PBRPipeline : public BasePipeline
 	{
@@ -16,7 +16,7 @@ namespace TANG
 		~PBRPipeline();
 		PBRPipeline(PBRPipeline&& other) noexcept;
 
-		void SetData(const PBRRenderPass* renderPass, const SetLayoutCache* setLayoutCache, VkExtent2D viewportSize);
+		void SetData(const HDRRenderPass* renderPass, const SetLayoutCache* setLayoutCache, VkExtent2D viewportSize);
 
 		void Create() override;
 
@@ -24,7 +24,7 @@ namespace TANG
 
 		void FlushData() override;
 
-		const PBRRenderPass* renderPass;
+		const HDRRenderPass* renderPass;
 		const SetLayoutCache* setLayoutCache;
 		VkExtent2D viewportSize;
 

@@ -14,11 +14,12 @@
 #include "descriptors/set_layout/set_layout_cache.h"
 #include "descriptors/set_layout/set_layout_summary.h"
 #include "pipelines/cubemap_preprocessing_pipeline.h"
+#include "pipelines/ldr_pipeline.h"
 #include "pipelines/pbr_pipeline.h"
 #include "pipelines/skybox_pipeline.h"
 #include "queue_types.h"
 #include "render_passes/hdr_render_pass.h"
-#include "render_passes/pbr_render_pass.h"
+#include "render_passes/ldr_render_pass.h"
 #include "render_passes/cubemap_preprocessing_render_pass.h"
 #include "texture_resource.h"
 #include "utils/sanity_check.h"
@@ -87,11 +88,7 @@ namespace TANG
 
 		void CreatePBRAssetResources(AssetDisk* asset, AssetResources& out_resources);
 		void CreateSkyboxAssetResources(AssetDisk* asset, AssetResources& out_resources);
-
-		// Creates a secondary command buffer, given the asset resources. After an asset is loaded and it's asset resources
-		// are loaded, this function must be called to create the secondary command buffer that holds the commands to render
-		// the asset.
-		void CreateAssetCommandBuffer(AssetResources* resources);
+		void CreateFullscreenQuadAssetResources(AssetDisk* asset, AssetResources& out_resources);
 
 		void DestroyAssetResources(UUID uuid);
 		void DestroyAllAssetResources();
@@ -110,7 +107,7 @@ namespace TANG
 
 		void DrawFrame();
 
-		void DrawSkybox();
+		void DrawSkybox(PrimaryCommandBuffer* cmdBuffer);
 
 		void PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo);
 
@@ -139,6 +136,11 @@ namespace TANG
 		void CreateSwapChain();
 		void CreateSwapChainImageViews(uint32_t imageCount);
 
+		// Creates a secondary command buffer, given the asset resources. After an asset is loaded and it's asset resources
+		// are loaded, this function must be called to create the secondary command buffer that holds the commands to render
+		// the asset.
+		void CreateAssetCommandBuffer(AssetResources* resources);
+
 		void CreateCommandPools();
 
 		void CreatePipelines();
@@ -146,26 +148,29 @@ namespace TANG
 		void CreateRenderPasses();
 
 		void CreateFramebuffers();
-		void CreatePBRFramebuffer();
+		void CreateLDRFramebuffers();
 		void CreateCubemapPreprocessingFramebuffer();
 		void CreateHDRFramebuffers();
 
-		void CreatePrimaryCommandBuffers(QueueType poolType);
+		void CreatePrimaryCommandBuffers();
 
 		void CreateSyncObjects();
 
 		void CreateAssetUniformBuffers(UUID uuid);
 		void CreateCubemapPreprocessingUniformBuffer();
 		void CreateSkyboxUniformBuffers();
+		void CreateLDRUniformBuffer();
 
 		void CreateAssetDescriptorSets(UUID uuid);
 		void CreateCubemapPreprocessingDescriptorSet();
 		void CreateSkyboxDescriptorSets();
+		void CreateLDRDescriptorSet();
 
 		void CreateDescriptorSetLayouts();
 		void CreatePBRSetLayouts();
 		void CreateCubemapPreprocessingSetLayouts();
 		void CreateSkyboxSetLayouts();
+		void CreateLDRSetLayouts();
 
 		void CreateDescriptorPool();
 
@@ -174,8 +179,10 @@ namespace TANG
 
 		void LoadSkyboxResources();
 
-		void RecordPrimaryCommandBuffer(uint32_t frameBufferIndex);
-		void RecordSecondaryCommandBuffer(SecondaryCommandBuffer& commandBuffer, AssetResources* resources, uint32_t frameBufferIndex);
+		void DrawAssets(PrimaryCommandBuffer* cmdBuffer);
+		void RecordSecondaryCommandBuffer(SecondaryCommandBuffer* cmdBuffer, AssetResources* resources);
+
+		void PerformLDRConversion(uint32_t imageIndex);
 
 		void RecreateAllSecondaryCommandBuffers();
 
@@ -190,12 +197,13 @@ namespace TANG
 		void UpdateCameraDataDescriptorSet(UUID uuid, uint32_t frameIndex);
 		void UpdateProjectionDescriptorSet(UUID uuid, uint32_t frameIndex);
 		void UpdatePBRTextureDescriptorSet(UUID uuid, uint32_t frameIndex);
+		void UpdateLDRDescriptorSet();
 
 		void UpdateTransformUniformBuffer(const Transform& transform, UUID uuid);
 		void UpdateCameraDataUniformBuffers(UUID uuid, uint32_t frameIndex, const glm::vec3& position, const glm::mat4& viewMatrix);
 		void UpdateProjectionUniformBuffer(UUID uuid, uint32_t frameIndex);
-
 		void UpdateCubemapPreprocessingUniforms(uint32_t i);
+		void UpdateLDRUniformBuffer();
 
 		void CalculateSkyboxCubemap(AssetResources* resources);
 
@@ -214,8 +222,6 @@ namespace TANG
 
 		void DestroyAssetBuffersHelper(AssetResources* resources);
 
-		PrimaryCommandBuffer* GetCurrentPrimaryBuffer();
-		SecondaryCommandBuffer* GetSecondaryCommandBufferAtIndex(uint32_t frameBufferIndex, UUID uuid);
 		VkFramebuffer GetFramebufferAtIndex(uint32_t frameBufferIndex);
 
 	private:
@@ -263,13 +269,20 @@ namespace TANG
 			UniformBuffer skyboxExposureUBO;
 			std::array<DescriptorSet, 3> skyboxDescriptorSets;
 
+			// LDR
+			UniformBuffer ldrCameraDataUBO;
+			DescriptorSet ldrDescriptorSet;
+
+			// Sync objects
 			VkSemaphore imageAvailableSemaphore;
 			VkSemaphore renderFinishedSemaphore;
 			VkFence inFlightFence;
 
 			// We need one primary command buffer per frame in flight, since we can be rendering multiple frames at the same time and
 			// we want to still be able to reset and record a primary buffer
-			PrimaryCommandBuffer primaryCommandBuffer;
+			PrimaryCommandBuffer hdrCommandBuffer;
+			PrimaryCommandBuffer ldrCommandBuffer;
+			std::unordered_map<UUID, SecondaryCommandBuffer> assetCommandBuffers;
 
 			VkFramebuffer hdrFramebuffer;
 		};
@@ -306,14 +319,11 @@ namespace TANG
 		{
 			TextureResource swapChainImage;
 			VkFramebuffer swapChainFramebuffer;
-
-			std::unordered_map<UUID, SecondaryCommandBuffer> secondaryCommandBuffer;
 		};
 		std::vector<SwapChainImageDependentData> swapChainImageDependentData;
 
 
 		PBRPipeline pbrPipeline;
-		PBRRenderPass pbrRenderPass;
 		SetLayoutCache pbrSetLayoutCache;
 
 		CubemapPreprocessingPipeline cubemapPreprocessingPipeline;
@@ -329,11 +339,17 @@ namespace TANG
 
 		SkyboxPipeline skyboxPipeline;
 		SetLayoutCache skyboxSetLayoutCache;
-		UUID skyboxAssetUUID;
 
 		TextureResource hdrDepthBuffer;
 		TextureResource hdrAttachment;
 		HDRRenderPass hdrRenderPass;
+
+		LDRRenderPass ldrRenderPass;
+		LDRPipeline ldrPipeline;
+		SetLayoutCache ldrSetLayoutCache;
+
+		UUID skyboxAssetUUID;
+		UUID fullscreenQuadAssetUUID;
 
 		uint32_t currentFrame;
 

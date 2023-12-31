@@ -32,6 +32,7 @@ void LoadMeshVertices(const aiMesh* importedMesh, TANG::Mesh<T>* mesh)
 	TNG_ASSERT_MSG(false, "Vertex type specialization not found. Please add a template specialization for the new vertex type");
 }
 
+// PBR VERTEX
 template<>
 void LoadMeshVertices<TANG::PBRVertex>(const aiMesh* importedMesh, TANG::Mesh<TANG::PBRVertex>* mesh)
 {
@@ -56,6 +57,7 @@ void LoadMeshVertices<TANG::PBRVertex>(const aiMesh* importedMesh, TANG::Mesh<TA
 	}
 }
 
+// CUBEMAP VERTEX
 template<> 
 void LoadMeshVertices<TANG::CubemapVertex>(const aiMesh* importedMesh, TANG::Mesh<TANG::CubemapVertex>* mesh)
 {
@@ -67,6 +69,24 @@ void LoadMeshVertices<TANG::CubemapVertex>(const aiMesh* importedMesh, TANG::Mes
 
 		TANG::CubemapVertex vertex{};
 		vertex.pos = { importedPos.x, importedPos.y, importedPos.z };
+
+		mesh->vertices[j] = vertex;
+	}
+}
+
+template<>
+void LoadMeshVertices<TANG::UVVertex>(const aiMesh* importedMesh, TANG::Mesh<TANG::UVVertex>* mesh)
+{
+	uint32_t vertexCount = importedMesh->mNumVertices;
+
+	for (uint32_t j = 0; j < vertexCount; j++)
+	{
+		const aiVector3D& importedPos = importedMesh->mVertices[j];
+		const aiVector3D& importedUVs = importedMesh->HasTextureCoords(0) ? importedMesh->mTextureCoords[0][j] : aiVector3D(0, 0, 0);
+
+		TANG::UVVertex vertex{};
+		vertex.pos = { importedPos.x, importedPos.y, importedPos.z };
+		vertex.uv = { importedUVs.x, importedUVs.y };
 
 		mesh->vertices[j] = vertex;
 	}
@@ -223,104 +243,108 @@ namespace TANG
 
 			// Determine the mesh type
 			// TODO - Find a better way to do this
-			bool useSkyboxVertexType = filePath == CONFIG::SkyboxCubeMeshFilePath;
-			if (useSkyboxVertexType)
+			if (filePath == CONFIG::SkyboxCubeMeshFilePath)
 			{
 				LoadMesh<CubemapVertex>(importedMesh, asset);
 				LogInfo("Loaded mesh using CubemapVertex for asset '%s'", filePath.data());
+			}
+			else if (filePath == CONFIG::FullscreenQuadMeshFilePath)
+			{
+				LoadMesh<UVVertex>(importedMesh, asset);
+				LogInfo("Loaded mesh using UVVertex for asset '%s'", filePath.data());
 			}
 			else
 			{
 				LoadMesh<PBRVertex>(importedMesh, asset);
 				LogInfo("Loaded mesh using PBRVertex for asset '%s'", filePath.data());
-			}
 
-			// Load the standalone texture(s)
-			for (uint32_t i = 0; i < numTextures; i++)
-			{
-				aiTexture* importedTexture = scene->mTextures[i];
-
-				Texture& texture = asset->textures[i];
-				texture.size = { importedTexture->mWidth, importedTexture->mHeight };
-
-				// Populate the texture data. Note from the assimp implementation:
-				// The format of the data from the imported texture is always ARGB8888, meaning it's 32-bit aligned
-				uint32_t texelSize = static_cast<uint32_t>(texture.size.x) * static_cast<uint32_t>(texture.size.y);
-				uint64_t numBytes = texelSize * 4;
-				char* data = new char[numBytes];
-				memcpy(data, importedTexture->pcData, numBytes);
-				texture.data = data;
-			}
-
-			// Load the materials
-			for (uint32_t i = 0; i < numMaterials; i++)
-			{
-				Material& currentMaterial = asset->materials[i];
-
-				aiMaterial* currentAIMaterial = scene->mMaterials[i];
-				aiString matName = currentAIMaterial->GetName();
-
-				currentMaterial.SetName(std::string(matName.C_Str()));
-
-				// Get all the supported textures
-				for (const auto& aiType : supportedTextureTypes)
+				// Load the standalone texture(s)
+				for (uint32_t i = 0; i < numTextures; i++)
 				{
-					uint32_t textureCount = currentAIMaterial->GetTextureCount(aiType);
-					if (textureCount > 0)
-					{
-						// Warn if we have more than one diffuse texture, we don't currently support multiple texture of a given type
-						if (textureCount > 1)
-						{
-							LogWarning("More than one texture type (%u) detected for material %s! This is not currently supported", static_cast<uint32_t>(aiType), matName.C_Str());
-						}
+					aiTexture* importedTexture = scene->mTextures[i];
 
-						aiString texturePath;
-						if (currentAIMaterial->GetTexture(aiType, 0, &texturePath) == AI_SUCCESS)
-						{
-							// We're only interested in the filenames, since we store the textures in a very specific directory
-							std::filesystem::path textureFilePath = std::filesystem::path(texturePath.data);
-							std::filesystem::path textureName = textureFilePath.filename();
-							std::filesystem::path assetDirectoryName = std::filesystem::path(filePath).parent_path().filename();
-							std::filesystem::path textureSourceFilePath = std::filesystem::path(CONFIG::MaterialTexturesFilePath);
+					Texture& texture = asset->textures[i];
+					texture.size = { importedTexture->mWidth, importedTexture->mHeight };
 
-							textureSourceFilePath += assetDirectoryName;
-							textureSourceFilePath /= textureName;
-
-							// Load the image using stb_image
-							std::string textureSourceFilePathStr = textureSourceFilePath.string();
-							int width, height, channels;
-							stbi_uc* pixels = stbi_load(textureSourceFilePathStr.c_str(), &width, &height, &channels, STBI_rgb_alpha);
-							if (pixels == nullptr)
-							{
-								LogError("Failed to load texture! '%s'", textureSourceFilePathStr.c_str());
-								continue;
-							}
-
-							// Create a new texture and add it to the material
-							Texture* tex = new Texture();
-							tex->data = pixels;
-							tex->size = { width, height }; // NOTE - We don't support 3D textures!
-							tex->bytesPerPixel = 32;
-							tex->fileName = textureSourceFilePathStr;
-
-							auto texTypeIter = aiTextureToInternal.find(aiType);
-							if (texTypeIter == aiTextureToInternal.end())
-							{
-								LogError("Failed to convert from aiTexture to the internal texture format! AiTexture type '%s'", static_cast<uint32_t>(aiType));
-								continue;
-							}
-
-							currentMaterial.AddTextureOfType(texTypeIter->second, tex);
-						}
-					}
+					// Populate the texture data. Note from the assimp implementation:
+					// The format of the data from the imported texture is always ARGB8888, meaning it's 32-bit aligned
+					uint32_t texelSize = static_cast<uint32_t>(texture.size.x) * static_cast<uint32_t>(texture.size.y);
+					uint64_t numBytes = texelSize * 4;
+					char* data = new char[numBytes];
+					memcpy(data, importedTexture->pcData, numBytes);
+					texture.data = data;
 				}
 
-				// Remove any materials which have no textures, either because we don't support them only textures it has or
-				// it was exported incorrectly
-				if (currentMaterial.GetTextureCount() == 0)
+				// Load the materials
+				for (uint32_t i = 0; i < numMaterials; i++)
 				{
-					LogWarning("Material '%s' in asset '%s' has no supported textures! Deleting empty material...", currentMaterial.GetName().data(), filePath.data());
-					asset->materials.erase(asset->materials.begin() + i);
+					Material& currentMaterial = asset->materials[i];
+
+					aiMaterial* currentAIMaterial = scene->mMaterials[i];
+					aiString matName = currentAIMaterial->GetName();
+
+					currentMaterial.SetName(std::string(matName.C_Str()));
+
+					// Get all the supported textures
+					for (const auto& aiType : supportedTextureTypes)
+					{
+						uint32_t textureCount = currentAIMaterial->GetTextureCount(aiType);
+						if (textureCount > 0)
+						{
+							// Warn if we have more than one diffuse texture, we don't currently support multiple texture of a given type
+							if (textureCount > 1)
+							{
+								LogWarning("More than one texture type (%u) detected for material %s! This is not currently supported", static_cast<uint32_t>(aiType), matName.C_Str());
+							}
+
+							aiString texturePath;
+							if (currentAIMaterial->GetTexture(aiType, 0, &texturePath) == AI_SUCCESS)
+							{
+								// We're only interested in the filenames, since we store the textures in a very specific directory
+								std::filesystem::path textureFilePath = std::filesystem::path(texturePath.data);
+								std::filesystem::path textureName = textureFilePath.filename();
+								std::filesystem::path assetDirectoryName = std::filesystem::path(filePath).parent_path().filename();
+								std::filesystem::path textureSourceFilePath = std::filesystem::path(CONFIG::MaterialTexturesFilePath);
+
+								textureSourceFilePath += assetDirectoryName;
+								textureSourceFilePath /= textureName;
+
+								// Load the image using stb_image
+								std::string textureSourceFilePathStr = textureSourceFilePath.string();
+								int width, height, channels;
+								stbi_uc* pixels = stbi_load(textureSourceFilePathStr.c_str(), &width, &height, &channels, STBI_rgb_alpha);
+								if (pixels == nullptr)
+								{
+									LogError("Failed to load texture! '%s'", textureSourceFilePathStr.c_str());
+									continue;
+								}
+
+								// Create a new texture and add it to the material
+								Texture* tex = new Texture();
+								tex->data = pixels;
+								tex->size = { width, height }; // NOTE - We don't support 3D textures!
+								tex->bytesPerPixel = 32;
+								tex->fileName = textureSourceFilePathStr;
+
+								auto texTypeIter = aiTextureToInternal.find(aiType);
+								if (texTypeIter == aiTextureToInternal.end())
+								{
+									LogError("Failed to convert from aiTexture to the internal texture format! AiTexture type '%s'", static_cast<uint32_t>(aiType));
+									continue;
+								}
+
+								currentMaterial.AddTextureOfType(texTypeIter->second, tex);
+							}
+						}
+					}
+
+					// Remove any materials which have no textures, either because we don't support them only textures it has or
+					// it was exported incorrectly
+					if (currentMaterial.GetTextureCount() == 0)
+					{
+						LogWarning("Material '%s' in asset '%s' has no supported textures! Deleting empty material...", currentMaterial.GetName().data(), filePath.data());
+						asset->materials.erase(asset->materials.begin() + i);
+					}
 				}
 			}
 

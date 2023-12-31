@@ -12,7 +12,8 @@ namespace TANG
 	{
 		PBR,
 		CUBEMAP_PREPROCESSING,
-		SKYBOX
+		SKYBOX,
+		FULLSCREEN_QUAD
 	};
 
 	class BasePipeline

@@ -7,6 +7,22 @@
 #include "tang.h"
 #include "utils/sanity_check.h"
 
+static TANG::PipelineType GetPipelineTypeFromFilePath(const std::string& filePath)
+{
+	if (filePath == TANG::CONFIG::SkyboxCubeMeshFilePath)
+	{
+		return TANG::PipelineType::CUBEMAP_PREPROCESSING;
+	}
+	else if (filePath == TANG::CONFIG::FullscreenQuadMeshFilePath)
+	{
+		return TANG::PipelineType::FULLSCREEN_QUAD;
+	}
+	else
+	{
+		return TANG::PipelineType::PBR;
+	}
+}
+
 namespace TANG
 {
 	// Let's make extra sure our conversions from float* to glm::vec3 for asset transforms below
@@ -30,8 +46,9 @@ namespace TANG
 		renderer.Initialize(window.GetHandle(), CONFIG::WindowWidth, CONFIG::WindowHeight);
 		camera.Initialize({ 0.0f, 5.0f, 15.0f }, { 0.0f, 0.0f, 0.0f }); // Start the camera facing towards negative Z
 
-		// Load the skybox's cube mesh
+		// Load special assets
 		LoadAsset(CONFIG::SkyboxCubeMeshFilePath.c_str());
+		LoadAsset(CONFIG::FullscreenQuadMeshFilePath.c_str());
 	}
 
 	void Update(float deltaTime)
@@ -99,7 +116,7 @@ namespace TANG
 		}
 
 		// TODO - Find a better way to determine which pipeline type to use
-		PipelineType pipelineType = std::string(filepath) == CONFIG::SkyboxCubeMeshFilePath ? PipelineType::CUBEMAP_PREPROCESSING : PipelineType::PBR;
+		PipelineType pipelineType = GetPipelineTypeFromFilePath(std::string(filepath));
 
 		AssetResources* resources = renderer.CreateAssetResources(asset, pipelineType);
 		if (resources == nullptr)
@@ -107,8 +124,6 @@ namespace TANG
 			LogError("Failed to create asset resources for asset '%s'", filepath);
 			return INVALID_UUID;
 		}
-
-		renderer.CreateAssetCommandBuffer(resources);
 
 		return asset->uuid;
 	}

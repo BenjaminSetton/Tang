@@ -9,7 +9,8 @@ namespace TANG
 	{
 		PBR,
 		CUBEMAP_PREPROCESSING,
-		SKYBOX
+		SKYBOX,
+		LDR
 	};
 
 	enum class ShaderStage

@@ -79,6 +79,36 @@ namespace TANG
 
 	struct UVVertex
 	{
+		static VkVertexInputBindingDescription GetBindingDescription()
+		{
+			VkVertexInputBindingDescription bindingDesc{};
+			bindingDesc.binding = 0;
+			bindingDesc.stride = sizeof(UVVertex);
+			bindingDesc.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+			return bindingDesc;
+		}
+
+		static std::array<VkVertexInputAttributeDescription, 2> GetAttributeDescriptions()
+		{
+			TNG_ASSERT_COMPILE(sizeof(UVVertex) == 20);
+
+			std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
+
+			// POSITION
+			attributeDescriptions[0].binding = 0;
+			attributeDescriptions[0].location = 0;
+			attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT; // vec3 (12 bytes)
+			attributeDescriptions[0].offset = offsetof(UVVertex, pos);
+
+			// UV
+			attributeDescriptions[1].binding = 0;
+			attributeDescriptions[1].location = 1;
+			attributeDescriptions[1].format = VK_FORMAT_R32G32_SFLOAT; // vec2 (8 bytes)
+			attributeDescriptions[1].offset = offsetof(UVVertex, uv);
+
+			return attributeDescriptions;
+		}
+
 		UVVertex() : pos(0.0f, 0.0f, 0.0f), uv(0.0f, 0.0f)
 		{ }
 

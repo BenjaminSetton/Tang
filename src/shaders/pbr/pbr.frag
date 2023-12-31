@@ -162,12 +162,6 @@ void main()
     // Add some ambient lighting
     vec3 ambient = vec3(0.01) * albedo; // NOTE - We should probably also multiply this by the ambient occlusion
     pbrColor += ambient;
-    
-    // HDR tone-mapping (exposure)
-    pbrColor = vec3(1.0) - exp(-pbrColor * cameraData.exposure);
 
-    // NOTE - Gamma correction is not necessary since render target uses sRGB which automatically applies tonemapping
-
-    vec4 finalColor = vec4( pbrColor, 1.0 );
-    outColor = finalColor;
+    outColor = vec4( pbrColor, 1.0 );
 }
