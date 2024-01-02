@@ -121,6 +121,11 @@ namespace TANG
 			return;
 		}
 
+		if (layout == destinationLayout)
+		{
+			return;
+		}
+
 		VkImageMemoryBarrier barrier{};
 		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 		barrier.oldLayout = layout;
@@ -138,7 +143,7 @@ namespace TANG
 
 		VkPipelineStageFlags sourceStage = VK_PIPELINE_STAGE_NONE;
 		VkPipelineStageFlags destinationStage = VK_PIPELINE_STAGE_NONE;
-		QueueType commandQueueType = QueueType::TRANSFER;
+		QueueType commandQueueType = QueueType::GRAPHICS;
 
 		if (destinationLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
 		{
@@ -208,13 +213,23 @@ namespace TANG
 		}
 		else if (layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL && destinationLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
 		{
-			// We're probably converting the color attachment after doing the LDR conversion
+			// We're probably converting the color attachment before doing the LDR conversion
 
-			barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+			barrier.srcAccessMask = 0;
 			barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
-			sourceStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+			sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 			destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+
+			commandQueueType = QueueType::GRAPHICS;
+		}
+		else if (layout == VK_IMAGE_LAYOUT_UNDEFINED && destinationLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+		{
+			barrier.srcAccessMask = 0;
+			barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+			sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+			destinationStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
 			commandQueueType = QueueType::GRAPHICS;
 		}
@@ -224,7 +239,7 @@ namespace TANG
 		}
 
 		{
-			DisposableCommand command(commandQueueType);
+			DisposableCommand command(commandQueueType, true);
 
 			vkCmdPipelineBarrier(
 				command.GetBuffer(),
@@ -503,7 +518,7 @@ namespace TANG
 			return;
 		}
 
-		DisposableCommand command(QueueType::TRANSFER);
+		DisposableCommand command(QueueType::TRANSFER, true);
 
 		VkBufferImageCopy region{};
 		region.bufferOffset = 0;
@@ -539,7 +554,7 @@ namespace TANG
 			TNG_ASSERT_MSG(false, "Texture image does not support linear blitting!");
 		}
 
-		DisposableCommand command(QueueType::GRAPHICS);
+		DisposableCommand command(QueueType::GRAPHICS, true);
 
 		VkImageMemoryBarrier barrier{};
 		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;

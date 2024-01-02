@@ -7,7 +7,7 @@
 
 namespace TANG
 {
-	DisposableCommand::DisposableCommand(QueueType _type) : type(_type)
+	DisposableCommand::DisposableCommand(QueueType _type, bool _waitUntilQueueIdle) : type(_type), waitUntilQueueIdle(_waitUntilQueueIdle)
 	{
 		VkDevice logicalDevice = GetLogicalDevice();
 
@@ -58,7 +58,7 @@ namespace TANG
 		submitInfo.commandBufferCount = 1;
 		submitInfo.pCommandBuffers = &allocatedBuffer;
 
-		res = Renderer::GetInstance().SubmitQueue(type, &submitInfo, 1, VK_NULL_HANDLE, true);
+		res = Renderer::GetInstance().SubmitQueue(type, &submitInfo, 1, VK_NULL_HANDLE, waitUntilQueueIdle);
 
 		vkFreeCommandBuffers(logicalDeviceHandle, CommandPoolRegistry::Get().GetCommandPool(type), 1, &allocatedBuffer);
 	}

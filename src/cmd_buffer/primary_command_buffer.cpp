@@ -87,12 +87,17 @@ namespace TANG
 	//	vkQueueWaitIdle(queue);
 	//}
 
-	void PrimaryCommandBuffer::CMD_BeginRenderPass(VkRenderPass renderPass, VkFramebuffer frameBuffer, VkExtent2D renderAreaExtent, bool usingSecondaryCmdBuffers)
+	void PrimaryCommandBuffer::CMD_BeginRenderPass(VkRenderPass renderPass, VkFramebuffer frameBuffer, VkExtent2D renderAreaExtent, bool usingSecondaryCmdBuffers, bool clearBuffers)
 	{
 		if (!IsCommandBufferValid() || !IsRecording())
 		{
 			LogWarning("Failed to begin render pass! Primary command buffer is not recording or command buffer is null");
 			return;
+		}
+
+		if (renderAreaExtent.width == 0.0f || renderAreaExtent.height == 0.0f)
+		{
+			LogWarning("Render area width or height is set to zero for render pass begin! Loading the contents of the previous frame will not work as expected");
 		}
 
 		std::array<VkClearValue, 2> clearValues{};
@@ -105,8 +110,17 @@ namespace TANG
 		renderPassInfo.framebuffer = frameBuffer;
 		renderPassInfo.renderArea.offset = { 0, 0 };
 		renderPassInfo.renderArea.extent = renderAreaExtent;
-		renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
-		renderPassInfo.pClearValues = clearValues.data();
+
+		if (clearBuffers)
+		{
+			renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+			renderPassInfo.pClearValues = clearValues.data();
+		}
+		else
+		{
+			renderPassInfo.clearValueCount = 0;
+			renderPassInfo.pClearValues = nullptr;
+		}
 
 		VkSubpassContents subpassContents = usingSecondaryCmdBuffers ? VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS : VK_SUBPASS_CONTENTS_INLINE;
 		vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, subpassContents);

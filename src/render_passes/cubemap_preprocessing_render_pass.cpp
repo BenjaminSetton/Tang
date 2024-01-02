@@ -30,26 +30,12 @@ namespace TANG
 		colorAttachmentDesc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 		colorAttachmentDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 		colorAttachmentDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		colorAttachmentDesc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		colorAttachmentDesc.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		colorAttachmentDesc.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		colorAttachmentDesc.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
 		VkAttachmentReference& colorAttachmentRef = out_builder.GetNextAttachmentReference();
 		colorAttachmentRef.attachment = 0;
 		colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-		//VkAttachmentDescription depthAttachmentDesc{};
-		//depthAttachmentDesc.format = depthAttachmentFormat;
-		//depthAttachmentDesc.samples = DeviceCache::Get().GetMaxMSAA();
-		//depthAttachmentDesc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-		//depthAttachmentDesc.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		//depthAttachmentDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-		//depthAttachmentDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		//depthAttachmentDesc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		//depthAttachmentDesc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-		//VkAttachmentReference& depthAttachmentRef = out_builder.GetNextAttachmentReference();
-		//depthAttachmentRef.attachment = 1;
-		//depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
 		VkSubpassDescription subpass{};
 		subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;

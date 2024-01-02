@@ -29,7 +29,7 @@ namespace TANG
 		//void SubmitToQueue(VkQueue queue);
 
 		// Begin and end commands for a render pass
-		void CMD_BeginRenderPass(VkRenderPass renderPass, VkFramebuffer frameBuffer, VkExtent2D renderAreaExtent, bool usingSecondaryCmdBuffers);
+		void CMD_BeginRenderPass(VkRenderPass renderPass, VkFramebuffer frameBuffer, VkExtent2D renderAreaExtent, bool usingSecondaryCmdBuffers, bool clearBuffers);
 		void CMD_EndRenderPass();
 
 		// Records an execution command for the provided secondary command buffer

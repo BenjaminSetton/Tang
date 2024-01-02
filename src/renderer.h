@@ -182,7 +182,7 @@ namespace TANG
 		void DrawAssets(PrimaryCommandBuffer* cmdBuffer);
 		void RecordSecondaryCommandBuffer(SecondaryCommandBuffer* cmdBuffer, AssetResources* resources);
 
-		void PerformLDRConversion(uint32_t imageIndex);
+		void PerformLDRConversion(PrimaryCommandBuffer* cmdBuffer);
 
 		void RecreateAllSecondaryCommandBuffers();
 
@@ -211,6 +211,7 @@ namespace TANG
 		[[nodiscard]] VkResult SubmitQueue(QueueType type, VkSubmitInfo* info, uint32_t submitCount, VkFence fence, bool waitUntilIdle = false);
 
 		AssetResources* GetAssetResourcesFromUUID(UUID uuid);
+		SecondaryCommandBuffer* GetSecondaryCommandBufferFromUUID(UUID uuid);
 
 		void CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
 
