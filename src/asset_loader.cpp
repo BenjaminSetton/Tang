@@ -86,7 +86,7 @@ void LoadMeshVertices<TANG::UVVertex>(const aiMesh* importedMesh, TANG::Mesh<TAN
 
 		TANG::UVVertex vertex{};
 		vertex.pos = { importedPos.x, importedPos.y, importedPos.z };
-		vertex.uv = { importedUVs.x, importedUVs.y };
+		vertex.uv = { importedUVs.x, 1.0f - importedUVs.y }; // Flip in here because I can't figure out how to flip UVs in Blender
 
 		mesh->vertices[j] = vertex;
 	}

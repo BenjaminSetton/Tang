@@ -157,6 +157,7 @@ namespace TANG
 		void CreateSyncObjects();
 
 		void CreateAssetUniformBuffers(UUID uuid);
+		void CreateFrameUniformBuffers();
 		void CreateCubemapPreprocessingUniformBuffer();
 		void CreateSkyboxUniformBuffers();
 		void CreateLDRUniformBuffer();
@@ -192,16 +193,18 @@ namespace TANG
 
 		void InitializeDescriptorSets(UUID uuid, uint32_t frameIndex);
 		void InitializeSkyboxUniformsAndDescriptor();
+		void InitializeFrameUniformBuffers();
 
 		void UpdateTransformDescriptorSet(UUID uuid);
 		void UpdateCameraDataDescriptorSet(UUID uuid, uint32_t frameIndex);
 		void UpdateProjectionDescriptorSet(UUID uuid, uint32_t frameIndex);
 		void UpdatePBRTextureDescriptorSet(UUID uuid, uint32_t frameIndex);
 		void UpdateLDRDescriptorSet();
+		void UpdateSkyboxDescriptorSets(uint32_t frameIndex);
 
 		void UpdateTransformUniformBuffer(const Transform& transform, UUID uuid);
-		void UpdateCameraDataUniformBuffers(UUID uuid, uint32_t frameIndex, const glm::vec3& position, const glm::mat4& viewMatrix);
-		void UpdateProjectionUniformBuffer(UUID uuid, uint32_t frameIndex);
+		void UpdateCameraDataUniformBuffers(uint32_t frameIndex, const glm::vec3& position, const glm::mat4& viewMatrix);
+		void UpdateProjectionUniformBuffer(uint32_t frameIndex);
 		void UpdateCubemapPreprocessingUniforms(uint32_t i);
 		void UpdateLDRUniformBuffer();
 
@@ -246,9 +249,6 @@ namespace TANG
 			std::vector<DescriptorSet> descriptorSets;
 
 			UniformBuffer transformUBO;
-			UniformBuffer viewUBO;
-			UniformBuffer projUBO;
-			UniformBuffer cameraDataUBO;
 		};
 
 
@@ -264,9 +264,11 @@ namespace TANG
 			// Assets
 			std::unordered_map<UUID, AssetDescriptorData> assetDescriptorDataMap;
 
+			UniformBuffer viewUBO;
+			UniformBuffer projUBO;
+			UniformBuffer cameraDataUBO;
+
 			// Skybox
-			UniformBuffer skyboxViewUBO;
-			UniformBuffer skyboxProjUBO;
 			UniformBuffer skyboxExposureUBO;
 			std::array<DescriptorSet, 3> skyboxDescriptorSets;
 

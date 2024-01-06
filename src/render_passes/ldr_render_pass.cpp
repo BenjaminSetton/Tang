@@ -54,7 +54,7 @@ namespace TANG
 
 		VkAttachmentDescription colorAttachmentResolve{};
 		colorAttachmentResolve.format = colorAttachmentFormat;
-		colorAttachmentResolve.samples = VK_SAMPLE_COUNT_1_BIT;
+		colorAttachmentResolve.samples = VK_SAMPLE_COUNT_1_BIT; // NOTE - Resolve attachment doesn't require multi-sampling, that comes from the color attachment instead
 		colorAttachmentResolve.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 		colorAttachmentResolve.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 		colorAttachmentResolve.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;

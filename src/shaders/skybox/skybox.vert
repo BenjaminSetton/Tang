@@ -16,9 +16,11 @@ layout(set = 2, binding = 1) uniform ProjUBO
 
 void main()
 {
-	localPos = modelPos;
 
 	mat4 rotationMatrix = mat4(mat3(viewUBO.viewMatrix)); // We want to remove the translation component
+
+	localPos = (rotationMatrix * vec4(modelPos, 0.0f)).xyz;
+
 	vec4 NDCPos = projUBO.projMatrix * rotationMatrix * vec4(localPos, 1.0);
 
 	// Swizzling to ensure that the depth of the fragment always ends up at 1.0

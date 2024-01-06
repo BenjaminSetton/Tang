@@ -64,7 +64,7 @@ namespace TANG
 		numBuffers--;
 	}
 
-	void WriteDescriptorSets::AddImageSampler(VkDescriptorSet descriptorSet, uint32_t binding, const TextureResource& texResource)
+	void WriteDescriptorSets::AddImageSampler(VkDescriptorSet descriptorSet, uint32_t binding, TextureResource& texResource)
 	{
 		if (numImages == 0)
 		{
@@ -74,6 +74,12 @@ namespace TANG
 			LogError("Failed to add image sampler to WriteDescriptorSet. Exceeded the number of promised image samplers!");
 			return;
 		}
+
+		//if ((texResource.GetLayout() & VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) == 0)
+		//{
+		//	LogWarning("Attempting to update descriptor set on binding %u with texture resource that does not have the SHADER_READ_ONLY layout! Transitioning layout", binding);
+		//	texResource.TransitionLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		//}
 
 		descriptorImageInfo.emplace_back(std::move(VkDescriptorImageInfo()));
 		VkDescriptorImageInfo& imageInfo = descriptorImageInfo.back();

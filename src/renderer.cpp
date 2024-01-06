@@ -62,6 +62,18 @@ static const bool enableValidationLayers = false;
 static const bool enableValidationLayers = true;
 #endif
 
+static const glm::mat4 cubemapProjMatrix = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 10.0f);
+
+static const glm::mat4 cubemapViewMatrices[] =
+{
+   glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f,  0.0f,  0.0f), glm::vec3(0.0f, -1.0f,  0.0f)), // RIGHT
+   glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(-1.0f,  0.0f, 0.0f), glm::vec3(0.0f, -1.0f,  0.0f)), // LEFT
+   glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f,  0.0f), glm::vec3(0.0f,  0.0f, -1.0f)), // DOWN
+   glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f,  1.0f,  0.0f), glm::vec3(0.0f,  0.0f,  1.0f)), // UP
+   glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f,  0.0f,  1.0f), glm::vec3(0.0f, -1.0f,  0.0f)), // RIGHT
+   glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f,  0.0f, -1.0f), glm::vec3(0.0f, -1.0f,  0.0f))  // LEFT
+};
+
 VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
 	VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 	VkDebugUtilsMessageTypeFlagsEXT messageType,
@@ -192,6 +204,9 @@ namespace TANG
 		float aspectRatio = swapChainExtent.width / static_cast<float>(swapChainExtent.height);
 		startingProjectionMatrix = glm::perspective(glm::radians(45.0f), aspectRatio, 0.1f, 1000.0f);
 		startingProjectionMatrix[1][1] *= -1; // NOTE - GLM was originally designed for OpenGL, where the Y coordinate of the clip coordinates is inverted
+	
+		CreateFrameUniformBuffers();
+		InitializeFrameUniformBuffers();
 	}
 
 	void Renderer::Update(float deltaTime)
@@ -242,12 +257,14 @@ namespace TANG
 			for (auto& iter : frameData->assetDescriptorDataMap)
 			{
 				iter.second.transformUBO.Destroy();
-				iter.second.projUBO.Destroy();
-				iter.second.viewUBO.Destroy();
-				iter.second.cameraDataUBO.Destroy();
 			}
 
 			vkDestroyFramebuffer(logicalDevice, frameData->hdrFramebuffer, nullptr);
+
+			frameData->ldrCameraDataUBO.Destroy();
+			frameData->cameraDataUBO.Destroy();
+			frameData->viewUBO.Destroy();
+			frameData->projUBO.Destroy();
 		}
 
 		descriptorPool.Destroy();
@@ -272,8 +289,6 @@ namespace TANG
 		for (uint32_t i = 0; i < GetFDDSize(); i++)
 		{
 			auto frameData = GetFDDAtIndex(i);
-			frameData->skyboxViewUBO.Destroy();
-			frameData->skyboxProjUBO.Destroy();
 			frameData->skyboxExposureUBO.Destroy();
 		}
 
@@ -500,9 +515,6 @@ namespace TANG
 		// solution must be implemented
 		for (uint32_t i = 0; i < GetFDDSize(); i++)
 		{
-			UpdateCameraDataUniformBuffers(out_resources.uuid, i, startingCameraPosition, startingCameraViewMatrix);
-			UpdateProjectionUniformBuffer(out_resources.uuid, i);
-
 			InitializeDescriptorSets(out_resources.uuid, i);
 		}
 	}
@@ -546,8 +558,6 @@ namespace TANG
 		// Initialize the uniforms and descriptor sets
 		CreateCubemapPreprocessingUniformBuffer();
 		CreateCubemapPreprocessingDescriptorSet();
-
-		skyboxCubemap.TransitionLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
 		// Convert the HDR texture into a cubemap so we can use it later
 		CalculateSkyboxCubemap(&out_resources);
@@ -707,8 +717,11 @@ namespace TANG
 
 	void Renderer::UpdateCameraData(const glm::vec3& position, const glm::mat4& viewMatrix)
 	{
-		FrameDependentData* currentFDD = GetCurrentFDD();
-		auto& assetDescriptorMap = currentFDD->assetDescriptorDataMap;
+		auto frameData = GetCurrentFDD();
+		auto& assetDescriptorMap = frameData->assetDescriptorDataMap;
+
+		UpdateCameraDataUniformBuffers(currentFrame, position, viewMatrix);
+		UpdateProjectionUniformBuffer(currentFrame);
 
 		// Update the view matrix and camera position UBOs for all assets, as well as the descriptor sets unless they're not being drawn this frame
 		for (auto& assetData : assetDescriptorMap)
@@ -727,11 +740,13 @@ namespace TANG
 			}
 
 			// Wait for the frame to finish using the camera buffer before updating it
-			vkWaitForFences(GetLogicalDevice(), 1, &currentFDD->inFlightFence, VK_TRUE, UINT64_MAX);
+			vkWaitForFences(GetLogicalDevice(), 1, &frameData->inFlightFence, VK_TRUE, UINT64_MAX);
 
-			UpdateCameraDataUniformBuffers(assetUUID, currentFrame, position, viewMatrix);
 			UpdateCameraDataDescriptorSet(assetUUID, currentFrame);
 		}
+
+		// Update the camera descriptor for the skybox as well
+		UpdateSkyboxDescriptorSets(currentFrame);
 	}
 
 	void Renderer::RecreateSwapChain()
@@ -845,11 +860,11 @@ namespace TANG
 		// Record PBR asset commands
 		DrawAssets(hdrCmdBuffer);
 
-		// Transition the image layout to shader read only so we can convert from HDR to LDR
-		colorAttachment.TransitionLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
 		hdrCmdBuffer->CMD_EndRenderPass();
 		hdrCmdBuffer->EndRecording();
+
+		// Transition the image layout to shader read only so we can convert from HDR to LDR
+		//colorAttachment.TransitionLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 		// Submit the LDR conversion commands separately, since they use a different render pass
 		PrimaryCommandBuffer* ldrCmdBuffer = &(frameData->ldrCommandBuffer);
@@ -862,24 +877,26 @@ namespace TANG
 		ldrCmdBuffer->CMD_EndRenderPass();
 		ldrCmdBuffer->EndRecording();
 
-		std::array<VkCommandBuffer, 2> commandBuffers = { hdrCmdBuffer->GetBuffer(), ldrCmdBuffer->GetBuffer()};
-		std::array<VkSemaphore, 1> signalSemaphores = { frameData->renderFinishedSemaphore };
-		std::array<VkSemaphore, 1> waitSemaphores = { frameData->imageAvailableSemaphore };
-		std::array<VkPipelineStageFlags, 1> waitStages = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-
-		VkSubmitInfo submitInfo{};
-		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		submitInfo.waitSemaphoreCount = static_cast<uint32_t>(waitSemaphores.size());
-		submitInfo.pWaitSemaphores = waitSemaphores.data();
-		submitInfo.pWaitDstStageMask = waitStages.data();
-		submitInfo.commandBufferCount = static_cast<uint32_t>(commandBuffers.size());
-		submitInfo.pCommandBuffers = commandBuffers.data();
-		submitInfo.signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size());
-		submitInfo.pSignalSemaphores = signalSemaphores.data();
-
-		if (SubmitQueue(QueueType::GRAPHICS, &submitInfo, 1, frameData->inFlightFence) != VK_SUCCESS)
 		{
-			return;
+			std::array<VkCommandBuffer, 2> commandBuffers = { hdrCmdBuffer->GetBuffer(), ldrCmdBuffer->GetBuffer() };
+			std::array<VkSemaphore, 1> signalSemaphores = { frameData->renderFinishedSemaphore };
+			std::array<VkSemaphore, 1> waitSemaphores = { frameData->imageAvailableSemaphore };
+			std::array<VkPipelineStageFlags, 1> waitStages = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+
+			VkSubmitInfo submitInfo{};
+			submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+			submitInfo.waitSemaphoreCount = static_cast<uint32_t>(waitSemaphores.size());
+			submitInfo.pWaitSemaphores = waitSemaphores.data();
+			submitInfo.pWaitDstStageMask = waitStages.data();
+			submitInfo.commandBufferCount = static_cast<uint32_t>(commandBuffers.size());
+			submitInfo.pCommandBuffers = commandBuffers.data();
+			submitInfo.signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size());
+			submitInfo.pSignalSemaphores = signalSemaphores.data();
+
+			if (SubmitQueue(QueueType::GRAPHICS, &submitInfo, 1, frameData->inFlightFence) != VK_SUCCESS)
+			{
+				return;
+			}
 		}
 
 		///////////////////////////////////////
@@ -888,18 +905,22 @@ namespace TANG
 		//
 		///////////////////////////////////////
 
-		VkPresentInfoKHR presentInfo{};
-		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-		presentInfo.waitSemaphoreCount = 0;
-		presentInfo.pWaitSemaphores = nullptr;
+		{
+			std::array<VkSemaphore, 1> waitSemaphores = { frameData->renderFinishedSemaphore };
 
-		std::array<VkSwapchainKHR, 1> swapChains = { swapChain };
-		presentInfo.swapchainCount = static_cast<uint32_t>(swapChains.size());
-		presentInfo.pSwapchains = swapChains.data();
-		presentInfo.pImageIndices = &imageIndex;
-		presentInfo.pResults = nullptr;
+			VkPresentInfoKHR presentInfo{};
+			presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+			presentInfo.waitSemaphoreCount = static_cast<uint32_t>(waitSemaphores.size());
+			presentInfo.pWaitSemaphores = waitSemaphores.data();
 
-		result = vkQueuePresentKHR(queues[QueueType::PRESENT], &presentInfo);
+			std::array<VkSwapchainKHR, 1> swapChains = { swapChain };
+			presentInfo.swapchainCount = static_cast<uint32_t>(swapChains.size());
+			presentInfo.pSwapchains = swapChains.data();
+			presentInfo.pImageIndices = &imageIndex;
+			presentInfo.pResults = nullptr;
+
+			result = vkQueuePresentKHR(queues[QueueType::PRESENT], &presentInfo);
+		}
 
 		if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
 		{
@@ -1537,9 +1558,6 @@ namespace TANG
 	void Renderer::CreateAssetUniformBuffers(UUID uuid)
 	{
 		VkDeviceSize transformUBOSize = sizeof(TransformUBO);
-		VkDeviceSize viewUBOSize = sizeof(ViewUBO);
-		VkDeviceSize projUBOSize = sizeof(ProjUBO);
-		VkDeviceSize cameraDataSize = sizeof(CameraDataUBO);
 
 		for (uint32_t i = 0; i < GetFDDSize(); i++)
 		{
@@ -1550,19 +1568,31 @@ namespace TANG
 			UniformBuffer& transUBO = assetDescriptorData.transformUBO;
 			transUBO.Create(transformUBOSize);
 			transUBO.MapMemory();
-				
+		}
+	}
+
+	void Renderer::CreateFrameUniformBuffers()
+	{
+		VkDeviceSize viewUBOSize = sizeof(ViewUBO);
+		VkDeviceSize projUBOSize = sizeof(ProjUBO);
+		VkDeviceSize cameraDataSize = sizeof(CameraDataUBO);
+
+		for (uint32_t i = 0; i < GetFDDSize(); i++)
+		{
+			auto frameData = GetFDDAtIndex(i);
+
 			// Create the ViewUBO
-			UniformBuffer& vpUBO = assetDescriptorData.viewUBO;
+			UniformBuffer& vpUBO = frameData->viewUBO;
 			vpUBO.Create(viewUBOSize);
 			vpUBO.MapMemory();
 
 			// Create the ProjUBO
-			UniformBuffer& projUBO = assetDescriptorData.projUBO;
+			UniformBuffer& projUBO = frameData->projUBO;
 			projUBO.Create(projUBOSize);
 			projUBO.MapMemory();
 
 			// Create the camera data UBO
-			UniformBuffer& cameraDataUBO = assetDescriptorData.cameraDataUBO;
+			UniformBuffer& cameraDataUBO = frameData->cameraDataUBO;
 			cameraDataUBO.Create(cameraDataSize);
 			cameraDataUBO.MapMemory();
 		}
@@ -1585,19 +1615,11 @@ namespace TANG
 
 	void Renderer::CreateSkyboxUniformBuffers()
 	{
-		VkDeviceSize skyboxViewUBOSize = sizeof(ViewUBO);
-		VkDeviceSize skyboxProjUBOSize = sizeof(ProjUBO);
 		VkDeviceSize skyboxExposureUBOSize = sizeof(float);
 
 		for (uint32_t i = 0; i < GetFDDSize(); i++)
 		{
 			auto frameData = GetFDDAtIndex(i);
-
-			frameData->skyboxViewUBO.Create(skyboxViewUBOSize);
-			frameData->skyboxViewUBO.MapMemory();
-
-			frameData->skyboxProjUBO.Create(skyboxProjUBOSize);
-			frameData->skyboxProjUBO.MapMemory();
 
 			frameData->skyboxExposureUBO.Create(skyboxExposureUBOSize);
 			frameData->skyboxExposureUBO.MapMemory();
@@ -1857,7 +1879,7 @@ namespace TANG
 		imageInfo.width = swapChainExtent.width;
 		imageInfo.height = swapChainExtent.height;
 		imageInfo.format = VK_FORMAT_R32G32B32A32_SFLOAT;
-		imageInfo.usage = VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+		imageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 		imageInfo.mipLevels = 1;
 		imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 		imageInfo.arrayLayers = 1;
@@ -2044,7 +2066,7 @@ namespace TANG
 		vkDestroySwapchainKHR(logicalDevice, swapChain, nullptr);
 	}
 
-	void Renderer::UpdateProjectionUniformBuffer(UUID uuid, uint32_t frameIndex)
+	void Renderer::UpdateProjectionUniformBuffer(uint32_t frameIndex)
 	{
 		using namespace glm;
 
@@ -2054,22 +2076,20 @@ namespace TANG
 		ProjUBO projUBO;
 		projUBO.proj = startingProjectionMatrix;
 
-		FrameDependentData* currentFDD = GetFDDAtIndex(frameIndex);
-		auto& currentAssetDataMap = currentFDD->assetDescriptorDataMap[uuid];
-
-		currentAssetDataMap.projUBO.UpdateData(&projUBO, sizeof(ProjUBO));
+		auto frameData = GetFDDAtIndex(frameIndex);
+		frameData->projUBO.UpdateData(&projUBO, sizeof(ProjUBO));
 	}
 
 	void Renderer::UpdateProjectionDescriptorSet(UUID uuid, uint32_t frameIndex)
 	{
-		FrameDependentData* currentFDD = GetFDDAtIndex(frameIndex);
-		auto& currentAssetDataMap = currentFDD->assetDescriptorDataMap[uuid];
+		auto frameData = GetFDDAtIndex(frameIndex);
+		auto& currentAssetDataMap = frameData->assetDescriptorDataMap[uuid];
 
 		DescriptorSet& descSet = currentAssetDataMap.descriptorSets[1];
 
 		// Update ProjUBO descriptor set
 		WriteDescriptorSets writeDescSets(1, 0);
-		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 0, currentAssetDataMap.projUBO);
+		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 0, frameData->projUBO);
 		descSet.Update(writeDescSets);
 	}
 
@@ -2105,22 +2125,32 @@ namespace TANG
 
 		// Update view matrix + camera data descriptor set
 		WriteDescriptorSets writeDescSets(1, 1);
-		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 0, colorAttachment);
+		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 0, hdrAttachment);
 		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 1, frameData->ldrCameraDataUBO);
 		descSet.Update(writeDescSets);
 	}
 
+	void Renderer::UpdateSkyboxDescriptorSets(uint32_t frameIndex)
+	{
+		auto frameData = GetFDDAtIndex(frameIndex);
+
+		WriteDescriptorSets writeSetVolatile(2, 0);
+		writeSetVolatile.AddUniformBuffer(frameData->skyboxDescriptorSets[2].GetDescriptorSet(), 0, frameData->viewUBO);
+		writeSetVolatile.AddUniformBuffer(frameData->skyboxDescriptorSets[2].GetDescriptorSet(), 1, frameData->projUBO);
+		frameData->skyboxDescriptorSets[2].Update(writeSetVolatile);
+	}
+
 	void Renderer::UpdateCameraDataDescriptorSet(UUID uuid, uint32_t frameIndex)
 	{
-		FrameDependentData* currentFDD = GetFDDAtIndex(frameIndex);
-		auto& currentAssetDataMap = currentFDD->assetDescriptorDataMap[uuid];
+		auto frameData = GetFDDAtIndex(frameIndex);
+		auto& currentAssetDataMap = frameData->assetDescriptorDataMap[uuid];
 
 		DescriptorSet& descSet = currentAssetDataMap.descriptorSets[2];
 
 		// Update view matrix + camera data descriptor set
 		WriteDescriptorSets writeDescSets(2, 0);
-		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 2, currentAssetDataMap.viewUBO);
-		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 0, currentAssetDataMap.cameraDataUBO);
+		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 2, frameData->viewUBO);
+		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 0, frameData->cameraDataUBO);
 		descSet.Update(writeDescSets);
 	}
 
@@ -2139,32 +2169,31 @@ namespace TANG
 		GetCurrentFDD()->assetDescriptorDataMap[uuid].transformUBO.UpdateData(&tempUBO, sizeof(TransformUBO));
 	}
 
-	void Renderer::UpdateCameraDataUniformBuffers(UUID uuid, uint32_t frameIndex, const glm::vec3& position, const glm::mat4& viewMatrix)
+	void Renderer::UpdateCameraDataUniformBuffers(uint32_t frameIndex, const glm::vec3& position, const glm::mat4& viewMatrix)
 	{
-		FrameDependentData* currentFDD = GetFDDAtIndex(frameIndex);
-		auto& assetDescriptorData = currentFDD->assetDescriptorDataMap[uuid];
+		auto frameData = GetFDDAtIndex(frameIndex);
 
 		ViewUBO viewUBO{};
 		viewUBO.view = viewMatrix;
-		assetDescriptorData.viewUBO.UpdateData(&viewUBO, sizeof(ViewUBO));
+		frameData->viewUBO.UpdateData(&viewUBO, sizeof(ViewUBO));
 
 		CameraDataUBO cameraDataUBO{};
 		cameraDataUBO.position = glm::vec4(position, 1.0f);
 		cameraDataUBO.exposure = 1.0f;
-		assetDescriptorData.cameraDataUBO.UpdateData(&cameraDataUBO, sizeof(CameraDataUBO));
+		frameData->cameraDataUBO.UpdateData(&cameraDataUBO, sizeof(CameraDataUBO));
 	}
 
 	void Renderer::UpdateTransformDescriptorSet(UUID uuid)
 	{
-		FrameDependentData* currentFDD = GetCurrentFDD();
-		auto& currentAssetDataMap = currentFDD->assetDescriptorDataMap[uuid];
+		auto frameData = GetCurrentFDD();
+		auto& currentAssetDataMap = frameData->assetDescriptorDataMap[uuid];
 
 		DescriptorSet& descSet = currentAssetDataMap.descriptorSets[2];
 
 		// Update transform + cameraData descriptor sets
 		WriteDescriptorSets writeDescSets(2, 0);
 		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 0, currentAssetDataMap.transformUBO);
-		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 1, currentAssetDataMap.cameraDataUBO);
+		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 1, frameData->cameraDataUBO);
 		descSet.Update(writeDescSets);
 	}
 
@@ -2185,8 +2214,6 @@ namespace TANG
 		{
 			auto frameData = GetFDDAtIndex(i);
 
-			frameData->skyboxViewUBO.UpdateData(&startingCameraViewMatrix, sizeof(startingCameraViewMatrix));
-			frameData->skyboxProjUBO.UpdateData(&startingProjectionMatrix, sizeof(startingProjectionMatrix));
 			frameData->skyboxExposureUBO.UpdateData(&exposure, sizeof(float));
 
 			// Initialize the descriptor
@@ -2199,27 +2226,29 @@ namespace TANG
 			frameData->skyboxDescriptorSets[1].Update(writeSetUnstable);
 
 			WriteDescriptorSets writeSetVolatile(2, 0);
-			writeSetVolatile.AddUniformBuffer(frameData->skyboxDescriptorSets[2].GetDescriptorSet(), 0, frameData->skyboxViewUBO);
-			writeSetVolatile.AddUniformBuffer(frameData->skyboxDescriptorSets[2].GetDescriptorSet(), 1, frameData->skyboxProjUBO);
+			writeSetVolatile.AddUniformBuffer(frameData->skyboxDescriptorSets[2].GetDescriptorSet(), 0, frameData->viewUBO);
+			writeSetVolatile.AddUniformBuffer(frameData->skyboxDescriptorSets[2].GetDescriptorSet(), 1, frameData->projUBO);
 			frameData->skyboxDescriptorSets[2].Update(writeSetVolatile);
+		}
+	}
+
+	void Renderer::InitializeFrameUniformBuffers()
+	{
+		for (uint32_t i = 0; i < GetFDDSize(); i++)
+		{
+			UpdateCameraDataUniformBuffers(i, startingCameraPosition, startingCameraViewMatrix);
+			UpdateProjectionUniformBuffer(i);
 		}
 	}
 
 	void Renderer::UpdateCubemapPreprocessingUniforms(uint32_t i)
 	{
-		static const glm::mat4 projMatrix = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 10.0f);
-		static const glm::mat4 viewMatrices[] =
-		{
-		   glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f,  0.0f,  0.0f), glm::vec3(0.0f, 1.0f,  0.0f)),
-		   glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(-1.0f,  0.0f,  0.0f), glm::vec3(0.0f, 1.0f,  0.0f)),
-		   glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f,  1.0f,  0.0f), glm::vec3(0.0f,  0.0f,  -1.0f)),
-		   glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f,  0.0f), glm::vec3(0.0f,  0.0f, 1.0f)),
-		   glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f,  0.0f,  1.0f), glm::vec3(0.0f, 1.0f,  0.0f)),
-		   glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f,  0.0f, -1.0f), glm::vec3(0.0f, 1.0f,  0.0f))
-		};
+		// NOTE - GLM was originally designed for OpenGL, where the Y coordinate of the clip coordinates is inverted
+		glm::mat4 projMatrix = cubemapProjMatrix;
+		projMatrix[1][1] *= -1;
 
 		ViewProjUBO viewProj{};
-		viewProj.view = viewMatrices[i];
+		viewProj.view = cubemapViewMatrices[i];
 		viewProj.proj = projMatrix;
 
 		cubemapPreprocessingViewProjUBO[i].UpdateData(&viewProj, sizeof(ViewProjUBO));
@@ -2245,6 +2274,8 @@ namespace TANG
 
 	void Renderer::CalculateSkyboxCubemap(AssetResources* resources)
 	{
+		vkResetFences(GetLogicalDevice(), 1, &cubemapPreprocessingFence);
+
 		// Update the descriptor set with the skybox texture
 		for (uint32_t i = 0; i < 6; i++)
 		{
@@ -2288,8 +2319,6 @@ namespace TANG
 		submitInfo.pWaitDstStageMask = 0;
 		submitInfo.commandBufferCount = 1;
 		submitInfo.pCommandBuffers = commandBuffers;
-
-		vkResetFences(GetLogicalDevice(), 1, &cubemapPreprocessingFence);
 
 		if (SubmitQueue(QueueType::GRAPHICS, &submitInfo, 1, cubemapPreprocessingFence) != VK_SUCCESS)
 		{

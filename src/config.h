@@ -12,7 +12,7 @@ namespace TANG
 
 		static const std::string SkyboxCubeMeshFilePath = "../src/data/assets/cube.fbx";
 		static const std::string SkyboxTextureFilePath = "../src/data/textures/cubemaps/skybox_sunny.hdr";
-		static const uint32_t SkyboxResolutionSize = 512;
+		static const uint32_t SkyboxResolutionSize = 1024;
 
 		static constexpr uint32_t MaxFramesInFlight = 2;
 		static constexpr uint32_t MaxAssetCount = 100;
