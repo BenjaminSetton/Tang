@@ -17,7 +17,7 @@ namespace TANG
 		VkCommandBufferAllocateInfo allocInfo{};
 		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-		allocInfo.commandPool = CommandPoolRegistry::Get().GetCommandPool(type);
+		allocInfo.commandPool = GetCommandPool(type);
 		allocInfo.commandBufferCount = 1;
 
 		VkCommandBuffer commandBuffer;
@@ -60,7 +60,7 @@ namespace TANG
 
 		res = Renderer::GetInstance().SubmitQueue(type, &submitInfo, 1, VK_NULL_HANDLE, waitUntilQueueIdle);
 
-		vkFreeCommandBuffers(logicalDeviceHandle, CommandPoolRegistry::Get().GetCommandPool(type), 1, &allocatedBuffer);
+		vkFreeCommandBuffers(logicalDeviceHandle, GetCommandPool(type), 1, &allocatedBuffer);
 	}
 
 	VkCommandBuffer DisposableCommand::GetBuffer() const

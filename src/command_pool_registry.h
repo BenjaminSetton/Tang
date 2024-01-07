@@ -34,6 +34,11 @@ namespace TANG
 		std::unordered_map<QueueType, VkCommandPool> pools;
 
 	};
+
+	inline VkCommandPool GetCommandPool(QueueType type)
+	{
+		return CommandPoolRegistry::Get().GetCommandPool(type);
+	}
 }
 
 #endif

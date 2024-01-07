@@ -1,7 +1,9 @@
 
 #include <cmath>
+#include <optional>
 
 #include "cmd_buffer/disposable_command.h"
+#include "cmd_buffer/primary_command_buffer.h"
 #include "command_pool_registry.h"
 #include "data_buffer/staging_buffer.h"
 #include "device_cache.h"
@@ -113,133 +115,47 @@ namespace TANG
 		}
 	}
 
-	void TextureResource::TransitionLayout(VkImageLayout destinationLayout)
+	void TextureResource::TransitionLayout(VkImageLayout destinationLayout, PrimaryCommandBuffer* commandBuffer)
 	{
-		if (IsInvalid())
+		VkPipelineStageFlags sourceStage = 0;
+		VkPipelineStageFlags destinationStage = 0;
+		QueueType queueType = QueueType::GRAPHICS;
+
+		std::optional<VkImageMemoryBarrier> barrier = TransitionLayout_Helper(destinationLayout, sourceStage, destinationStage, queueType);
+
+		if (!barrier.has_value())
 		{
-			LogError("Attempting to transition layout of invalid texture!");
 			return;
 		}
 
-		if (layout == destinationLayout)
+		vkCmdPipelineBarrier(
+			commandBuffer->GetBuffer(),
+			sourceStage, destinationStage,
+			0,
+			0, nullptr,
+			0, nullptr,
+			1, &barrier.value()
+		);
+
+		// Success!
+		layout = destinationLayout;
+	}
+
+	void TextureResource::TransitionLayout_Immediate(VkImageLayout destinationLayout)
+	{
+		VkPipelineStageFlags sourceStage = 0;
+		VkPipelineStageFlags destinationStage = 0;
+		QueueType queueType = QueueType::GRAPHICS;
+
+		std::optional<VkImageMemoryBarrier> barrier = TransitionLayout_Helper(destinationLayout, sourceStage, destinationStage, queueType);
+
+		if (!barrier.has_value())
 		{
 			return;
 		}
 
-		VkImageMemoryBarrier barrier{};
-		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-		barrier.oldLayout = layout;
-		barrier.newLayout = destinationLayout;
-		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		barrier.image = baseImage;
-		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		barrier.subresourceRange.baseMipLevel = 0;
-		barrier.subresourceRange.levelCount = mipLevels;
-		barrier.subresourceRange.baseArrayLayer = 0;
-		barrier.subresourceRange.layerCount = arrayLayers;
-		barrier.srcAccessMask = 0; // TODO
-		barrier.dstAccessMask = 0; // TODO
-
-		VkPipelineStageFlags sourceStage = VK_PIPELINE_STAGE_NONE;
-		VkPipelineStageFlags destinationStage = VK_PIPELINE_STAGE_NONE;
-		QueueType commandQueueType = QueueType::GRAPHICS;
-
-		if (destinationLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
 		{
-			barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-
-			if (HasStencilComponent(format))
-			{
-				barrier.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
-			}
-		}
-		else
-		{
-			barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		}
-
-		if (layout == VK_IMAGE_LAYOUT_UNDEFINED && destinationLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
-		{
-			barrier.srcAccessMask = 0;
-			barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-
-			sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-			destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-
-			commandQueueType = QueueType::TRANSFER;
-		}
-		else if (layout == VK_IMAGE_LAYOUT_UNDEFINED && destinationLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
-		{
-			barrier.srcAccessMask = 0;
-			barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-			sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-			destinationStage = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT; // Let's block on the vertex shader for now...
-
-			commandQueueType = QueueType::GRAPHICS;
-		}
-		else if (layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && destinationLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
-		{
-			barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-			barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-			sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-			destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT; // I guess this depends on whether we're using the texture in the vertex or pixel shader?
-
-			commandQueueType = QueueType::GRAPHICS;
-		}
-		else if (layout == VK_IMAGE_LAYOUT_UNDEFINED && destinationLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-		{
-			barrier.srcAccessMask = 0;
-			barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-
-			sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-			destinationStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-
-			commandQueueType = QueueType::GRAPHICS;
-		}
-		else if (layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL && destinationLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
-		{
-			// We're probably converting the color attachment after doing the LDR conversion
-
-			barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
-			barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-
-			sourceStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-			destinationStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-
-			commandQueueType = QueueType::GRAPHICS;
-		}
-		else if (layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL && destinationLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
-		{
-			// We're probably converting the color attachment before doing the LDR conversion
-
-			barrier.srcAccessMask = 0;
-			barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-			sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-			destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-
-			commandQueueType = QueueType::GRAPHICS;
-		}
-		else if (layout == VK_IMAGE_LAYOUT_UNDEFINED && destinationLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
-		{
-			barrier.srcAccessMask = 0;
-			barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-
-			sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-			destinationStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-
-			commandQueueType = QueueType::GRAPHICS;
-		}
-		else
-		{
-			TNG_ASSERT_MSG(false, "Unsupported layout transition!");
-		}
-
-		{
-			DisposableCommand command(commandQueueType, true);
+			DisposableCommand command(queueType, true);
 
 			vkCmdPipelineBarrier(
 				command.GetBuffer(),
@@ -247,7 +163,7 @@ namespace TANG
 				0,
 				0, nullptr,
 				0, nullptr,
-				1, &barrier
+				1, &barrier.value()
 			);
 		}
 
@@ -278,6 +194,16 @@ namespace TANG
 	bool TextureResource::IsInvalid() const
 	{
 		return !isValid;
+	}
+
+	uint32_t TextureResource::GetWidth() const
+	{
+		return width;
+	}
+
+	uint32_t TextureResource::GetHeight() const
+	{
+		return height;
 	}
 
 	void TextureResource::CreateBaseImage(const BaseImageCreateInfo* baseImageInfo)
@@ -500,11 +426,11 @@ namespace TANG
 
 		VkImageLayout oldLayout = layout;
 
-		TransitionLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+		TransitionLayout_Immediate(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 		CopyFromBuffer(stagingBuffer.GetBuffer());
 		if (oldLayout != VK_IMAGE_LAYOUT_UNDEFINED)
 		{
-			TransitionLayout(oldLayout);
+			TransitionLayout_Immediate(oldLayout);
 		}
 
 		stagingBuffer.Destroy();
@@ -637,6 +563,141 @@ namespace TANG
 
 		// Success!
 		layout = barrier.newLayout;
+	}
+
+	std::optional<VkImageMemoryBarrier> TextureResource::TransitionLayout_Helper(VkImageLayout destinationLayout, 
+		VkPipelineStageFlags& out_sourceStage, 
+		VkPipelineStageFlags& out_destinationStage,
+		QueueType& out_queueType)
+	{
+		if (IsInvalid())
+		{
+			LogError("Attempting to transition layout of invalid texture!");
+			return {};
+		}
+
+		if (layout == destinationLayout)
+		{
+			return {};
+		}
+
+		VkImageMemoryBarrier barrier{};
+		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		barrier.oldLayout = layout;
+		barrier.newLayout = destinationLayout;
+		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barrier.image = baseImage;
+		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		barrier.subresourceRange.baseMipLevel = 0;
+		barrier.subresourceRange.levelCount = mipLevels;
+		barrier.subresourceRange.baseArrayLayer = 0;
+		barrier.subresourceRange.layerCount = arrayLayers;
+		barrier.srcAccessMask = 0; // These are set below
+		barrier.dstAccessMask = 0; // These are set below
+
+		VkPipelineStageFlags sourceStage = VK_PIPELINE_STAGE_NONE;
+		VkPipelineStageFlags destinationStage = VK_PIPELINE_STAGE_NONE;
+		QueueType commandQueueType = QueueType::GRAPHICS;
+
+		if (destinationLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+		{
+			barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+
+			if (HasStencilComponent(format))
+			{
+				barrier.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+			}
+		}
+		else
+		{
+			barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		}
+
+		if (layout == VK_IMAGE_LAYOUT_UNDEFINED && destinationLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+		{
+			barrier.srcAccessMask = 0;
+			barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+			sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+			destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+
+			commandQueueType = QueueType::TRANSFER;
+		}
+		else if (layout == VK_IMAGE_LAYOUT_UNDEFINED && destinationLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+		{
+			barrier.srcAccessMask = 0;
+			barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+			sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+			destinationStage = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT; // Let's block on the vertex shader for now...
+
+			commandQueueType = QueueType::GRAPHICS;
+		}
+		else if (layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && destinationLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+		{
+			barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+			sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+			destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT; // I guess this depends on whether we're using the texture in the vertex or pixel shader?
+
+			commandQueueType = QueueType::GRAPHICS;
+		}
+		else if (layout == VK_IMAGE_LAYOUT_UNDEFINED && destinationLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+		{
+			barrier.srcAccessMask = 0;
+			barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+
+			sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+			destinationStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+
+			commandQueueType = QueueType::GRAPHICS;
+		}
+		else if (layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL && destinationLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+		{
+			// We're probably converting the color attachment after doing the LDR conversion
+
+			barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+			barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+			sourceStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+			destinationStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+			commandQueueType = QueueType::GRAPHICS;
+		}
+		else if (layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL && destinationLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+		{
+			// We're probably converting the color attachment before doing the LDR conversion
+
+			barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+			barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+			sourceStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+			destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+
+			commandQueueType = QueueType::GRAPHICS;
+		}
+		else if (layout == VK_IMAGE_LAYOUT_UNDEFINED && destinationLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+		{
+			barrier.srcAccessMask = 0;
+			barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+			sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+			destinationStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+			commandQueueType = QueueType::GRAPHICS;
+		}
+		else
+		{
+			TNG_ASSERT_MSG(false, "Unsupported layout transition!");
+		}
+
+		out_sourceStage = sourceStage;
+		out_destinationStage = destinationStage;
+		out_queueType = commandQueueType;
+
+		return barrier;
 	}
 
 	void TextureResource::ResetMembers()

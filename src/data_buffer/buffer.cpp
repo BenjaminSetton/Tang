@@ -90,6 +90,11 @@ namespace TANG
 		return buffer;
 	}
 
+	const VkBuffer Buffer::GetBuffer() const 
+	{
+		return buffer;
+	}
+
 	// Returns the member variable "bufferMemory"
 	VkDeviceMemory Buffer::GetBufferMemory()
 	{

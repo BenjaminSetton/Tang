@@ -1,9 +1,12 @@
 #ifndef TEXTURE_RESOURCE_H
 #define TEXTURE_RESOURCE_H
 
+#include <optional>
 #include <string_view>
 #include <vector>
 #include <vulkan/vulkan.h>
+
+#include "queue_types.h"
 
 namespace TANG
 {
@@ -40,6 +43,10 @@ namespace TANG
 		VkImageCreateFlags flags		= 0;
 	};
 
+	// Forward declarations
+	class PrimaryCommandBuffer;
+	class DisposableCommand;
+
 	class TextureResource
 	{
 	public:
@@ -67,13 +74,17 @@ namespace TANG
 		void Destroy();
 		void DestroyImageView();
 
-		void TransitionLayout(VkImageLayout destinationLayout);
+		void TransitionLayout(VkImageLayout destinationLayout, PrimaryCommandBuffer* commandBuffer);
+		void TransitionLayout_Immediate(VkImageLayout destinationLayout);
 
 		VkImageView GetImageView() const;
 		VkSampler GetSampler() const;
 		VkFormat GetFormat() const;
 		VkImageLayout GetLayout() const;
 		bool IsInvalid() const;
+
+		uint32_t GetWidth() const;
+		uint32_t GetHeight() const;
 
 	private:
 
@@ -89,6 +100,11 @@ namespace TANG
 
 		void CopyFromBuffer(VkBuffer buffer);
 		void GenerateMipmaps();
+
+		[[nodiscard]] std::optional<VkImageMemoryBarrier> TransitionLayout_Helper(VkImageLayout destinationLayout, 
+			VkPipelineStageFlags& out_sourceStage, 
+			VkPipelineStageFlags& out_destinationStage,
+			QueueType& out_queueType);
 
 		// NOTE - This function does NOT clean up the allocated memory!!
 		void ResetMembers();

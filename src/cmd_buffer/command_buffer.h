@@ -41,7 +41,7 @@ namespace TANG
 		void BeginRecording(VkCommandBufferUsageFlags flags, VkCommandBufferInheritanceInfo* inheritanceInfo);
 		void EndRecording();
 
-		void CMD_BindMesh(AssetResources* resources);
+		void CMD_BindMesh(const AssetResources* resources);
 		void CMD_BindDescriptorSets(VkPipelineLayout pipelineLayout, uint32_t descriptorSetCount, VkDescriptorSet* descriptorSets);
 		void CMD_BindGraphicsPipeline(VkPipeline graphicsPipeline);
 		void CMD_SetViewport(float width, float height);

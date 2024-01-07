@@ -32,6 +32,7 @@ namespace TANG
 
 		// Returns the member variable "buffer"
 		VkBuffer GetBuffer();
+		const VkBuffer GetBuffer() const;
 
 		// Returns the member variable "bufferMemory"
 		VkDeviceMemory GetBufferMemory();

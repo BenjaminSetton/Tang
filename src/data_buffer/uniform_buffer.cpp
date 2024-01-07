@@ -6,6 +6,8 @@
 #include "../utils/logger.h"
 #include "uniform_buffer.h"
 
+static const VkDeviceSize PREFERRED_UNIFORM_BUFFER_MIN_SIZE = 128;
+
 namespace TANG
 {
 	UniformBuffer::UniformBuffer() : mappedData(nullptr), bufferSize(0)
@@ -35,6 +37,11 @@ namespace TANG
 
 	void UniformBuffer::Create(VkDeviceSize size)
 	{
+		if (size < PREFERRED_UNIFORM_BUFFER_MIN_SIZE)
+		{
+			LogWarning("Creating uniform buffer of size %u, which is less than the preferred minimum of %u. Prefer push constants instead!", size, PREFERRED_UNIFORM_BUFFER_MIN_SIZE);
+		}
+
 		CreateBase(size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 		bufferSize = size;
 	}

@@ -50,11 +50,11 @@ namespace TANG
 		createInfo.flags = flags;
 		createInfo.pBindings = layoutSummary.GetBindings();
 		createInfo.bindingCount = layoutSummary.GetBindingCount();
-
-		DescriptorSetLayout layout;
-		layout.Create(createInfo);
 		
-		layoutCache[layoutSummary] = layout;
+		layoutCache.insert({ layoutSummary, DescriptorSetLayout() });
+
+		DescriptorSetLayout& layout = layoutCache.at(layoutSummary);
+		layout.Create(createInfo);
 
 		return layout.GetLayout();
 	}

@@ -120,7 +120,7 @@ namespace TANG
 		cmdBufferState = COMMAND_BUFFER_STATE::SEALED;
 	}
 
-	void CommandBuffer::CMD_BindMesh(AssetResources* resources)
+	void CommandBuffer::CMD_BindMesh(const AssetResources* resources)
 	{
 		if (!IsCommandBufferValid() || !IsRecording() || (resources == nullptr))
 		{

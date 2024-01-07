@@ -9,14 +9,18 @@
 #include "cmd_buffer/primary_command_buffer.h"
 #include "cmd_buffer/secondary_command_buffer.h"
 #include "data_buffer/uniform_buffer.h"
+
 #include "descriptors/descriptor_pool.h"
 #include "descriptors/descriptor_set.h"
 #include "descriptors/set_layout/set_layout_cache.h"
 #include "descriptors/set_layout/set_layout_summary.h"
+
 #include "pipelines/cubemap_preprocessing_pipeline.h"
+#include "pipelines/irradiance_sampling_pipeline.h"
 #include "pipelines/ldr_pipeline.h"
 #include "pipelines/pbr_pipeline.h"
 #include "pipelines/skybox_pipeline.h"
+
 #include "queue_types.h"
 #include "render_passes/hdr_render_pass.h"
 #include "render_passes/ldr_render_pass.h"
@@ -151,6 +155,7 @@ namespace TANG
 		void CreateLDRFramebuffers();
 		void CreateCubemapPreprocessingFramebuffer();
 		void CreateHDRFramebuffers();
+		void CreateIrradianceSamplingFramebuffer();
 
 		void CreatePrimaryCommandBuffers();
 
@@ -164,12 +169,14 @@ namespace TANG
 
 		void CreateAssetDescriptorSets(UUID uuid);
 		void CreateCubemapPreprocessingDescriptorSet();
+		void CreateIrradianceSamplingDescriptorSet();
 		void CreateSkyboxDescriptorSets();
 		void CreateLDRDescriptorSet();
 
 		void CreateDescriptorSetLayouts();
 		void CreatePBRSetLayouts();
 		void CreateCubemapPreprocessingSetLayouts();
+		void CreateIrradianceSamplingSetLayouts();
 		void CreateSkyboxSetLayouts();
 		void CreateLDRSetLayouts();
 
@@ -205,10 +212,12 @@ namespace TANG
 		void UpdateTransformUniformBuffer(const Transform& transform, UUID uuid);
 		void UpdateCameraDataUniformBuffers(uint32_t frameIndex, const glm::vec3& position, const glm::mat4& viewMatrix);
 		void UpdateProjectionUniformBuffer(uint32_t frameIndex);
-		void UpdateCubemapPreprocessingUniforms(uint32_t i);
+		void UpdateCubemapPreprocessingShaderData();
+		void UpdateIrradianceSamplingShaderData();
 		void UpdateLDRUniformBuffer();
 
-		void CalculateSkyboxCubemap(AssetResources* resources);
+		void CalculateSkyboxCubemap(PrimaryCommandBuffer* cmdBuffer, const AssetResources* resources);
+		void CalculateIrradianceMap(PrimaryCommandBuffer* cmdBuffer, const AssetResources* resources);
 
 		// Submits the provided queue type, along with the provided command buffer. Return value should _not_ be ignored
 		[[nodiscard]] VkResult SubmitQueue(QueueType type, VkSubmitInfo* info, uint32_t submitCount, VkFence fence, bool waitUntilIdle = false);
@@ -339,6 +348,12 @@ namespace TANG
 		UniformBuffer cubemapPreprocessingCubemapLayerUBO[6];
 		DescriptorSet cubemapPreprocessingDescriptorSets[6];
 		VkFence cubemapPreprocessingFence;
+
+		IrradianceSamplingPipeline irradianceSamplingPipeline;
+		SetLayoutCache irradianceSamplingSetLayoutCache;
+		DescriptorSet irradianceSamplingsDescriptorSets[6];
+		TextureResource irradianceMap;
+		VkFramebuffer irradianceSamplingFramebuffer;
 
 		SkyboxPipeline skyboxPipeline;
 		SetLayoutCache skyboxSetLayoutCache;

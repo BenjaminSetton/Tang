@@ -15,7 +15,8 @@ static const std::unordered_map<TANG::ShaderType, std::string> ShaderTypeToFolde
 	{ TANG::ShaderType::PBR, "pbr" },
 	{ TANG::ShaderType::CUBEMAP_PREPROCESSING, "cubemap_preprocessing" },
 	{ TANG::ShaderType::SKYBOX, "skybox" },
-	{ TANG::ShaderType::LDR, "ldr_conversion" }
+	{ TANG::ShaderType::LDR, "ldr_conversion" },
+	{ TANG::ShaderType::IRRADIANCE_SAMPLING, "irradiance_sampling" }
 };
 
 static const std::unordered_map<TANG::ShaderStage, std::string> ShaderStageToFileName =
