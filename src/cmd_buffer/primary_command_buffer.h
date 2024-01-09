@@ -5,6 +5,9 @@
 
 namespace TANG
 {
+	// Forward declarations
+	class BaseRenderPass;
+	class Framebuffer;
 
 	enum class PRIMARY_COMMAND_RENDER_PASS_STATE
 	{
@@ -25,12 +28,11 @@ namespace TANG
 
 		void Create(VkCommandPool commandPool) override;
 
-		// Submits all currently written commands to the provided queue
-		//void SubmitToQueue(VkQueue queue);
-
 		// Begin and end commands for a render pass
-		void CMD_BeginRenderPass(VkRenderPass renderPass, VkFramebuffer frameBuffer, VkExtent2D renderAreaExtent, bool usingSecondaryCmdBuffers, bool clearBuffers);
+		void CMD_BeginRenderPass(const BaseRenderPass* renderPass, Framebuffer* frameBuffer, VkExtent2D renderAreaExtent, bool usingSecondaryCmdBuffers, bool clearBuffers);
 		void CMD_EndRenderPass();
+
+		void CMD_NextSubpass(bool usingSecondaryCmdBuffers);
 
 		// Records an execution command for the provided secondary command buffer
 		void CMD_ExecuteSecondaryCommands(VkCommandBuffer* cmdBuffers, uint32_t cmdBufferCount);
@@ -40,6 +42,9 @@ namespace TANG
 		// The renderPassState is initialized to ENDED. This sounds weird, but the only state that can transition to BEGUN is ENDED,
 		// which is the first state-altering function that should be called (e.g. EndRenderPass() shouldn't be called before BeginRenderPass())
 		PRIMARY_COMMAND_RENDER_PASS_STATE renderPassState;
+
+		const BaseRenderPass* renderPass;
+		Framebuffer* framebuffer;
 	};
 }
 

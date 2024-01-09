@@ -2,6 +2,9 @@
 #include <array>
 
 #include "../device_cache.h"
+#include "../framebuffer.h"
+#include "../render_passes/base_render_pass.h"
+#include "../texture_resource.h"
 #include "../utils/sanity_check.h"
 #include "../utils/logger.h"
 #include "primary_command_buffer.h"
@@ -71,27 +74,29 @@ namespace TANG
 		cmdBufferState = COMMAND_BUFFER_STATE::ALLOCATED;
 	}
 
-	//void PrimaryCommandBuffer::SubmitToQueue(VkQueue queue)
-	//{
-	//	if (!IsCommandBufferValid() || IsRecording())
-	//	{
-	//		LogWarning("Failed to submit primary command buffer to queue. Primary command buffer is still recording or command buffer is null");
-	//		return;
-	//	}
-
-	//	VkSubmitInfo submitInfo = {};
-	//	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	//	submitInfo.commandBufferCount = 1;
-	//	submitInfo.pCommandBuffers = &commandBuffer;
-	//	vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
-	//	vkQueueWaitIdle(queue);
-	//}
-
-	void PrimaryCommandBuffer::CMD_BeginRenderPass(VkRenderPass renderPass, VkFramebuffer frameBuffer, VkExtent2D renderAreaExtent, bool usingSecondaryCmdBuffers, bool clearBuffers)
+	void PrimaryCommandBuffer::CMD_BeginRenderPass(const BaseRenderPass* _renderPass, Framebuffer* _frameBuffer, VkExtent2D renderAreaExtent, bool usingSecondaryCmdBuffers, bool clearBuffers)
 	{
+		if (renderPassState == PRIMARY_COMMAND_RENDER_PASS_STATE::BEGUN)
+		{
+			LogWarning("Mismatched BeginRenderPass/EndRenderPass calls!");
+			return;
+		}
+
 		if (!IsCommandBufferValid() || !IsRecording())
 		{
 			LogWarning("Failed to begin render pass! Primary command buffer is not recording or command buffer is null");
+			return;
+		}
+
+		if (_renderPass == nullptr)
+		{
+			LogWarning("Attempting to begin render pass with an invalid render pass pointer!");
+			return;
+		}
+
+		if (_frameBuffer == nullptr)
+		{
+			LogWarning("Attempting to begin render pass with an invalid framebuffer pointer!");
 			return;
 		}
 
@@ -106,8 +111,8 @@ namespace TANG
 
 		VkRenderPassBeginInfo renderPassInfo{};
 		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-		renderPassInfo.renderPass = renderPass;
-		renderPassInfo.framebuffer = frameBuffer;
+		renderPassInfo.renderPass = _renderPass->GetRenderPass();
+		renderPassInfo.framebuffer = _frameBuffer->GetFramebuffer();
 		renderPassInfo.renderArea.offset = { 0, 0 };
 		renderPassInfo.renderArea.extent = renderAreaExtent;
 
@@ -126,10 +131,20 @@ namespace TANG
 		vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, subpassContents);
 
 		renderPassState = PRIMARY_COMMAND_RENDER_PASS_STATE::BEGUN;
+
+		// Cache the framebuffer so we can transition the layout of the framebuffer attachments once the render pass ends
+		renderPass = _renderPass;
+		framebuffer = _frameBuffer;
 	}
 
 	void PrimaryCommandBuffer::CMD_EndRenderPass()
 	{
+		if (renderPassState == PRIMARY_COMMAND_RENDER_PASS_STATE::ENDED)
+		{
+			LogWarning("Mismatched BeginRenderPass/EndRenderPass calls!");
+			return;
+		}
+
 		if (!IsCommandBufferValid() || !IsRecording())
 		{
 			LogWarning("Failed to end render pass! Primary command buffer is not recording or command buffer is null");
@@ -139,6 +154,27 @@ namespace TANG
 		vkCmdEndRenderPass(commandBuffer);
 
 		renderPassState = PRIMARY_COMMAND_RENDER_PASS_STATE::ENDED;
+
+		// Forcefully transition the attachments
+		TextureResource** attachmentImages = framebuffer->GetAttachmentImages();
+		const VkImageLayout* finalImageLayouts = renderPass->GetFinalImageLayouts();
+		uint32_t attachmentCount = framebuffer->GetAttachmentCount();
+		for (uint32_t i = 0; i < attachmentCount; i++)
+		{
+			attachmentImages[i]->TransitionLayout_Force(finalImageLayouts[i]);
+		}
+	}
+
+	void PrimaryCommandBuffer::CMD_NextSubpass(bool usingSecondaryCmdBuffers)
+	{
+		if (!IsCommandBufferValid() || !IsRecording())
+		{
+			LogWarning("Failed to start next subpass! Primary command buffer is not recording or command buffer is null");
+			return;
+		}
+
+		VkSubpassContents subpassContents = usingSecondaryCmdBuffers ? VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS : VK_SUBPASS_CONTENTS_INLINE;
+		vkCmdNextSubpass(commandBuffer, subpassContents);
 	}
 
 	void PrimaryCommandBuffer::CMD_ExecuteSecondaryCommands(VkCommandBuffer* cmdBuffers, uint32_t cmdBufferCount)

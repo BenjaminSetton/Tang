@@ -171,6 +171,11 @@ namespace TANG
 		layout = destinationLayout;
 	}
 
+	void TextureResource::TransitionLayout_Force(VkImageLayout destinationLayout)
+	{
+		layout = destinationLayout;
+	}
+
 	VkImageView TextureResource::GetImageView() const 
 	{
 		return imageView;

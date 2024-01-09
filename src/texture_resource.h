@@ -77,6 +77,10 @@ namespace TANG
 		void TransitionLayout(VkImageLayout destinationLayout, PrimaryCommandBuffer* commandBuffer);
 		void TransitionLayout_Immediate(VkImageLayout destinationLayout);
 
+		// This function must only be used to reflect implicit layout transitions which happen after the
+		// render pass ends. It does not introduce a pipeline barrier like the other TransitionLayout() functions
+		void TransitionLayout_Force(VkImageLayout destinationLayout);
+
 		VkImageView GetImageView() const;
 		VkSampler GetSampler() const;
 		VkFormat GetFormat() const;

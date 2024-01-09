@@ -260,7 +260,7 @@ namespace TANG
 				iter.second.transformUBO.Destroy();
 			}
 
-			vkDestroyFramebuffer(logicalDevice, frameData->hdrFramebuffer, nullptr);
+			frameData->hdrFramebuffer.Destroy();
 
 			frameData->ldrCameraDataUBO.Destroy();
 			frameData->cameraDataUBO.Destroy();
@@ -283,7 +283,8 @@ namespace TANG
 		CommandPoolRegistry::Get().DestroyPools();
 
 		// Destroy skybox resources
-		vkDestroyFramebuffer(logicalDevice, cubemapPreprocessingFramebuffer, nullptr);
+		irradianceSamplingFramebuffer.Destroy();
+		cubemapPreprocessingFramebuffer.Destroy();
 		irradianceMap.Destroy();
 		skyboxCubemap.Destroy();
 
@@ -694,7 +695,7 @@ namespace TANG
 
 	VkFramebuffer Renderer::GetFramebufferAtIndex(uint32_t frameBufferIndex)
 	{
-		return GetSWIDDAtIndex(frameBufferIndex)->swapChainFramebuffer;
+		return GetSWIDDAtIndex(frameBufferIndex)->swapChainFramebuffer.GetFramebuffer();
 	}
 
 	void Renderer::DestroyAssetResources(UUID uuid)
@@ -892,7 +893,7 @@ namespace TANG
 		PrimaryCommandBuffer* hdrCmdBuffer = &(frameData->hdrCommandBuffer);
 		hdrCmdBuffer->Reset();
 		hdrCmdBuffer->BeginRecording(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, nullptr);
-		hdrCmdBuffer->CMD_BeginRenderPass(hdrRenderPass.GetRenderPass(), frameData->hdrFramebuffer, swapChainExtent, true, true);
+		hdrCmdBuffer->CMD_BeginRenderPass(&hdrRenderPass, &(frameData->hdrFramebuffer), swapChainExtent, true, true);
 
 		// Record skybox commands
 		DrawSkybox(hdrCmdBuffer);
@@ -904,10 +905,11 @@ namespace TANG
 		hdrCmdBuffer->EndRecording();
 
 		// Submit the LDR conversion commands separately, since they use a different render pass
+		Framebuffer& swapChainFramebuffer = GetSWIDDAtIndex(imageIndex)->swapChainFramebuffer;
 		PrimaryCommandBuffer* ldrCmdBuffer = &(frameData->ldrCommandBuffer);
 		ldrCmdBuffer->Reset();
 		ldrCmdBuffer->BeginRecording(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, nullptr);
-		ldrCmdBuffer->CMD_BeginRenderPass(ldrRenderPass.GetRenderPass(), GetSWIDDAtIndex(imageIndex)->swapChainFramebuffer, swapChainExtent, false, true);
+		ldrCmdBuffer->CMD_BeginRenderPass(&ldrRenderPass, &swapChainFramebuffer, swapChainExtent, false, true);
 
 		PerformLDRConversion(ldrCmdBuffer);
 
@@ -991,7 +993,7 @@ namespace TANG
 		inheritanceInfo.pNext = nullptr;
 		inheritanceInfo.renderPass = hdrRenderPass.GetRenderPass();
 		inheritanceInfo.subpass = 0;
-		inheritanceInfo.framebuffer = frameData->hdrFramebuffer;
+		inheritanceInfo.framebuffer = frameData->hdrFramebuffer.GetFramebuffer();
 
 		secondaryCmdBuffer->BeginRecording(VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT | VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT, &inheritanceInfo);
 
@@ -1473,98 +1475,82 @@ namespace TANG
 
 		for (size_t i = 0; i < GetSWIDDSize(); i++)
 		{
-			std::array<VkImageView, 2> attachments =
+			std::array<TextureResource*, 2> attachments =
 			{
-				colorAttachment.GetImageView(),
-				swidd[i].swapChainImage.GetImageView()
+				&colorAttachment,
+				&swidd[i].swapChainImage
 			};
 
-			VkFramebufferCreateInfo framebufferInfo{};
-			framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-			framebufferInfo.renderPass = ldrRenderPass.GetRenderPass();
+			FramebufferCreateInfo framebufferInfo{};
+			framebufferInfo.renderPass = &ldrRenderPass;
 			framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-			framebufferInfo.pAttachments = attachments.data();
+			framebufferInfo.attachments = attachments.data();
 			framebufferInfo.width = swapChainExtent.width;
 			framebufferInfo.height = swapChainExtent.height;
 			framebufferInfo.layers = 1;
 
-			if (vkCreateFramebuffer(GetLogicalDevice(), &framebufferInfo, nullptr, &(swidd[i].swapChainFramebuffer)) != VK_SUCCESS)
-			{
-				TNG_ASSERT_MSG(false, "Failed to create LDR framebuffer!");
-			}
+			swidd[i].swapChainFramebuffer.Create(framebufferInfo);
 		}
 	}
 
 	void Renderer::CreateCubemapPreprocessingFramebuffer()
 	{
-		std::array<VkImageView, 1> attachments =
+		std::array<TextureResource*, 1> attachments =
 		{
-			skyboxCubemap.GetImageView()
+			&skyboxCubemap
 		};
 
-		VkFramebufferCreateInfo framebufferInfo{};
-		framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-		framebufferInfo.renderPass = cubemapPreprocessingRenderPass.GetRenderPass();
+		FramebufferCreateInfo framebufferInfo{};
+		framebufferInfo.renderPass = &cubemapPreprocessingRenderPass;
 		framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-		framebufferInfo.pAttachments = attachments.data();
+		framebufferInfo.attachments = attachments.data();
 		framebufferInfo.width = CONFIG::SkyboxResolutionSize;
 		framebufferInfo.height = CONFIG::SkyboxResolutionSize;
 		framebufferInfo.layers = 6;
 
-		if (vkCreateFramebuffer(GetLogicalDevice(), &framebufferInfo, nullptr, &cubemapPreprocessingFramebuffer) != VK_SUCCESS)
-		{
-			TNG_ASSERT_MSG(false, "Failed to create cubemap preprocessing framebuffer!");
-		}
+		cubemapPreprocessingFramebuffer.Create(framebufferInfo);
 	}
 
 	void Renderer::CreateHDRFramebuffers()
 	{
-		std::array<VkImageView, 2> attachments =
+		std::array<TextureResource*, 2> attachments =
 		{
-			hdrAttachment.GetImageView(),
-			hdrDepthBuffer.GetImageView()
+			&hdrAttachment,
+			&hdrDepthBuffer
 		};
 
 		for (uint32_t i = 0; i < GetFDDSize(); i++)
 		{
 			auto frameData = GetFDDAtIndex(i);
 
-			VkFramebufferCreateInfo framebufferInfo{};
-			framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-			framebufferInfo.renderPass = hdrRenderPass.GetRenderPass();
+			FramebufferCreateInfo framebufferInfo{};
+			framebufferInfo.renderPass = &hdrRenderPass;
 			framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-			framebufferInfo.pAttachments = attachments.data();
+			framebufferInfo.attachments = attachments.data();
 			framebufferInfo.width = swapChainExtent.width;
 			framebufferInfo.height = swapChainExtent.height;
 			framebufferInfo.layers = 1;
 
-			if (vkCreateFramebuffer(GetLogicalDevice(), &framebufferInfo, nullptr, &frameData->hdrFramebuffer) != VK_SUCCESS)
-			{
-				TNG_ASSERT_MSG(false, "Failed to create HDR framebuffers!");
-			}
+			frameData->hdrFramebuffer.Create(framebufferInfo);
 		}
 	}
 
 	void Renderer::CreateIrradianceSamplingFramebuffer()
 	{
-		std::array<VkImageView, 1> attachments =
+		std::array<TextureResource*, 1> attachments =
 		{
-			irradianceMap.GetImageView()
+			&irradianceMap
 		};
 
-		VkFramebufferCreateInfo framebufferInfo{};
-		framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-		framebufferInfo.renderPass = cubemapPreprocessingRenderPass.GetRenderPass();
+		FramebufferCreateInfo framebufferInfo{};
+		framebufferInfo.renderPass = &cubemapPreprocessingRenderPass;
 		framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-		framebufferInfo.pAttachments = attachments.data();
-		framebufferInfo.width = CONFIG::SkyboxResolutionSize;
-		framebufferInfo.height = CONFIG::SkyboxResolutionSize;
+		framebufferInfo.attachments = attachments.data();
+		framebufferInfo.width = CONFIG::IrradianceMapSize;
+		framebufferInfo.height = CONFIG::IrradianceMapSize;
 		framebufferInfo.layers = 6;
 
-		if (vkCreateFramebuffer(GetLogicalDevice(), &framebufferInfo, nullptr, &irradianceSamplingFramebuffer) != VK_SUCCESS)
-		{
-			TNG_ASSERT_MSG(false, "Failed to create irradiance sampling framebuffer!");
-		}
+		irradianceSamplingFramebuffer.Create(framebufferInfo);
 	}
 
 	void Renderer::CreatePrimaryCommandBuffers()
@@ -2028,6 +2014,9 @@ namespace TANG
 		samplerInfo.maxAnisotropy = 1.0f; // Is this an appropriate value??
 
 		skyboxCubemap.Create(&baseImageInfo, &viewCreateInfo, &samplerInfo);
+
+		baseImageInfo.width = CONFIG::IrradianceMapSize;
+		baseImageInfo.height = CONFIG::IrradianceMapSize;
 		irradianceMap.Create(&baseImageInfo, &viewCreateInfo, &samplerInfo);
 	}
 
@@ -2081,7 +2070,7 @@ namespace TANG
 		inheritanceInfo.pNext = nullptr;
 		inheritanceInfo.renderPass = hdrRenderPass.GetRenderPass();
 		inheritanceInfo.subpass = 0;
-		inheritanceInfo.framebuffer = frameData->hdrFramebuffer;
+		inheritanceInfo.framebuffer = frameData->hdrFramebuffer.GetFramebuffer();
 
 		cmdBuffer->BeginRecording(VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT | VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT, &inheritanceInfo);
 
@@ -2143,7 +2132,7 @@ namespace TANG
 
 		for (auto& swidd : swapChainImageDependentData)
 		{
-			vkDestroyFramebuffer(logicalDevice, swidd.swapChainFramebuffer, nullptr);
+			swidd.swapChainFramebuffer.Destroy();
 		}
 
 		for (auto& swidd : swapChainImageDependentData)
@@ -2384,8 +2373,6 @@ namespace TANG
 
 	void Renderer::CalculateSkyboxCubemap(PrimaryCommandBuffer* cmdBuffer, const AssetResources* resources)
 	{
-		vkResetFences(GetLogicalDevice(), 1, &cubemapPreprocessingFence);
-
 		// Update the descriptor set with the skybox texture
 		for (uint32_t i = 0; i < 6; i++)
 		{
@@ -2394,7 +2381,7 @@ namespace TANG
 			cubemapPreprocessingDescriptorSets[i].Update(writeDescSets);
 		}
 
-		cmdBuffer->CMD_BeginRenderPass(cubemapPreprocessingRenderPass.GetRenderPass(), cubemapPreprocessingFramebuffer, { CONFIG::SkyboxResolutionSize, CONFIG::SkyboxResolutionSize }, false, true);
+		cmdBuffer->CMD_BeginRenderPass(&cubemapPreprocessingRenderPass, &cubemapPreprocessingFramebuffer, { CONFIG::SkyboxResolutionSize, CONFIG::SkyboxResolutionSize }, false, true);
 		cmdBuffer->CMD_BindGraphicsPipeline(cubemapPreprocessingPipeline.GetPipeline());
 		cmdBuffer->CMD_SetScissor({ 0, 0 }, { CONFIG::SkyboxResolutionSize, CONFIG::SkyboxResolutionSize });
 		cmdBuffer->CMD_SetViewport(static_cast<float>(CONFIG::SkyboxResolutionSize), static_cast<float>(CONFIG::SkyboxResolutionSize));
@@ -2423,10 +2410,10 @@ namespace TANG
 			irradianceSamplingsDescriptorSets[i].Update(writeDescSets);
 		}
 
-		cmdBuffer->CMD_BeginRenderPass(cubemapPreprocessingRenderPass.GetRenderPass(), irradianceSamplingFramebuffer, { CONFIG::SkyboxResolutionSize, CONFIG::SkyboxResolutionSize }, false, true);
+		cmdBuffer->CMD_BeginRenderPass(&cubemapPreprocessingRenderPass, &irradianceSamplingFramebuffer, { CONFIG::IrradianceMapSize, CONFIG::IrradianceMapSize }, false, true);
 		cmdBuffer->CMD_BindGraphicsPipeline(irradianceSamplingPipeline.GetPipeline());
-		cmdBuffer->CMD_SetScissor({ 0, 0 }, { CONFIG::SkyboxResolutionSize, CONFIG::SkyboxResolutionSize });
-		cmdBuffer->CMD_SetViewport(static_cast<float>(CONFIG::SkyboxResolutionSize), static_cast<float>(CONFIG::SkyboxResolutionSize));
+		cmdBuffer->CMD_SetScissor({ 0, 0 }, { CONFIG::IrradianceMapSize, CONFIG::IrradianceMapSize });
+		cmdBuffer->CMD_SetViewport(static_cast<float>(CONFIG::IrradianceMapSize), static_cast<float>(CONFIG::IrradianceMapSize));
 		cmdBuffer->CMD_BindMesh(resources);
 
 		// For every face of the cube, we must change our camera's view direction, change the framebuffer (since we're rendering to

@@ -82,7 +82,7 @@ namespace TANG
 		// Push the objects into the render pass builder
 		out_builder.AddAttachment(colorAttachmentDesc)
 			.AddAttachment(depthAttachmentDesc)
-			.AddSubpass(subpass, dependency);
+			.AddSubpass(subpass, &dependency);
 
 		return out_builder.IsValid();
 	}

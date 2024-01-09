@@ -6,8 +6,10 @@
 #include <vector>
 
 #include "asset_types.h"
+
 #include "cmd_buffer/primary_command_buffer.h"
 #include "cmd_buffer/secondary_command_buffer.h"
+
 #include "data_buffer/uniform_buffer.h"
 
 #include "descriptors/descriptor_pool.h"
@@ -21,6 +23,7 @@
 #include "pipelines/pbr_pipeline.h"
 #include "pipelines/skybox_pipeline.h"
 
+#include "framebuffer.h"
 #include "queue_types.h"
 #include "render_passes/hdr_render_pass.h"
 #include "render_passes/ldr_render_pass.h"
@@ -296,7 +299,7 @@ namespace TANG
 			PrimaryCommandBuffer ldrCommandBuffer;
 			std::unordered_map<UUID, SecondaryCommandBuffer> assetCommandBuffers;
 
-			VkFramebuffer hdrFramebuffer;
+			Framebuffer hdrFramebuffer;
 		};
 		std::vector<FrameDependentData> frameDependentData;
 		// We want to organize our descriptor sets as follows:
@@ -330,7 +333,7 @@ namespace TANG
 		struct SwapChainImageDependentData
 		{
 			TextureResource swapChainImage;
-			VkFramebuffer swapChainFramebuffer;
+			Framebuffer swapChainFramebuffer;
 		};
 		std::vector<SwapChainImageDependentData> swapChainImageDependentData;
 
@@ -343,7 +346,7 @@ namespace TANG
 		SetLayoutCache cubemapPreprocessingSetLayoutCache;
 		TextureResource skyboxTexture;
 		TextureResource skyboxCubemap;
-		VkFramebuffer cubemapPreprocessingFramebuffer;
+		Framebuffer cubemapPreprocessingFramebuffer;
 		UniformBuffer cubemapPreprocessingViewProjUBO[6];
 		UniformBuffer cubemapPreprocessingCubemapLayerUBO[6];
 		DescriptorSet cubemapPreprocessingDescriptorSets[6];
@@ -353,7 +356,7 @@ namespace TANG
 		SetLayoutCache irradianceSamplingSetLayoutCache;
 		DescriptorSet irradianceSamplingsDescriptorSets[6];
 		TextureResource irradianceMap;
-		VkFramebuffer irradianceSamplingFramebuffer;
+		Framebuffer irradianceSamplingFramebuffer;
 
 		SkyboxPipeline skyboxPipeline;
 		SetLayoutCache skyboxSetLayoutCache;

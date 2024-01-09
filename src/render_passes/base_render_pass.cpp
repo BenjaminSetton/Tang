@@ -45,11 +45,22 @@ namespace TANG
 	{
 		vkDestroyRenderPass(GetLogicalDevice(), renderPass, nullptr);
 		renderPass = VK_NULL_HANDLE;
+		finalImageLayouts.clear();
 	}
 
 	VkRenderPass BaseRenderPass::GetRenderPass() const
 	{
 		return renderPass;
+	}
+
+	const VkImageLayout* BaseRenderPass::GetFinalImageLayouts() const
+	{
+		return finalImageLayouts.data();
+	}
+
+	uint32_t BaseRenderPass::GetAttachmentCount()
+	{
+		return static_cast<uint32_t>(finalImageLayouts.size());
 	}
 
 	void BaseRenderPass::Create_Internal(const RenderPassBuilder& builder)
@@ -67,6 +78,13 @@ namespace TANG
 		{
 			TNG_ASSERT_MSG(false, "Failed to create render pass!");
 		}
+
+		// Cache the final layouts
+		finalImageLayouts.resize(renderPassInfo.attachmentCount);
+		for (uint32_t i = 0; i < renderPassInfo.attachmentCount; i++)
+		{
+			finalImageLayouts[i] = builder.attachmentDescriptions[i].finalLayout;
+		}
 	}
 
 	RenderPassBuilder& RenderPassBuilder::AddAttachment(const VkAttachmentDescription& attachmentDesc)
@@ -75,20 +93,20 @@ namespace TANG
 		return *this;
 	}
 
-	RenderPassBuilder& RenderPassBuilder::AddSubpass(const VkSubpassDescription& subpassDesc, const VkSubpassDependency& subpassDep)
+	RenderPassBuilder& RenderPassBuilder::AddSubpass(const VkSubpassDescription& subpassDesc, const VkSubpassDependency* subpassDep)
 	{
 		subpassDescriptions.push_back(subpassDesc);
-		subpassDependencies.push_back(subpassDep);
+		if(subpassDep != nullptr) subpassDependencies.push_back(*subpassDep);
 		return *this;
 	}
 
 	bool RenderPassBuilder::IsValid() const
 	{
-		bool subpassesEqual = subpassDescriptions.size() == subpassDependencies.size();
+		//bool subpassesEqual = subpassDescriptions.size() == subpassDependencies.size();
 		bool attachmentsEqual = attachmentDescriptions.size() == attachmentReferences.size();
 
 		// TODO - Add any necessary checks
-		return subpassesEqual && attachmentsEqual;
+		return attachmentsEqual;
 	}
 
 	void RenderPassBuilder::PreAllocateAttachmentReferences(uint32_t numberOfAttachmentRefs)

@@ -29,12 +29,19 @@ void main()
         for(float theta = 0.0; theta < 0.5 * PI; theta += sampleDelta)
         {
             // spherical to cartesian (in tangent space)
-            vec3 tangentSample = vec3(sin(theta) * cos(phi),  sin(theta) * sin(phi), cos(theta));
+            vec3 tangentSample = vec3(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta));
 
             // tangent space to world
             vec3 sampleVec = tangentSample.x * right + tangentSample.y * up + tangentSample.z * normal; 
 
-            irradiance += texture(skyboxCubemap, sampleVec).rgb * cos(theta) * sin(theta);
+            vec3 colorSample = texture(skyboxCubemap, sampleVec).rgb * cos(theta) * sin(theta);
+
+            // Tone-map the sample to avoid cube artifacts on irradiance map
+            // NOTE - We are assuming a camera exposure of 1.0
+            colorSample = vec3(1.0) - exp(-colorSample * 1.0);
+
+            irradiance += colorSample;
+
             sampleCount++;
         }
     }

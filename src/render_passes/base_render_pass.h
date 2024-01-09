@@ -27,6 +27,9 @@ namespace TANG
 
 		VkRenderPass GetRenderPass() const;
 
+		const VkImageLayout* GetFinalImageLayouts() const;
+		uint32_t GetAttachmentCount();
+
 	protected:
 
 		virtual bool Build(RenderPassBuilder& out_builder) = 0;
@@ -44,6 +47,9 @@ namespace TANG
 
 		VkRenderPass renderPass;
 
+		// Stores the final layout of all the attachments. This is used when CMD_EndRenderPass() is issued so we can
+		// reflect the implicit layout transition that Vulkan does for us in the TextureResource object
+		std::vector<VkImageLayout> finalImageLayouts;
 	};
 
 	// Utility class to make it easy to build render passes by calling AddAttachment
@@ -56,7 +62,7 @@ namespace TANG
 
 		// Helpers function to add generic attachments and subpasses. These copy the parameters and add to the internal containers
 		RenderPassBuilder& AddAttachment(const VkAttachmentDescription& attachmentDesc);
-		RenderPassBuilder& AddSubpass(const VkSubpassDescription& subpassDesc, const VkSubpassDependency& subpassDep);
+		RenderPassBuilder& AddSubpass(const VkSubpassDescription& subpassDesc, const VkSubpassDependency* subpassDep);
 
 		// Performs sanity checks to ensure that the final state of the builder is valid before being used to construct a render pass
 		bool IsValid() const;
