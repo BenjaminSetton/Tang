@@ -1,5 +1,4 @@
 
-#include "../device_cache.h"
 #include "../render_passes/hdr_render_pass.h"
 #include "../shader.h"
 #include "../utils/sanity_check.h"

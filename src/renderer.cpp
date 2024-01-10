@@ -165,7 +165,7 @@ namespace TANG
 		vkInstance(VK_NULL_HANDLE), debugMessenger(VK_NULL_HANDLE), surface(VK_NULL_HANDLE), queues(), swapChain(VK_NULL_HANDLE), 
 		swapChainImageFormat(VK_FORMAT_UNDEFINED), swapChainExtent({ 0, 0 }), frameDependentData(), swapChainImageDependentData(),
 		pbrSetLayoutCache(), pbrPipeline(), currentFrame(0), resourcesMap(), assetResources(), descriptorPool(),
-		depthBuffer(), colorAttachment(), framebufferWidth(0), framebufferHeight(0), cubemapPreprocessingPipeline(), 
+		colorAttachment(), framebufferWidth(0), framebufferHeight(0), cubemapPreprocessingPipeline(), 
 		cubemapPreprocessingRenderPass(), cubemapPreprocessingSetLayoutCache(), skyboxAssetUUID(INVALID_UUID),
 		fullscreenQuadAssetUUID(INVALID_UUID)
 	{ }
@@ -1804,6 +1804,7 @@ namespace TANG
 		persistentLayout.AddBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Metallic texture
 		persistentLayout.AddBinding(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Roughness texture
 		persistentLayout.AddBinding(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Lightmap texture
+		persistentLayout.AddBinding(5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Irradiance map
 		pbrSetLayoutCache.CreateSetLayout(persistentLayout, 0);
 
 		// Holds ProjUBO
@@ -1884,24 +1885,8 @@ namespace TANG
 	{
 		VkFormat depthFormat = FindDepthFormat();
 
-		// Final depth buffer used with color attachment resolve for multi-sampling
-		BaseImageCreateInfo imageInfo{};
-		imageInfo.width = framebufferWidth;
-		imageInfo.height = framebufferHeight;
-		imageInfo.format = depthFormat;
-		imageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-		imageInfo.mipLevels = 1;
-		imageInfo.samples = DeviceCache::Get().GetMaxMSAA();
-		imageInfo.arrayLayers = 1;
-		imageInfo.flags = 0;
-
-		ImageViewCreateInfo imageViewInfo{};
-		imageViewInfo.aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
-		imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-
-		depthBuffer.Create(&imageInfo, &imageViewInfo);
-
 		// HDR depth buffer
+		BaseImageCreateInfo imageInfo{};
 		imageInfo.width = framebufferWidth;
 		imageInfo.height = framebufferHeight;
 		imageInfo.format = depthFormat;
@@ -1911,6 +1896,7 @@ namespace TANG
 		imageInfo.arrayLayers = 1;
 		imageInfo.flags = 0;
 
+		ImageViewCreateInfo imageViewInfo{};
 		imageViewInfo.aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
 		imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
 
@@ -2128,7 +2114,6 @@ namespace TANG
 		colorAttachment.Destroy();
 
 		hdrDepthBuffer.Destroy();
-		depthBuffer.Destroy();
 
 		for (auto& swidd : swapChainImageDependentData)
 		{
@@ -2185,12 +2170,13 @@ namespace TANG
 		}
 
 		// Update PBR textures
-		WriteDescriptorSets writeDescSets(0, 5);
+		WriteDescriptorSets writeDescSets(0, 6);
 		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 0, asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::DIFFUSE)]);
 		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 1, asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::NORMAL)]);
 		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 2, asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::METALLIC)]);
 		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 3, asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::ROUGHNESS)]);
 		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 4, asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::LIGHTMAP)]);
+		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 5, irradianceMap);
 
 		descSet.Update(writeDescSets);
 	}

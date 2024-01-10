@@ -386,7 +386,6 @@ namespace TANG
 
 		DescriptorPool descriptorPool;
 
-		TextureResource depthBuffer;
 		TextureResource colorAttachment;
 
 		// Cached window sizes

@@ -2,6 +2,7 @@
 // Resources:
 // PBR (Victor Gordan) - https://www.youtube.com/watch?v=RRE-F57fbXw&t=10s
 // PBR explanation (OGL Dev) - https://www.youtube.com/watch?v=XK_p2MxGBQs&t=126s
+// Diffuse IBL (LearnOpenGL) - https://learnopengl.com/PBR/IBL/Diffuse-irradiance
 
 // Simplified rendering equation:
 // vec3 finalColor = ( DiffuseBRDF + SpecularBRDF ) * LightIntensity * NdotL
@@ -63,6 +64,7 @@ layout(set = 0, binding = 1) uniform sampler2D normalSampler;
 layout(set = 0, binding = 2) uniform sampler2D metallicSampler;
 layout(set = 0, binding = 3) uniform sampler2D roughnessSampler;
 layout(set = 0, binding = 4) uniform sampler2D lightmapSampler;
+layout(set = 0, binding = 5) uniform samplerCube irradianceMap;
 
 layout(set = 2, binding = 1) uniform CameraData {
     vec4 position;
@@ -75,14 +77,17 @@ layout(set = 2, binding = 1) uniform CameraData {
 layout(location = 0) out vec4 outColor;
 
 // Fresnel (Schlick)
-vec3 F(float HdotV, vec3 albedo, float metalness)
+// NOTE - The roughness term accounts for the roughness around the edges of the surface
+//        making the reflection weaker. This is needed since we started using diffuse IBL
+//        (refer to diffuse IBL link at the top of the shader)
+vec3 F(float HdotV, vec3 albedo, float metalness, float roughness)
 {
     // baseReflectivity + ( 1 - baseReflectivity ) * ( 1 - dot( view, half ) )^5
 
     vec3 baseReflectivity = vec3(0.04);
     baseReflectivity = mix(baseReflectivity, albedo, metalness);
 
-    return baseReflectivity + ( 1.0 - baseReflectivity ) * pow( ( 1.0 - HdotV ), 5.0 );
+    return baseReflectivity + ( max( vec3( 1.0 - roughness ), baseReflectivity ) - baseReflectivity ) * pow( ( 1.0 - HdotV ), 5.0 );
 }
 
 // Geometry (GGX - Schlick & Beckmann)
@@ -111,7 +116,7 @@ float D(float HdotN, float roughness)
 
 vec3 CookTorrance(float NdotV, float NdotL, float HdotV, float HdotN, vec3 albedo, float metalness, float roughness)
 {
-    vec3 funcNominator = D(HdotN, roughness) * G(NdotV, roughness) * F(HdotV, albedo, metalness);
+    vec3 funcNominator = D(HdotN, roughness) * G(NdotV, roughness) * F(HdotV, albedo, metalness, roughness);
     float funcDenominator = 4.0 * NdotL * NdotV;
     return funcNominator / ( funcDenominator + EPSILON ); // Prevent division by 0
 }
@@ -150,9 +155,12 @@ void main()
     float metalness = texture(metallicSampler, inUV).b;
     float roughness = texture(roughnessSampler, inUV).g;
 
-    vec3 fresnel = F(HdotV, albedo, metalness);
-    vec3 kS = fresnel;
+    vec3 kS = F(HdotV, albedo, metalness, roughness);
     vec3 kD = vec3(1.0) - kS;
+
+    vec3 irradiance = texture(irradianceMap, normal).rgb;
+    vec3 diffuse = irradiance * albedo;
+    vec3 ambient = (kD * diffuse) * 1.0; // Hard-coding the ambient occlusion term to 1.0 for now
 
     // Kill diffuse component if we're dealing with a metal
     //kD *= 1.0 - metalness;
@@ -160,7 +168,6 @@ void main()
     vec3 pbrColor = ( CalculateDiffuseBRDF( kD ) + CalculateSpecularBRDF( NdotV, NdotL, HdotV, HdotN, albedo, metalness, roughness ) ) * lightIntensity * NdotL;
 
     // Add some ambient lighting
-    vec3 ambient = vec3(0.01) * albedo; // NOTE - We should probably also multiply this by the ambient occlusion
     pbrColor += ambient;
 
     outColor = vec4( pbrColor, 1.0 );
