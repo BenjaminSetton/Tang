@@ -64,7 +64,7 @@ namespace TANG
 		numBuffers--;
 	}
 
-	void WriteDescriptorSets::AddImageSampler(VkDescriptorSet descriptorSet, uint32_t binding, TextureResource& texResource)
+	void WriteDescriptorSets::AddImageSampler(VkDescriptorSet descriptorSet, uint32_t binding, const TextureResource* texResource)
 	{
 		if (numImages == 0)
 		{
@@ -75,17 +75,16 @@ namespace TANG
 			return;
 		}
 
-		//if ((texResource.GetLayout() & VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) == 0)
-		//{
-		//	LogWarning("Attempting to update descriptor set on binding %u with texture resource that does not have the SHADER_READ_ONLY layout! Transitioning layout", binding);
-		//	texResource.TransitionLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-		//}
+		if ((texResource->GetLayout() & VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) == 0)
+		{
+			LogWarning("Attempting to update descriptor set on binding %u with texture resource that does not have the SHADER_READ_ONLY layout!", binding);
+		}
 
 		descriptorImageInfo.emplace_back(std::move(VkDescriptorImageInfo()));
 		VkDescriptorImageInfo& imageInfo = descriptorImageInfo.back();
-		imageInfo.imageLayout = texResource.GetLayout();
-		imageInfo.imageView = texResource.GetImageView();
-		imageInfo.sampler = texResource.GetSampler();
+		imageInfo.imageLayout = texResource->GetLayout();
+		imageInfo.imageView = texResource->GetImageView();
+		imageInfo.sampler = texResource->GetSampler();
 
 		VkWriteDescriptorSet writeDescSet{};
 		writeDescSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;

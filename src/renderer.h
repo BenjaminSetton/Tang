@@ -17,19 +17,18 @@
 #include "descriptors/set_layout/set_layout_cache.h"
 #include "descriptors/set_layout/set_layout_summary.h"
 
-#include "pipelines/cubemap_preprocessing_pipeline.h"
-#include "pipelines/irradiance_sampling_pipeline.h"
+#include "passes/cubemap_preprocessing_pass.h"
+#include "passes/skybox_pass.h"
+
 #include "pipelines/ldr_pipeline.h"
 #include "pipelines/pbr_pipeline.h"
-#include "pipelines/skybox_pipeline.h"
+
+#include "render_passes/hdr_render_pass.h"
+#include "render_passes/ldr_render_pass.h"
 
 #include "framebuffer.h"
 #include "queue_types.h"
-#include "render_passes/hdr_render_pass.h"
-#include "render_passes/ldr_render_pass.h"
-#include "render_passes/cubemap_preprocessing_render_pass.h"
 #include "texture_resource.h"
-#include "utils/sanity_check.h"
 
 struct GLFWwindow;
 
@@ -156,9 +155,7 @@ namespace TANG
 
 		void CreateFramebuffers();
 		void CreateLDRFramebuffers();
-		void CreateCubemapPreprocessingFramebuffer();
 		void CreateHDRFramebuffers();
-		void CreateIrradianceSamplingFramebuffer();
 
 		void CreatePrimaryCommandBuffers();
 
@@ -166,29 +163,20 @@ namespace TANG
 
 		void CreateAssetUniformBuffers(UUID uuid);
 		void CreateFrameUniformBuffers();
-		void CreateCubemapPreprocessingUniformBuffer();
-		void CreateSkyboxUniformBuffers();
 		void CreateLDRUniformBuffer();
 
 		void CreateAssetDescriptorSets(UUID uuid);
-		void CreateCubemapPreprocessingDescriptorSet();
-		void CreateIrradianceSamplingDescriptorSet();
 		void CreateSkyboxDescriptorSets();
 		void CreateLDRDescriptorSet();
 
 		void CreateDescriptorSetLayouts();
 		void CreatePBRSetLayouts();
-		void CreateCubemapPreprocessingSetLayouts();
-		void CreateIrradianceSamplingSetLayouts();
-		void CreateSkyboxSetLayouts();
 		void CreateLDRSetLayouts();
 
 		void CreateDescriptorPool();
 
 		void CreateDepthTextures();
 		void CreateColorAttachmentTextures();
-
-		void LoadSkyboxResources();
 
 		void DrawAssets(PrimaryCommandBuffer* cmdBuffer);
 		void RecordSecondaryCommandBuffer(SecondaryCommandBuffer* cmdBuffer, AssetResources* resources);
@@ -281,7 +269,6 @@ namespace TANG
 			UniformBuffer cameraDataUBO;
 
 			// Skybox
-			UniformBuffer skyboxExposureUBO;
 			std::array<DescriptorSet, 3> skyboxDescriptorSets;
 
 			// LDR
@@ -341,25 +328,8 @@ namespace TANG
 		PBRPipeline pbrPipeline;
 		SetLayoutCache pbrSetLayoutCache;
 
-		CubemapPreprocessingPipeline cubemapPreprocessingPipeline;
-		CubemapPreprocessingRenderPass cubemapPreprocessingRenderPass;
-		SetLayoutCache cubemapPreprocessingSetLayoutCache;
-		TextureResource skyboxTexture;
-		TextureResource skyboxCubemap;
-		Framebuffer cubemapPreprocessingFramebuffer;
-		UniformBuffer cubemapPreprocessingViewProjUBO[6];
-		UniformBuffer cubemapPreprocessingCubemapLayerUBO[6];
-		DescriptorSet cubemapPreprocessingDescriptorSets[6];
-		VkFence cubemapPreprocessingFence;
-
-		IrradianceSamplingPipeline irradianceSamplingPipeline;
-		SetLayoutCache irradianceSamplingSetLayoutCache;
-		DescriptorSet irradianceSamplingsDescriptorSets[6];
-		TextureResource irradianceMap;
-		Framebuffer irradianceSamplingFramebuffer;
-
-		SkyboxPipeline skyboxPipeline;
-		SetLayoutCache skyboxSetLayoutCache;
+		SkyboxPass skyboxPass;
+		CubemapPreprocessingPass cubemapPreprocessingPass;
 
 		TextureResource hdrDepthBuffer;
 		TextureResource hdrAttachment;

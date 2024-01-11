@@ -47,6 +47,7 @@
 #include "device_cache.h"
 #include "queue_family_indices.h"
 #include "utils/file_utils.h"
+#include "ubo_structs.h"
 
 static std::vector<const char*> validationLayers = {
 	"VK_LAYER_KHRONOS_validation"
@@ -61,18 +62,6 @@ static const bool enableValidationLayers = false;
 #else
 static const bool enableValidationLayers = true;
 #endif
-
-static const glm::mat4 cubemapProjMatrix = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 10.0f);
-
-static const glm::mat4 cubemapViewMatrices[] =
-{
-   glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f,  0.0f,  0.0f), glm::vec3(0.0f, -1.0f,  0.0f)), // RIGHT
-   glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(-1.0f,  0.0f, 0.0f), glm::vec3(0.0f, -1.0f,  0.0f)), // LEFT
-   glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f,  0.0f), glm::vec3(0.0f,  0.0f, -1.0f)), // DOWN
-   glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f,  1.0f,  0.0f), glm::vec3(0.0f,  0.0f,  1.0f)), // UP
-   glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f,  0.0f,  1.0f), glm::vec3(0.0f, -1.0f,  0.0f)), // RIGHT
-   glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f,  0.0f, -1.0f), glm::vec3(0.0f, -1.0f,  0.0f))  // LEFT
-};
 
 VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
 	VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
@@ -120,53 +109,11 @@ namespace TANG
 		std::vector<VkPresentModeKHR> presentModes;
 	};
 
-	// This UBO is updated every frame for every different asset, to properly reflect their location. Matches
-	// up with the Transform struct inside asset_types.h
-	struct TransformUBO
-	{
-		TransformUBO() : transform(glm::identity<glm::mat4>())
-		{
-		}
-
-		TransformUBO(glm::mat4 trans) : transform(trans)
-		{
-		}
-
-		glm::mat4 transform;
-	};
-
-	struct ViewUBO
-	{
-		glm::mat4 view;
-	};
-
-	struct ProjUBO
-	{
-		glm::mat4 proj;
-	};
-
-	struct ViewProjUBO
-	{
-		glm::mat4 view;
-		glm::mat4 proj;
-	};
-
-	// The minimum uniform buffer alignment of the chosen physical device is 64 bytes...an entire matrix 4
-	// 
-	struct CameraDataUBO
-	{
-		glm::vec4 position;
-		float exposure;
-		char padding[44];
-	};
-	TNG_ASSERT_COMPILE(sizeof(CameraDataUBO) == 64);
-
 	Renderer::Renderer() : 
 		vkInstance(VK_NULL_HANDLE), debugMessenger(VK_NULL_HANDLE), surface(VK_NULL_HANDLE), queues(), swapChain(VK_NULL_HANDLE), 
 		swapChainImageFormat(VK_FORMAT_UNDEFINED), swapChainExtent({ 0, 0 }), frameDependentData(), swapChainImageDependentData(),
 		pbrSetLayoutCache(), pbrPipeline(), currentFrame(0), resourcesMap(), assetResources(), descriptorPool(),
-		colorAttachment(), framebufferWidth(0), framebufferHeight(0), cubemapPreprocessingPipeline(), 
-		cubemapPreprocessingRenderPass(), cubemapPreprocessingSetLayoutCache(), skyboxAssetUUID(INVALID_UUID),
+		colorAttachment(), framebufferWidth(0), framebufferHeight(0), skyboxAssetUUID(INVALID_UUID),
 		fullscreenQuadAssetUUID(INVALID_UUID)
 	{ }
 
@@ -188,12 +135,13 @@ namespace TANG
 		CreateRenderPasses();
 		CreatePipelines();
 		CreateCommandPools();
-		LoadSkyboxResources();
 		CreateColorAttachmentTextures();
 		CreateDepthTextures();
 		CreateFramebuffers();
 		CreatePrimaryCommandBuffers();
 		CreateSyncObjects();
+
+		cubemapPreprocessingPass.LoadTextureResources();
 
 		// Calculate the starting view direction and position of the camera
 		glm::vec3 eye = { 0.0f, 0.0f, 1.0f };
@@ -245,10 +193,9 @@ namespace TANG
 
 		CleanupSwapChain();
 
+		cubemapPreprocessingPass.Destroy();
+
 		ldrSetLayoutCache.DestroyLayouts();
-		skyboxSetLayoutCache.DestroyLayouts();
-		irradianceSamplingSetLayoutCache.DestroyLayouts();
-		cubemapPreprocessingSetLayoutCache.DestroyLayouts();
 		pbrSetLayoutCache.DestroyLayouts();
 
 		for (uint32_t i = 0; i < GetFDDSize(); i++)
@@ -270,8 +217,6 @@ namespace TANG
 
 		descriptorPool.Destroy();
 
-		vkDestroyFence(logicalDevice, cubemapPreprocessingFence, nullptr);
-
 		for (uint32_t i = 0; i < GetFDDSize(); i++)
 		{
 			auto frameData = GetFDDAtIndex(i);
@@ -282,34 +227,16 @@ namespace TANG
 
 		CommandPoolRegistry::Get().DestroyPools();
 
-		// Destroy skybox resources
-		irradianceSamplingFramebuffer.Destroy();
-		cubemapPreprocessingFramebuffer.Destroy();
-		irradianceMap.Destroy();
-		skyboxCubemap.Destroy();
-
 		for (uint32_t i = 0; i < GetFDDSize(); i++)
 		{
 			auto frameData = GetFDDAtIndex(i);
-			frameData->skyboxExposureUBO.Destroy();
 		}
 
-		// Cubemap preprocessing UBOs
-		for (uint32_t i = 0; i < 6; i++)
-		{
-			cubemapPreprocessingCubemapLayerUBO[i].Destroy();
-			cubemapPreprocessingViewProjUBO[i].Destroy();
-		}
-
-		irradianceSamplingPipeline.Destroy();
 		ldrPipeline.Destroy();
-		skyboxPipeline.Destroy();
-		cubemapPreprocessingPipeline.Destroy();
 		pbrPipeline.Destroy();
 
 		ldrRenderPass.Destroy();
 		hdrRenderPass.Destroy();
-		cubemapPreprocessingRenderPass.Destroy();
 
 		vkDestroyDevice(logicalDevice, nullptr);
 		DeviceCache::Get().InvalidateCache();
@@ -558,24 +485,14 @@ namespace TANG
 		out_resources.indexCount = totalIndexCount;
 		out_resources.uuid = asset->uuid;
 
-		// Initialize the uniforms and descriptor sets
-		CreateCubemapPreprocessingUniformBuffer();
-		CreateCubemapPreprocessingDescriptorSet();
-		CreateIrradianceSamplingDescriptorSet();
+		cubemapPreprocessingPass.Create(descriptorPool);
 
-		UpdateCubemapPreprocessingShaderData();
-		UpdateIrradianceSamplingShaderData();
-
-		// Convert the HDR texture into a cubemap and calculate IBL components (irradiance)
+		// Convert the HDR texture into a cubemap and calculate IBL components (irradiance + prefilter map + BRDF LUT)
 		PrimaryCommandBuffer cmdBuffer;
 		cmdBuffer.Create(GetCommandPool(QueueType::GRAPHICS));
 		cmdBuffer.BeginRecording(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, nullptr);
 
-		CalculateSkyboxCubemap(&cmdBuffer, &out_resources);
-
-		skyboxCubemap.TransitionLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &cmdBuffer);
-
-		CalculateIrradianceMap(&cmdBuffer, &out_resources);
+		cubemapPreprocessingPass.Preprocess(&cmdBuffer, &out_resources);
 
 		cmdBuffer.EndRecording();
 
@@ -589,6 +506,7 @@ namespace TANG
 		submitInfo.commandBufferCount = 1;
 		submitInfo.pCommandBuffers = commandBuffers;
 
+		VkFence cubemapPreprocessingFence = cubemapPreprocessingPass.GetFence();
 		vkResetFences(GetLogicalDevice(), 1, &cubemapPreprocessingFence);
 
 		if (SubmitQueue(QueueType::GRAPHICS, &submitInfo, 1, cubemapPreprocessingFence) != VK_SUCCESS)
@@ -600,11 +518,9 @@ namespace TANG
 		// Wait for the GPU to finish preprocessing the cubemap
 		vkWaitForFences(GetLogicalDevice(), 1, &cubemapPreprocessingFence, VK_TRUE, UINT64_MAX);
 
-		// Now that the equirectangular texture has been mapped to a cubemap, we don't need the original texture anymore
-		skyboxTexture.Destroy();
+		cubemapPreprocessingPass.DestroyIntermediates();
 
 		// Create and initialize the skybox uniforms + descriptor set
-		CreateSkyboxUniformBuffers();
 		CreateSkyboxDescriptorSets();
 
 		InitializeSkyboxUniformsAndDescriptor();
@@ -978,7 +894,7 @@ namespace TANG
 		AssetResources* skyboxAsset = GetAssetResourcesFromUUID(skyboxAssetUUID);
 		if (skyboxAsset == nullptr)
 		{
-			TNG_ASSERT_MSG(false, "Skybox asset is not loaded! Failed to draw skybox");
+			LogError("Skybox asset is not loaded! Failed to draw skybox");
 			return;
 		}
 
@@ -988,23 +904,13 @@ namespace TANG
 			return;
 		}
 
-		VkCommandBufferInheritanceInfo inheritanceInfo{};
-		inheritanceInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
-		inheritanceInfo.pNext = nullptr;
-		inheritanceInfo.renderPass = hdrRenderPass.GetRenderPass();
-		inheritanceInfo.subpass = 0;
-		inheritanceInfo.framebuffer = frameData->hdrFramebuffer.GetFramebuffer();
+		DrawData data{};
+		data.asset = skyboxAsset;
+		data.cmdBuffer = secondaryCmdBuffer;
+		data.framebuffer = &frameData->hdrFramebuffer;
+		data.renderPass = &hdrRenderPass;
 
-		secondaryCmdBuffer->BeginRecording(VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT | VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT, &inheritanceInfo);
-
-		secondaryCmdBuffer->CMD_SetScissor({ 0, 0 }, swapChainExtent);
-		secondaryCmdBuffer->CMD_SetViewport(static_cast<float>(swapChainExtent.width), static_cast<float>(swapChainExtent.height));
-		secondaryCmdBuffer->CMD_BindGraphicsPipeline(skyboxPipeline.GetPipeline());
-		secondaryCmdBuffer->CMD_BindMesh(skyboxAsset);
-		secondaryCmdBuffer->CMD_BindDescriptorSets(skyboxPipeline.GetPipelineLayout(), 3, reinterpret_cast<VkDescriptorSet*>(frameData->skyboxDescriptorSets.data()));
-		secondaryCmdBuffer->CMD_DrawIndexed(static_cast<uint32_t>(skyboxAsset->indexCount));
-		
-		secondaryCmdBuffer->EndRecording();
+		skyboxPass.Draw(currentFrame, data);
 
 		VkCommandBuffer vkCmdBuffer = secondaryCmdBuffer->GetBuffer();
 		cmdBuffer->CMD_ExecuteSecondaryCommands(&vkCmdBuffer, 1);
@@ -1424,17 +1330,8 @@ namespace TANG
 		pbrPipeline.SetData(&hdrRenderPass, &pbrSetLayoutCache, swapChainExtent);
 		pbrPipeline.Create();
 
-		cubemapPreprocessingPipeline.SetData(&cubemapPreprocessingRenderPass, &cubemapPreprocessingSetLayoutCache, swapChainExtent);
-		cubemapPreprocessingPipeline.Create();
-
-		skyboxPipeline.SetData(&hdrRenderPass, &skyboxSetLayoutCache, swapChainExtent);
-		skyboxPipeline.Create();
-
 		ldrPipeline.SetData(&ldrRenderPass, &ldrSetLayoutCache, swapChainExtent);
 		ldrPipeline.Create();
-
-		irradianceSamplingPipeline.SetData(&cubemapPreprocessingRenderPass, &cubemapPreprocessingSetLayoutCache, swapChainExtent);
-		irradianceSamplingPipeline.Create();
 	}
 
 	void Renderer::CreateRenderPasses()
@@ -1455,8 +1352,6 @@ namespace TANG
 		hdrRenderPass.SetData(VK_FORMAT_R32G32B32A32_SFLOAT, depthAttachmentFormat);
 		hdrRenderPass.Create();
 
-		cubemapPreprocessingRenderPass.Create();
-
 		ldrRenderPass.SetData(VK_FORMAT_B8G8R8A8_SRGB, depthAttachmentFormat);
 		ldrRenderPass.Create();
 	}
@@ -1464,8 +1359,6 @@ namespace TANG
 	void Renderer::CreateFramebuffers()
 	{
 		CreateLDRFramebuffers();
-		CreateCubemapPreprocessingFramebuffer();
-		CreateIrradianceSamplingFramebuffer();
 		CreateHDRFramebuffers();
 	}
 
@@ -1493,24 +1386,6 @@ namespace TANG
 		}
 	}
 
-	void Renderer::CreateCubemapPreprocessingFramebuffer()
-	{
-		std::array<TextureResource*, 1> attachments =
-		{
-			&skyboxCubemap
-		};
-
-		FramebufferCreateInfo framebufferInfo{};
-		framebufferInfo.renderPass = &cubemapPreprocessingRenderPass;
-		framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-		framebufferInfo.attachments = attachments.data();
-		framebufferInfo.width = CONFIG::SkyboxResolutionSize;
-		framebufferInfo.height = CONFIG::SkyboxResolutionSize;
-		framebufferInfo.layers = 6;
-
-		cubemapPreprocessingFramebuffer.Create(framebufferInfo);
-	}
-
 	void Renderer::CreateHDRFramebuffers()
 	{
 		std::array<TextureResource*, 2> attachments =
@@ -1533,24 +1408,6 @@ namespace TANG
 
 			frameData->hdrFramebuffer.Create(framebufferInfo);
 		}
-	}
-
-	void Renderer::CreateIrradianceSamplingFramebuffer()
-	{
-		std::array<TextureResource*, 1> attachments =
-		{
-			&irradianceMap
-		};
-
-		FramebufferCreateInfo framebufferInfo{};
-		framebufferInfo.renderPass = &cubemapPreprocessingRenderPass;
-		framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-		framebufferInfo.attachments = attachments.data();
-		framebufferInfo.width = CONFIG::IrradianceMapSize;
-		framebufferInfo.height = CONFIG::IrradianceMapSize;
-		framebufferInfo.layers = 6;
-
-		irradianceSamplingFramebuffer.Create(framebufferInfo);
 	}
 
 	void Renderer::CreatePrimaryCommandBuffers()
@@ -1595,12 +1452,6 @@ namespace TANG
 			{
 				TNG_ASSERT_MSG(false, "Failed to create in-flight fence!");
 			}
-		}
-
-		// Create cubemap preprocessing fence
-		if(vkCreateFence(logicalDevice, &fenceInfo, nullptr, &cubemapPreprocessingFence) != VK_SUCCESS)
-		{
-			TNG_ASSERT_MSG(false, "Failed to create cubemap preprocessing fence!");
 		}
 	}
 
@@ -1647,34 +1498,6 @@ namespace TANG
 		}
 	}
 
-	void Renderer::CreateCubemapPreprocessingUniformBuffer()
-	{
-		VkDeviceSize viewProjSize = sizeof(ViewProjUBO);
-		VkDeviceSize cubemapLayerSize = sizeof(uint32_t);
-
-		for (uint32_t i = 0; i < 6; i++)
-		{
-			cubemapPreprocessingViewProjUBO[i].Create(viewProjSize);
-			cubemapPreprocessingViewProjUBO[i].MapMemory();
-
-			cubemapPreprocessingCubemapLayerUBO[i].Create(cubemapLayerSize);
-			cubemapPreprocessingCubemapLayerUBO[i].MapMemory();
-		}
-	}
-
-	void Renderer::CreateSkyboxUniformBuffers()
-	{
-		VkDeviceSize skyboxExposureUBOSize = sizeof(float);
-
-		for (uint32_t i = 0; i < GetFDDSize(); i++)
-		{
-			auto frameData = GetFDDAtIndex(i);
-
-			frameData->skyboxExposureUBO.Create(skyboxExposureUBOSize);
-			frameData->skyboxExposureUBO.MapMemory();
-		}
-	}
-
 	void Renderer::CreateLDRUniformBuffer()
 	{
 		VkDeviceSize ldrCameraDataUBOSize = sizeof(float);
@@ -1706,39 +1529,6 @@ namespace TANG
 
 				currentSet->Create(descriptorPool, iter.second);
 			}
-		}
-	}
-
-	void Renderer::CreateCubemapPreprocessingDescriptorSet()
-	{
-		const LayoutCache& cache = cubemapPreprocessingSetLayoutCache.GetLayoutCache();
-		if (cubemapPreprocessingSetLayoutCache.GetLayoutCount() != 1)
-		{
-			TNG_ASSERT_MSG(false, "Failed to create cubemap preprocessing descriptor set!");
-			return;
-		}
-
-		for (uint32_t i = 0; i < 6; i++)
-		{
-			cubemapPreprocessingDescriptorSets[i].Create(descriptorPool, cache.begin()->second);
-		}
-	}
-
-	void Renderer::CreateIrradianceSamplingDescriptorSet()
-	{
-		// NOTE - We're re-using the cubemap preprocessing descriptor set layout because they do have
-		//        the exact same layout, the problem is that we need to update the descriptors separately
-		//        during subsequent render passes, which is why we must create sets for irradiance sampling
-		const LayoutCache& cache = cubemapPreprocessingSetLayoutCache.GetLayoutCache();
-		if (cubemapPreprocessingSetLayoutCache.GetLayoutCount() != 1)
-		{
-			TNG_ASSERT_MSG(false, "Failed to create irradiance sampling descriptor set!");
-			return;
-		}
-
-		for (uint32_t i = 0; i < 6; i++)
-		{
-			irradianceSamplingsDescriptorSets[i].Create(descriptorPool, cache.begin()->second);
 		}
 	}
 
@@ -1783,8 +1573,6 @@ namespace TANG
 	void Renderer::CreateDescriptorSetLayouts()
 	{
 		CreatePBRSetLayouts();
-		CreateCubemapPreprocessingSetLayouts();
-		CreateIrradianceSamplingSetLayouts();
 		CreateSkyboxSetLayouts();
 		CreateLDRSetLayouts();
 	}
@@ -1819,36 +1607,6 @@ namespace TANG
 		volatileLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT); // Camera data
 		volatileLayout.AddBinding(2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);   // View matrix
 		pbrSetLayoutCache.CreateSetLayout(volatileLayout, 0);
-	}
-
-	void Renderer::CreateCubemapPreprocessingSetLayouts()
-	{
-		SetLayoutSummary volatileLayout;
-		volatileLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT); // View/proj matrix
-		volatileLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_GEOMETRY_BIT); // Cubemap layer
-		volatileLayout.AddBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Equirectangular map
-		cubemapPreprocessingSetLayoutCache.CreateSetLayout(volatileLayout, 0);
-	}
-
-	void Renderer::CreateIrradianceSamplingSetLayouts()
-	{
-
-	}
-
-	void Renderer::CreateSkyboxSetLayouts()
-	{
-		SetLayoutSummary persistentLayout;
-		persistentLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Skybox texture
-		skyboxSetLayoutCache.CreateSetLayout(persistentLayout, 0);
-
-		SetLayoutSummary unstableLayout;
-		unstableLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT); // Camera exposure
-		skyboxSetLayoutCache.CreateSetLayout(unstableLayout, 0);
-
-		SetLayoutSummary volatileLayout;
-		volatileLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT); // View matrix
-		volatileLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT); // Projection matrix
-		skyboxSetLayoutCache.CreateSetLayout(volatileLayout, 0);
 	}
 
 	void Renderer::CreateLDRSetLayouts()
@@ -1951,59 +1709,6 @@ namespace TANG
 		samplerInfo.maxAnisotropy = 1.0f;
 
 		hdrAttachment.Create(&imageInfo, &imageViewInfo, &samplerInfo);
-	}
-
-	void Renderer::LoadSkyboxResources()
-	{
-		VkFormat texFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
-
-		//
-		// Load the skybox texture from file
-		//
-		BaseImageCreateInfo baseImageInfo{}; 
-		baseImageInfo.width = 0; // Unused
-		baseImageInfo.height = 0; // Unused
-		baseImageInfo.format = texFormat;
-		baseImageInfo.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-		baseImageInfo.mipLevels = 0; // Unused
-		baseImageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-
-		ImageViewCreateInfo viewCreateInfo{};
-		viewCreateInfo.aspect = VK_IMAGE_ASPECT_COLOR_BIT;
-
-		SamplerCreateInfo samplerInfo{};
-		samplerInfo.minificationFilter = VK_FILTER_LINEAR;
-		samplerInfo.magnificationFilter = VK_FILTER_LINEAR;
-		samplerInfo.addressModeUVW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		samplerInfo.maxAnisotropy = 1.0f; // Is this an appropriate value??
-
-		skyboxTexture.CreateFromFile(CONFIG::SkyboxTextureFilePath, &baseImageInfo, &viewCreateInfo, &samplerInfo);
-
-		//
-		// Create the offscreen textures that we'll render the cube faces to
-		//
-		baseImageInfo.width = CONFIG::SkyboxResolutionSize;
-		baseImageInfo.height = CONFIG::SkyboxResolutionSize;
-		baseImageInfo.format = texFormat;
-		baseImageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-		baseImageInfo.mipLevels = 1;
-		baseImageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-		baseImageInfo.arrayLayers = 6;
-		baseImageInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
-
-		viewCreateInfo.aspect = VK_IMAGE_ASPECT_COLOR_BIT;
-		viewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
-
-		samplerInfo.minificationFilter = VK_FILTER_LINEAR;
-		samplerInfo.magnificationFilter = VK_FILTER_LINEAR;
-		samplerInfo.addressModeUVW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		samplerInfo.maxAnisotropy = 1.0f; // Is this an appropriate value??
-
-		skyboxCubemap.Create(&baseImageInfo, &viewCreateInfo, &samplerInfo);
-
-		baseImageInfo.width = CONFIG::IrradianceMapSize;
-		baseImageInfo.height = CONFIG::IrradianceMapSize;
-		irradianceMap.Create(&baseImageInfo, &viewCreateInfo, &samplerInfo);
 	}
 
 	void Renderer::DrawAssets(PrimaryCommandBuffer* cmdBuffer)
@@ -2171,12 +1876,12 @@ namespace TANG
 
 		// Update PBR textures
 		WriteDescriptorSets writeDescSets(0, 6);
-		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 0, asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::DIFFUSE)]);
-		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 1, asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::NORMAL)]);
-		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 2, asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::METALLIC)]);
-		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 3, asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::ROUGHNESS)]);
-		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 4, asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::LIGHTMAP)]);
-		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 5, irradianceMap);
+		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 0, &asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::DIFFUSE)]);
+		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 1, &asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::NORMAL)]);
+		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 2, &asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::METALLIC)]);
+		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 3, &asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::ROUGHNESS)]);
+		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 4, &asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::LIGHTMAP)]);
+		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 5, cubemapPreprocessingPass.GetIrradianceMap());
 
 		descSet.Update(writeDescSets);
 	}
@@ -2188,7 +1893,7 @@ namespace TANG
 
 		// Update view matrix + camera data descriptor set
 		WriteDescriptorSets writeDescSets(1, 1);
-		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 0, hdrAttachment);
+		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 0, &hdrAttachment);
 		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 1, frameData->ldrCameraDataUBO);
 		descSet.Update(writeDescSets);
 	}
@@ -2270,23 +1975,14 @@ namespace TANG
 
 	void Renderer::InitializeSkyboxUniformsAndDescriptor()
 	{
-		// Initialize uniform buffers
-		float exposure = 1.0f; // Temporary, we do the same for CameraData
-
 		for (uint32_t i = 0; i < GetFDDSize(); i++)
 		{
 			auto frameData = GetFDDAtIndex(i);
 
-			frameData->skyboxExposureUBO.UpdateData(&exposure, sizeof(float));
-
 			// Initialize the descriptor
 			WriteDescriptorSets writeSetPersistent(0, 1);
-			writeSetPersistent.AddImageSampler(frameData->skyboxDescriptorSets[0].GetDescriptorSet(), 0, skyboxCubemap);
+			writeSetPersistent.AddImageSampler(frameData->skyboxDescriptorSets[0].GetDescriptorSet(), 0, cubemapPreprocessingPass.GetSkyboxCubemap());
 			frameData->skyboxDescriptorSets[0].Update(writeSetPersistent);
-
-			WriteDescriptorSets writeSetUnstable(1, 0);
-			writeSetUnstable.AddUniformBuffer(frameData->skyboxDescriptorSets[1].GetDescriptorSet(), 0, frameData->skyboxExposureUBO);
-			frameData->skyboxDescriptorSets[1].Update(writeSetUnstable);
 
 			WriteDescriptorSets writeSetVolatile(2, 0);
 			writeSetVolatile.AddUniformBuffer(frameData->skyboxDescriptorSets[2].GetDescriptorSet(), 0, frameData->viewUBO);
@@ -2304,115 +2000,12 @@ namespace TANG
 		}
 	}
 
-	void Renderer::UpdateCubemapPreprocessingShaderData()
-	{
-		// NOTE - GLM was originally designed for OpenGL, where the Y coordinate of the clip coordinates is inverted
-		glm::mat4 projMatrix = cubemapProjMatrix;
-		projMatrix[1][1] *= -1;
-
-		for (uint32_t i = 0; i < 6; i++)
-		{
-			ViewProjUBO viewProj{};
-			viewProj.view = cubemapViewMatrices[i];
-			viewProj.proj = projMatrix;
-
-			cubemapPreprocessingViewProjUBO[i].UpdateData(&viewProj, sizeof(viewProj));
-
-			// https://registry.khronos.org/OpenGL-Refpages/gl4/html/gl_Layer.xhtml
-			uint32_t cubemapLayer = i;
-			cubemapPreprocessingCubemapLayerUBO[i].UpdateData(&cubemapLayer, sizeof(cubemapLayer));
-
-			// Update camera data descritor set
-			WriteDescriptorSets writeDescSets(2, 0);
-			writeDescSets.AddUniformBuffer(cubemapPreprocessingDescriptorSets[i].GetDescriptorSet(), 0, cubemapPreprocessingViewProjUBO[i]);
-			writeDescSets.AddUniformBuffer(cubemapPreprocessingDescriptorSets[i].GetDescriptorSet(), 1, cubemapPreprocessingCubemapLayerUBO[i]);
-			cubemapPreprocessingDescriptorSets[i].Update(writeDescSets);
-		}
-	}
-
-	void Renderer::UpdateIrradianceSamplingShaderData()
-	{
-		// NOTE - GLM was originally designed for OpenGL, where the Y coordinate of the clip coordinates is inverted
-		glm::mat4 projMatrix = cubemapProjMatrix;
-		projMatrix[1][1] *= -1;
-
-		for (uint32_t i = 0; i < 6; i++)
-		{
-			// NOTE - The glLayer and viewProj matrix UBOs were updated in a previous function call, which is kinda nasty.
-			// TODO - Clean this up :)
-
-			// Update camera data descritor set
-			WriteDescriptorSets writeDescSets(2, 0);
-			writeDescSets.AddUniformBuffer(irradianceSamplingsDescriptorSets[i].GetDescriptorSet(), 0, cubemapPreprocessingViewProjUBO[i]);
-			writeDescSets.AddUniformBuffer(irradianceSamplingsDescriptorSets[i].GetDescriptorSet(), 1, cubemapPreprocessingCubemapLayerUBO[i]);
-			irradianceSamplingsDescriptorSets[i].Update(writeDescSets);
-		}
-	}
-
 	void Renderer::UpdateLDRUniformBuffer()
 	{
 		float exposure = 1.0f;
 
 		auto frameData = GetCurrentFDD();
 		frameData->ldrCameraDataUBO.UpdateData(&exposure, sizeof(exposure));
-	}
-
-	void Renderer::CalculateSkyboxCubemap(PrimaryCommandBuffer* cmdBuffer, const AssetResources* resources)
-	{
-		// Update the descriptor set with the skybox texture
-		for (uint32_t i = 0; i < 6; i++)
-		{
-			WriteDescriptorSets writeDescSets(0, 1);
-			writeDescSets.AddImageSampler(cubemapPreprocessingDescriptorSets[i].GetDescriptorSet(), 2, skyboxTexture);
-			cubemapPreprocessingDescriptorSets[i].Update(writeDescSets);
-		}
-
-		cmdBuffer->CMD_BeginRenderPass(&cubemapPreprocessingRenderPass, &cubemapPreprocessingFramebuffer, { CONFIG::SkyboxResolutionSize, CONFIG::SkyboxResolutionSize }, false, true);
-		cmdBuffer->CMD_BindGraphicsPipeline(cubemapPreprocessingPipeline.GetPipeline());
-		cmdBuffer->CMD_SetScissor({ 0, 0 }, { CONFIG::SkyboxResolutionSize, CONFIG::SkyboxResolutionSize });
-		cmdBuffer->CMD_SetViewport(static_cast<float>(CONFIG::SkyboxResolutionSize), static_cast<float>(CONFIG::SkyboxResolutionSize));
-		cmdBuffer->CMD_BindMesh(resources);
-
-		// For every face of the cube, we must change our camera's view direction, change the framebuffer (since we're rendering to
-		// a different texture each pass) 
-		for (uint32_t i = 0; i < 6; i++)
-		{
-			VkDescriptorSet descriptors[1] = { cubemapPreprocessingDescriptorSets[i].GetDescriptorSet() };
-			cmdBuffer->CMD_BindDescriptorSets(cubemapPreprocessingPipeline.GetPipelineLayout(), 1, descriptors);
-
-			cmdBuffer->CMD_DrawIndexed(static_cast<uint32_t>(resources->indexCount));
-		}
-
-		cmdBuffer->CMD_EndRenderPass();
-	}
-
-	void Renderer::CalculateIrradianceMap(PrimaryCommandBuffer* cmdBuffer, const AssetResources* resources)
-	{
-		// Update the descriptor set with the skybox texture
-		for (uint32_t i = 0; i < 6; i++)
-		{
-			WriteDescriptorSets writeDescSets(0, 1);
-			writeDescSets.AddImageSampler(irradianceSamplingsDescriptorSets[i].GetDescriptorSet(), 2, skyboxCubemap);
-			irradianceSamplingsDescriptorSets[i].Update(writeDescSets);
-		}
-
-		cmdBuffer->CMD_BeginRenderPass(&cubemapPreprocessingRenderPass, &irradianceSamplingFramebuffer, { CONFIG::IrradianceMapSize, CONFIG::IrradianceMapSize }, false, true);
-		cmdBuffer->CMD_BindGraphicsPipeline(irradianceSamplingPipeline.GetPipeline());
-		cmdBuffer->CMD_SetScissor({ 0, 0 }, { CONFIG::IrradianceMapSize, CONFIG::IrradianceMapSize });
-		cmdBuffer->CMD_SetViewport(static_cast<float>(CONFIG::IrradianceMapSize), static_cast<float>(CONFIG::IrradianceMapSize));
-		cmdBuffer->CMD_BindMesh(resources);
-
-		// For every face of the cube, we must change our camera's view direction, change the framebuffer (since we're rendering to
-		// a different texture each pass) 
-		for (uint32_t i = 0; i < 6; i++)
-		{
-			VkDescriptorSet descriptors[1] = { irradianceSamplingsDescriptorSets[i].GetDescriptorSet() };
-			cmdBuffer->CMD_BindDescriptorSets(irradianceSamplingPipeline.GetPipelineLayout(), 1, descriptors);
-
-			cmdBuffer->CMD_DrawIndexed(static_cast<uint32_t>(resources->indexCount));
-		}
-
-		cmdBuffer->CMD_EndRenderPass();
 	}
 
 	VkResult Renderer::SubmitQueue(QueueType type, VkSubmitInfo* info, uint32_t submitCount, VkFence fence, bool waitUntilIdle)

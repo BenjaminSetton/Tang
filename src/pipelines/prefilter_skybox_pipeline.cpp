@@ -8,26 +8,26 @@
 #include "../utils/sanity_check.h"
 #include "../utils/logger.h"
 #include "../vertex_types.h"
-#include "irradiance_sampling_pipeline.h"
+#include "prefilter_skybox_pipeline.h"
 
 namespace TANG
 {
-	IrradianceSamplingPipeline::IrradianceSamplingPipeline()
+	PrefilterSkyboxPipeline::PrefilterSkyboxPipeline()
 	{
 		FlushData();
 	}
 
-	IrradianceSamplingPipeline::~IrradianceSamplingPipeline()
+	PrefilterSkyboxPipeline::~PrefilterSkyboxPipeline()
 	{
 		FlushData();
 	}
 
-	IrradianceSamplingPipeline::IrradianceSamplingPipeline(IrradianceSamplingPipeline&& other) noexcept : BasePipeline(std::move(other))
+	PrefilterSkyboxPipeline::PrefilterSkyboxPipeline(PrefilterSkyboxPipeline&& other) noexcept : BasePipeline(std::move(other))
 	{
 	}
 
 	// Get references to the data required in Create(), it's not needed
-	void IrradianceSamplingPipeline::SetData(const CubemapPreprocessingRenderPass* _renderPass, const SetLayoutCache* _setLayoutCache, VkExtent2D _viewportSize)
+	void PrefilterSkyboxPipeline::SetData(const CubemapPreprocessingRenderPass* _renderPass, const SetLayoutCache* _setLayoutCache, VkExtent2D _viewportSize)
 	{
 		renderPass = _renderPass;
 		setLayoutCache = _setLayoutCache;
@@ -36,7 +36,7 @@ namespace TANG
 		wasDataSet = true;
 	}
 
-	void IrradianceSamplingPipeline::Create()
+	void PrefilterSkyboxPipeline::Create()
 	{
 		if (!wasDataSet)
 		{
@@ -49,7 +49,7 @@ namespace TANG
 		//        same functionality
 		Shader vertexShader(ShaderType::CUBEMAP_PREPROCESSING, ShaderStage::VERTEX_SHADER);
 		Shader geometryShader(ShaderType::CUBEMAP_PREPROCESSING, ShaderStage::GEOMETRY_SHADER);
-		Shader fragmentShader(ShaderType::IRRADIANCE_SAMPLING, ShaderStage::FRAGMENT_SHADER);
+		Shader fragmentShader(ShaderType::PREFILTER_SKYBOX, ShaderStage::FRAGMENT_SHADER);
 
 		VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
 		vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -229,11 +229,11 @@ namespace TANG
 
 		if (!CreatePipelineObject(pipelineInfo))
 		{
-			TNG_ASSERT_MSG(false, "Failed to create irradiance sampling pipeline!");
+			TNG_ASSERT_MSG(false, "Failed to create prefilter map pipeline!");
 		}
 	}
 
-	void IrradianceSamplingPipeline::FlushData()
+	void PrefilterSkyboxPipeline::FlushData()
 	{
 		renderPass = nullptr;
 		setLayoutCache = nullptr;
