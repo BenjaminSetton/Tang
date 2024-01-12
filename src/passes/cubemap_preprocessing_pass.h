@@ -25,10 +25,12 @@ namespace TANG
 		CubemapPreprocessingPass(const CubemapPreprocessingPass& other) = delete;
 		CubemapPreprocessingPass& operator=(const CubemapPreprocessingPass& other) = delete;
 
-		void Create(const DescriptorPool& descriptorPool);
+		void SetData(const DescriptorPool* descriptorPool, VkExtent2D swapChainExtent);
+
+		void Create() override;
 
 		void DestroyIntermediates();
-		void Destroy();
+		void Destroy() override;
 
 		void LoadTextureResources();
 
@@ -47,7 +49,7 @@ namespace TANG
 		void CreatePipelines() override;
 		void CreateRenderPasses() override;
 		void CreateSetLayoutCaches() override;
-		void CreateDescriptorSets(const DescriptorPool& descriptorPool) override;
+		void CreateDescriptorSets() override;
 		void CreateUniformBuffers() override;
 		void CreateSyncObjects() override;
 
@@ -55,6 +57,8 @@ namespace TANG
 
 		void CalculateSkyboxCubemap(PrimaryCommandBuffer* cmdBuffer, AssetResources* asset);
 		void CalculateIrradianceMap(PrimaryCommandBuffer* cmdBuffer, AssetResources* asset);
+
+		void ResetBorrowedData() override;
 
 		CubemapPreprocessingPipeline cubemapPreprocessingPipeline;
 		CubemapPreprocessingRenderPass cubemapPreprocessingRenderPass;
@@ -71,6 +75,12 @@ namespace TANG
 		DescriptorSet irradianceSamplingsDescriptorSets[6];
 		TextureResource irradianceMap;
 		Framebuffer irradianceSamplingFramebuffer;
+
+		struct
+		{
+			const DescriptorPool* descriptorPool;
+			VkExtent2D swapChainExtent;
+		} borrowedData;
 	};
 }
 

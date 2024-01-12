@@ -166,7 +166,6 @@ namespace TANG
 		void CreateLDRUniformBuffer();
 
 		void CreateAssetDescriptorSets(UUID uuid);
-		void CreateSkyboxDescriptorSets();
 		void CreateLDRDescriptorSet();
 
 		void CreateDescriptorSetLayouts();
@@ -190,7 +189,6 @@ namespace TANG
 		void CleanupSwapChain();
 
 		void InitializeDescriptorSets(UUID uuid, uint32_t frameIndex);
-		void InitializeSkyboxUniformsAndDescriptor();
 		void InitializeFrameUniformBuffers();
 
 		void UpdateTransformDescriptorSet(UUID uuid);
@@ -198,17 +196,11 @@ namespace TANG
 		void UpdateProjectionDescriptorSet(UUID uuid, uint32_t frameIndex);
 		void UpdatePBRTextureDescriptorSet(UUID uuid, uint32_t frameIndex);
 		void UpdateLDRDescriptorSet();
-		void UpdateSkyboxDescriptorSets(uint32_t frameIndex);
 
 		void UpdateTransformUniformBuffer(const Transform& transform, UUID uuid);
 		void UpdateCameraDataUniformBuffers(uint32_t frameIndex, const glm::vec3& position, const glm::mat4& viewMatrix);
 		void UpdateProjectionUniformBuffer(uint32_t frameIndex);
-		void UpdateCubemapPreprocessingShaderData();
-		void UpdateIrradianceSamplingShaderData();
 		void UpdateLDRUniformBuffer();
-
-		void CalculateSkyboxCubemap(PrimaryCommandBuffer* cmdBuffer, const AssetResources* resources);
-		void CalculateIrradianceMap(PrimaryCommandBuffer* cmdBuffer, const AssetResources* resources);
 
 		// Submits the provided queue type, along with the provided command buffer. Return value should _not_ be ignored
 		[[nodiscard]] VkResult SubmitQueue(QueueType type, VkSubmitInfo* info, uint32_t submitCount, VkFence fence, bool waitUntilIdle = false);

@@ -23,7 +23,7 @@ namespace TANG
 		WriteDescriptorSets(WriteDescriptorSets&& other);
 		WriteDescriptorSets& operator=(const WriteDescriptorSets& other) = delete;
 
-		void AddUniformBuffer(VkDescriptorSet descriptorSet, uint32_t binding, UniformBuffer& uniformBuffer, VkDeviceSize offset = 0);
+		void AddUniformBuffer(VkDescriptorSet descriptorSet, uint32_t binding, const UniformBuffer* uniformBuffer, VkDeviceSize offset = 0);
 		void AddImageSampler(VkDescriptorSet descriptorSet, uint32_t binding, const TextureResource* texResource);
 
 		uint32_t GetWriteDescriptorSetCount() const;

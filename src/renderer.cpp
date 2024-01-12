@@ -227,11 +227,6 @@ namespace TANG
 
 		CommandPoolRegistry::Get().DestroyPools();
 
-		for (uint32_t i = 0; i < GetFDDSize(); i++)
-		{
-			auto frameData = GetFDDAtIndex(i);
-		}
-
 		ldrPipeline.Destroy();
 		pbrPipeline.Destroy();
 
@@ -485,7 +480,8 @@ namespace TANG
 		out_resources.indexCount = totalIndexCount;
 		out_resources.uuid = asset->uuid;
 
-		cubemapPreprocessingPass.Create(descriptorPool);
+		cubemapPreprocessingPass.SetData(&descriptorPool, swapChainExtent);
+		cubemapPreprocessingPass.Create();
 
 		// Convert the HDR texture into a cubemap and calculate IBL components (irradiance + prefilter map + BRDF LUT)
 		PrimaryCommandBuffer cmdBuffer;
@@ -509,6 +505,8 @@ namespace TANG
 		VkFence cubemapPreprocessingFence = cubemapPreprocessingPass.GetFence();
 		vkResetFences(GetLogicalDevice(), 1, &cubemapPreprocessingFence);
 
+		LogInfo("Starting cubemap preprocessing...");
+
 		if (SubmitQueue(QueueType::GRAPHICS, &submitInfo, 1, cubemapPreprocessingFence) != VK_SUCCESS)
 		{
 			LogError("Failed to execute commands for cubemap preprocessing!");
@@ -520,10 +518,13 @@ namespace TANG
 
 		cubemapPreprocessingPass.DestroyIntermediates();
 
-		// Create and initialize the skybox uniforms + descriptor set
-		CreateSkyboxDescriptorSets();
+		LogInfo("Cubemap preprocessing done!");
 
-		InitializeSkyboxUniformsAndDescriptor();
+		// Initialize the skybox pass
+		skyboxPass.SetData(&descriptorPool, &hdrRenderPass, swapChainExtent);
+		skyboxPass.Create();
+
+		skyboxPass.UpdateSkyboxCubemapShaderParameter(cubemapPreprocessingPass.GetSkyboxCubemap());
 
 		// Cache the skybox mesh UUID. We used it to convert the HDR equirectangular map to a cubemap, but we can
 		// reuse the cube mesh to draw the skybox in future frames as well
@@ -703,7 +704,7 @@ namespace TANG
 		}
 
 		// Update the camera descriptor for the skybox as well
-		UpdateSkyboxDescriptorSets(currentFrame);
+		skyboxPass.UpdateCameraMatricesShaderParameters(currentFrame, &frameData->viewUBO, &frameData->projUBO);
 	}
 
 	void Renderer::RecreateSwapChain()
@@ -909,6 +910,8 @@ namespace TANG
 		data.cmdBuffer = secondaryCmdBuffer;
 		data.framebuffer = &frameData->hdrFramebuffer;
 		data.renderPass = &hdrRenderPass;
+		data.framebufferWidth = framebufferWidth;
+		data.framebufferHeight = framebufferHeight;
 
 		skyboxPass.Draw(currentFrame, data);
 
@@ -1532,27 +1535,6 @@ namespace TANG
 		}
 	}
 
-	void Renderer::CreateSkyboxDescriptorSets()
-	{
-		const LayoutCache& cache = skyboxSetLayoutCache.GetLayoutCache();
-		if (skyboxSetLayoutCache.GetLayoutCount() != 3)
-		{
-			TNG_ASSERT_MSG(false, "Failed to create skybox descriptor set!");
-			return;
-		}
-
-		for (uint32_t i = 0; i < GetFDDSize(); i++)
-		{
-			auto frameData = GetFDDAtIndex(i);
-			uint32_t j = 0;
-			for (auto& iter : cache)
-			{
-				frameData->skyboxDescriptorSets[j].Create(descriptorPool, iter.second);
-				j++;
-			}
-		}
-	}
-
 	void Renderer::CreateLDRDescriptorSet()
 	{
 		const LayoutCache& cache = ldrSetLayoutCache.GetLayoutCache();
@@ -1573,7 +1555,6 @@ namespace TANG
 	void Renderer::CreateDescriptorSetLayouts()
 	{
 		CreatePBRSetLayouts();
-		CreateSkyboxSetLayouts();
 		CreateLDRSetLayouts();
 	}
 
@@ -1856,7 +1837,7 @@ namespace TANG
 
 		// Update ProjUBO descriptor set
 		WriteDescriptorSets writeDescSets(1, 0);
-		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 0, frameData->projUBO);
+		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 0, &frameData->projUBO);
 		descSet.Update(writeDescSets);
 	}
 
@@ -1894,18 +1875,8 @@ namespace TANG
 		// Update view matrix + camera data descriptor set
 		WriteDescriptorSets writeDescSets(1, 1);
 		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 0, &hdrAttachment);
-		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 1, frameData->ldrCameraDataUBO);
+		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 1, &frameData->ldrCameraDataUBO);
 		descSet.Update(writeDescSets);
-	}
-
-	void Renderer::UpdateSkyboxDescriptorSets(uint32_t frameIndex)
-	{
-		auto frameData = GetFDDAtIndex(frameIndex);
-
-		WriteDescriptorSets writeSetVolatile(2, 0);
-		writeSetVolatile.AddUniformBuffer(frameData->skyboxDescriptorSets[2].GetDescriptorSet(), 0, frameData->viewUBO);
-		writeSetVolatile.AddUniformBuffer(frameData->skyboxDescriptorSets[2].GetDescriptorSet(), 1, frameData->projUBO);
-		frameData->skyboxDescriptorSets[2].Update(writeSetVolatile);
 	}
 
 	void Renderer::UpdateCameraDataDescriptorSet(UUID uuid, uint32_t frameIndex)
@@ -1917,8 +1888,8 @@ namespace TANG
 
 		// Update view matrix + camera data descriptor set
 		WriteDescriptorSets writeDescSets(2, 0);
-		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 2, frameData->viewUBO);
-		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 0, frameData->cameraDataUBO);
+		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 2, &frameData->viewUBO);
+		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 0, &frameData->cameraDataUBO);
 		descSet.Update(writeDescSets);
 	}
 
@@ -1960,8 +1931,8 @@ namespace TANG
 
 		// Update transform + cameraData descriptor sets
 		WriteDescriptorSets writeDescSets(2, 0);
-		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 0, currentAssetDataMap.transformUBO);
-		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 1, frameData->cameraDataUBO);
+		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 0, &currentAssetDataMap.transformUBO);
+		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 1, &frameData->cameraDataUBO);
 		descSet.Update(writeDescSets);
 	}
 
@@ -1971,24 +1942,6 @@ namespace TANG
 		UpdateCameraDataDescriptorSet(uuid, frameIndex);
 		UpdateProjectionDescriptorSet(uuid, frameIndex);
 		UpdatePBRTextureDescriptorSet(uuid, frameIndex);
-	}
-
-	void Renderer::InitializeSkyboxUniformsAndDescriptor()
-	{
-		for (uint32_t i = 0; i < GetFDDSize(); i++)
-		{
-			auto frameData = GetFDDAtIndex(i);
-
-			// Initialize the descriptor
-			WriteDescriptorSets writeSetPersistent(0, 1);
-			writeSetPersistent.AddImageSampler(frameData->skyboxDescriptorSets[0].GetDescriptorSet(), 0, cubemapPreprocessingPass.GetSkyboxCubemap());
-			frameData->skyboxDescriptorSets[0].Update(writeSetPersistent);
-
-			WriteDescriptorSets writeSetVolatile(2, 0);
-			writeSetVolatile.AddUniformBuffer(frameData->skyboxDescriptorSets[2].GetDescriptorSet(), 0, frameData->viewUBO);
-			writeSetVolatile.AddUniformBuffer(frameData->skyboxDescriptorSets[2].GetDescriptorSet(), 1, frameData->projUBO);
-			frameData->skyboxDescriptorSets[2].Update(writeSetVolatile);
-		}
 	}
 
 	void Renderer::InitializeFrameUniformBuffers()

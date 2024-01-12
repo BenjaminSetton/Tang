@@ -32,20 +32,38 @@ namespace TANG
 
 	CubemapPreprocessingPass::CubemapPreprocessingPass(CubemapPreprocessingPass&& other) noexcept
 	{
-
+		UNUSED(other);
+		TNG_TODO();
 	}
 
-	void CubemapPreprocessingPass::Create(const DescriptorPool& descriptorPool)
+	void CubemapPreprocessingPass::SetData(const DescriptorPool* descriptorPool, VkExtent2D swapChainExtent)
 	{
-		CreateFramebuffers();
-		CreatePipelines();
-		CreateRenderPasses();
+		borrowedData.descriptorPool = descriptorPool;
+		borrowedData.swapChainExtent = swapChainExtent;
+	}
+
+	void CubemapPreprocessingPass::Create()
+	{
+		if (wasCreated)
+		{
+			LogWarning("Attempting to create cubemap preprocessing pass more than once!");
+			return;
+		}
+
+		ResetBaseMembers();
+
 		CreateSetLayoutCaches();
-		CreateDescriptorSets(descriptorPool);
 		CreateUniformBuffers();
+		CreateDescriptorSets();
 		CreateSyncObjects();
+		CreateRenderPasses();
+		CreatePipelines();
+		CreateFramebuffers();
 
 		InitializeShaderParameters();
+
+		ResetBorrowedData();
+		wasCreated = true;
 	}
 
 	void CubemapPreprocessingPass::DestroyIntermediates()
@@ -76,6 +94,8 @@ namespace TANG
 		cubemapPreprocessingPipeline.Destroy();
 
 		cubemapPreprocessingRenderPass.Destroy();
+
+		wasCreated = false;
 	}
 
 	void CubemapPreprocessingPass::LoadTextureResources()
@@ -142,28 +162,9 @@ namespace TANG
 
 	void CubemapPreprocessingPass::Draw(uint32_t currentFrame, const DrawData& data)
 	{
-		//if (!IsDrawDataValid(data))
-		//{
-		//	return;
-		//}
-
-		//VkCommandBufferInheritanceInfo inheritanceInfo{};
-		//inheritanceInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
-		//inheritanceInfo.pNext = nullptr;
-		//inheritanceInfo.renderPass = data.renderPass->GetRenderPass();
-		//inheritanceInfo.subpass = 0;
-		//inheritanceInfo.framebuffer = data.framebuffer->GetFramebuffer();
-
-		//data.cmdBuffer->BeginRecording(VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT | VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT, &inheritanceInfo);
-
-		//data.cmdBuffer->CMD_SetScissor({ 0, 0 }, {data.framebufferWidth, data.framebufferHeight});
-		//data.cmdBuffer->CMD_SetViewport(static_cast<float>(data.framebufferWidth), static_cast<float>(data.framebufferHeight));
-		//data.cmdBuffer->CMD_BindGraphicsPipeline(skyboxPipeline.GetPipeline());
-		//data.cmdBuffer->CMD_BindMesh(data.asset);
-		//data.cmdBuffer->CMD_BindDescriptorSets(skyboxPipeline.GetPipelineLayout(), 3, reinterpret_cast<VkDescriptorSet*>(skyboxDescriptorSets[currentFrame].data()));
-		//data.cmdBuffer->CMD_DrawIndexed(static_cast<uint32_t>(data.asset->indexCount));
-
-		//data.cmdBuffer->EndRecording();
+		// Nothing to do here, all the work is done during Preprocess()
+		UNUSED(currentFrame);
+		UNUSED(data);
 	}
 
 	const TextureResource* CubemapPreprocessingPass::GetSkyboxCubemap() const
@@ -217,10 +218,10 @@ namespace TANG
 
 	void CubemapPreprocessingPass::CreatePipelines()
 	{
-		cubemapPreprocessingPipeline.SetData(&cubemapPreprocessingRenderPass, &cubemapPreprocessingSetLayoutCache, swapChainExtent);
+		cubemapPreprocessingPipeline.SetData(&cubemapPreprocessingRenderPass, &cubemapPreprocessingSetLayoutCache, borrowedData.swapChainExtent);
 		cubemapPreprocessingPipeline.Create();
 
-		irradianceSamplingPipeline.SetData(&cubemapPreprocessingRenderPass, &cubemapPreprocessingSetLayoutCache, swapChainExtent);
+		irradianceSamplingPipeline.SetData(&cubemapPreprocessingRenderPass, &cubemapPreprocessingSetLayoutCache, borrowedData.swapChainExtent);
 		irradianceSamplingPipeline.Create();
 	}
 
@@ -241,7 +242,7 @@ namespace TANG
 		}
 	}
 
-	void CubemapPreprocessingPass::CreateDescriptorSets(const DescriptorPool& descriptorPool)
+	void CubemapPreprocessingPass::CreateDescriptorSets()
 	{
 		// Cubemap preprocessing + irradiance sampling
 		// NOTE - We're re-using the cubemap preprocessing descriptor set layout because they do have
@@ -256,8 +257,8 @@ namespace TANG
 
 		for (uint32_t i = 0; i < 6; i++)
 		{
-			cubemapPreprocessingDescriptorSets[i].Create(descriptorPool, cache.begin()->second);
-			irradianceSamplingsDescriptorSets[i].Create(descriptorPool, cache.begin()->second);
+			cubemapPreprocessingDescriptorSets[i].Create(*(borrowedData.descriptorPool), cache.begin()->second);
+			irradianceSamplingsDescriptorSets[i].Create(*(borrowedData.descriptorPool), cache.begin()->second);
 		}
 	}
 
@@ -308,15 +309,20 @@ namespace TANG
 			cubemapPreprocessingCubemapLayerUBO[i].UpdateData(&cubemapLayer, sizeof(cubemapLayer));
 
 			// Cubemap preprocessing
-			WriteDescriptorSets writeDescSets(2, 0);
-			writeDescSets.AddUniformBuffer(cubemapPreprocessingDescriptorSets[i].GetDescriptorSet(), 0, cubemapPreprocessingViewProjUBO[i]);
-			writeDescSets.AddUniformBuffer(cubemapPreprocessingDescriptorSets[i].GetDescriptorSet(), 1, cubemapPreprocessingCubemapLayerUBO[i]);
-			cubemapPreprocessingDescriptorSets[i].Update(writeDescSets);
+			{
+				WriteDescriptorSets writeDescSets(2, 0);
+				writeDescSets.AddUniformBuffer(cubemapPreprocessingDescriptorSets[i].GetDescriptorSet(), 0, &cubemapPreprocessingViewProjUBO[i]);
+				writeDescSets.AddUniformBuffer(cubemapPreprocessingDescriptorSets[i].GetDescriptorSet(), 1, &cubemapPreprocessingCubemapLayerUBO[i]);
+				cubemapPreprocessingDescriptorSets[i].Update(writeDescSets);
+			}
 
 			// Irradiance sampling
-			writeDescSets.AddUniformBuffer(irradianceSamplingsDescriptorSets[i].GetDescriptorSet(), 0, cubemapPreprocessingViewProjUBO[i]);
-			writeDescSets.AddUniformBuffer(irradianceSamplingsDescriptorSets[i].GetDescriptorSet(), 1, cubemapPreprocessingCubemapLayerUBO[i]);
-			irradianceSamplingsDescriptorSets[i].Update(writeDescSets);
+			{
+				WriteDescriptorSets writeDescSets(2, 0);
+				writeDescSets.AddUniformBuffer(irradianceSamplingsDescriptorSets[i].GetDescriptorSet(), 0, &cubemapPreprocessingViewProjUBO[i]);
+				writeDescSets.AddUniformBuffer(irradianceSamplingsDescriptorSets[i].GetDescriptorSet(), 1, &cubemapPreprocessingCubemapLayerUBO[i]);
+				irradianceSamplingsDescriptorSets[i].Update(writeDescSets);
+			}
 		}
 	}
 
@@ -378,4 +384,8 @@ namespace TANG
 		cmdBuffer->CMD_EndRenderPass();
 	}
 
+	void CubemapPreprocessingPass::ResetBorrowedData()
+	{
+		memset(&borrowedData, 0, sizeof(borrowedData));
+	}
 }

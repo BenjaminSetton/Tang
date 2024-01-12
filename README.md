@@ -31,6 +31,8 @@ NOTES:
 - Normal mapping (LearnOpenGL) - https://learnopengl.com/Advanced-Lighting/Normal-Mapping
 - Shader resource bindings - https://developer.nvidia.com/vulkan-shader-resource-binding
 - Sync objects - https://vulkan-tutorial.com/Drawing_a_triangle/Drawing/Rendering_and_presentation
+- Raytracing tutorial - https://nvpro-samples.github.io/vk_raytracing_tutorial_KHR/
+- Fixing fireflies when convoluting HDR maps - https://graphicrants.blogspot.com/2013/12/tone-mapping.html?m=1
 
 ## DEPENDENCIES
 

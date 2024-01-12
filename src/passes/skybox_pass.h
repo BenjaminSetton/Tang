@@ -20,8 +20,13 @@ namespace TANG
 		SkyboxPass(const SkyboxPass& other) = delete;
 		SkyboxPass& operator=(const SkyboxPass& other) = delete;
 
-		void Create(const DescriptorPool& descriptorPool);
-		void Destroy();
+		void SetData(const DescriptorPool* descriptorPool, const HDRRenderPass* hdrRenderPass, VkExtent2D swapChainExtent);
+
+		void UpdateSkyboxCubemapShaderParameter(const TextureResource* skyboxCubemap);
+		void UpdateCameraMatricesShaderParameters(uint32_t frameIndex, const UniformBuffer* view, const UniformBuffer* proj);
+
+		void Create() override;
+		void Destroy() override;
 
 		void Draw(uint32_t currentFrame, const DrawData& data) override;
 
@@ -29,12 +34,20 @@ namespace TANG
 
 		void CreatePipelines() override;
 		void CreateSetLayoutCaches() override;
-		void CreateUniformBuffers() override;
+		void CreateDescriptorSets() override;
+
+		void ResetBorrowedData() override;
 
 		SkyboxPipeline skyboxPipeline;
 		SetLayoutCache skyboxSetLayoutCache;
-		std::array<std::array<DescriptorSet, 3>, CONFIG::MaxFramesInFlight> skyboxDescriptorSets;
+		std::array<std::array<DescriptorSet, 2>, CONFIG::MaxFramesInFlight> skyboxDescriptorSets;
 
+		struct  
+		{
+			const DescriptorPool* descriptorPool;
+			const HDRRenderPass* hdrRenderPass;
+			VkExtent2D swapChainExtent;
+		} borrowedData;
 	};
 }
 

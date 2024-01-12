@@ -203,6 +203,8 @@ namespace TANG
 	{
 		AssetDisk* Load(std::string_view filePath)
 		{
+			LogInfo("Starting asset load for '%s'", filePath.data());
+
 			Assimp::Importer importer;
 #if defined(FAST_IMPORT)
 			uint32_t importFlags = aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_CalcTangentSpace;
@@ -334,6 +336,8 @@ namespace TANG
 								}
 
 								currentMaterial.AddTextureOfType(texTypeIter->second, tex);
+
+								LogInfo("\tMaterial %u: Loaded texture '%s' of type %u from disk", i, textureName.string().c_str(), static_cast<uint32_t>(aiType));
 							}
 						}
 					}
@@ -347,6 +351,8 @@ namespace TANG
 					}
 				}
 			}
+
+			LogInfo("Finished loading asset with %u materials!", asset->materials.size());
 
 			AssetContainer& container = AssetContainer::GetInstance();
 

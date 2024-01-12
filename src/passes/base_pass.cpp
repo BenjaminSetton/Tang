@@ -3,20 +3,31 @@
 
 #include "base_pass.h"
 #include "../utils/sanity_check.h"
+#include "../utils/logger.h"
 
 static const std::array<uint8_t, sizeof(TANG::DrawData)> ZERO_BLOCK = {};
 
 namespace TANG
 {
-	void BasePass::Create(const DescriptorPool& descriptorPool)
+	void BasePass::Create()
 	{
-		CreateFramebuffers();
-		CreatePipelines();
-		CreateRenderPasses();
+		if (wasCreated)
+		{
+			LogWarning("Attempting to create base pass when it was already created!");
+			return;
+		}
+
+		ResetBaseMembers();
+
 		CreateSetLayoutCaches();
-		CreateDescriptorSets(descriptorPool);
 		CreateUniformBuffers();
+		CreateDescriptorSets();
 		CreateSyncObjects();
+		CreateRenderPasses();
+		CreatePipelines();
+		CreateFramebuffers();
+
+		wasCreated = true;
 	}
 
 	bool BasePass::IsDrawDataValid(const DrawData& data) const
@@ -25,7 +36,7 @@ namespace TANG
 		// Ensure that ZERO_BLOCK actually was zero-initialized to some extent
 		// I know this looks stupid, but better safe than sorry
 		uint8_t testBlock[5] = { 0, 0, 0, 0, 0 };
-		TNG_ASSERT((memcmp(testBlock, ZERO_BLOCK.data(), 5)) != 0);
+		TNG_ASSERT((memcmp(testBlock, ZERO_BLOCK.data(), 5)) == 0);
 #endif
 
 		// memcmp returns 0 if both blocks are equal
@@ -45,7 +56,7 @@ namespace TANG
 	{
 	}
 
-	void BasePass::CreateDescriptorSets(const DescriptorPool & descriptorPool) 
+	void BasePass::CreateDescriptorSets() 
 	{
 	}
 	
@@ -56,6 +67,12 @@ namespace TANG
 	void BasePass::CreateSyncObjects()
 	{
 		fence = VK_NULL_HANDLE;
+	}
+
+	void BasePass::ResetBaseMembers()
+	{
+		fence = VK_NULL_HANDLE;
+		wasCreated = false;
 	}
 
 	VkFence BasePass::GetFence()

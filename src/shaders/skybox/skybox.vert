@@ -4,12 +4,12 @@ layout(location = 0) in vec3 modelPos;
 
 layout(location = 0) out vec3 localPos;
 
-layout(set = 2, binding = 0) uniform ViewUBO
+layout(set = 1, binding = 0) uniform ViewUBO
 {
 	mat4 viewMatrix;
 } viewUBO;
 
-layout(set = 2, binding = 1) uniform ProjUBO
+layout(set = 1, binding = 1) uniform ProjUBO
 {
 	mat4 projMatrix;
 } projUBO;

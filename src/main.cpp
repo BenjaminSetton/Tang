@@ -29,7 +29,7 @@ struct MyAsset
 
 static std::vector<std::string> assetNames =
 {
-    "../src/data/assets/marble_statue/scene.gltf"
+    "../src/data/assets/brass_vase/scene.gltf"
 };
 
 int RandomRangeInt(int min, int max)
@@ -62,8 +62,8 @@ int main(uint32_t argc, const char** argv)
         {
             MyAsset asset(assetName, id);
 
-			float scale = 5.0f;
-            //float scale = 1.0f;
+			//float scale = 0.005f;
+            float scale = 15.0f;
 			asset.scale[0] = scale;
 			asset.scale[1] = scale;
 			asset.scale[2] = scale;

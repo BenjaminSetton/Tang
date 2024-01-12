@@ -32,7 +32,7 @@ namespace TANG
 		other.numImages = 0;
 	}
 
-	void WriteDescriptorSets::AddUniformBuffer(VkDescriptorSet descriptorSet, uint32_t binding, UniformBuffer& uniformBuffer, VkDeviceSize offset)
+	void WriteDescriptorSets::AddUniformBuffer(VkDescriptorSet descriptorSet, uint32_t binding, const UniformBuffer* uniformBuffer, VkDeviceSize offset)
 	{
 		if (numBuffers == 0)
 		{
@@ -45,9 +45,9 @@ namespace TANG
 
 		descriptorBufferInfo.push_back(VkDescriptorBufferInfo());
 		VkDescriptorBufferInfo& bufferInfo = descriptorBufferInfo.back();
-		bufferInfo.buffer = uniformBuffer.GetBuffer();
+		bufferInfo.buffer = uniformBuffer->GetBuffer();
 		bufferInfo.offset = offset;
-		bufferInfo.range = uniformBuffer.GetBufferSize();
+		bufferInfo.range = uniformBuffer->GetBufferSize();
 
 		VkWriteDescriptorSet writeDescSet{};
 		writeDescSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
