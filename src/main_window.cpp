@@ -7,24 +7,73 @@
 
 #include <utility>
 
+#include "input_manager.h"
 #include "main_window.h"
 #include "utils/logger.h"
 #include "utils/sanity_check.h"
 
+static struct
+{
+	bool resized = false;
+	bool inFocus = true;
+} WindowData;
+
 namespace TANG
 {
-
 	static void FramebufferResizeCallback(GLFWwindow* windowHandle, int windowWidth, int windowHeight)
 	{
 		UNUSED(windowWidth);
 		UNUSED(windowHeight);
 
-		auto app = reinterpret_cast<MainWindow*>(glfwGetWindowUserPointer(windowHandle));
-		app->windowResized = true;
+		WindowData.resized = true;
 
+		auto app = reinterpret_cast<MainWindow*>(glfwGetWindowUserPointer(windowHandle));
 		// Block if the window is minimized
 		uint32_t width, height;
 		app->BlockIfMinimized(&width, &height);
+	}
+
+	static void WindowFocusedCallback(GLFWwindow* windowHandle, int focused)
+	{
+		UNUSED(windowHandle);
+
+		WindowData.inFocus = focused;
+	}
+
+	void MainWindow::LMBCallback(InputState state)
+	{
+		if (state != InputState::PRESSED)
+		{
+			return;
+		}
+
+		// Set cursor to DISABLED when we click on the window
+		GLFWwindow* windowHandle = MainWindow::Get().GetHandle();
+		if (glfwGetInputMode(windowHandle, GLFW_CURSOR) == GLFW_CURSOR_NORMAL)
+		{
+			glfwSetInputMode(windowHandle, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+		}
+
+		// Focus the window
+		WindowData.inFocus = true;
+	}
+
+	void MainWindow::ESCCallback(InputState state)
+	{
+		if (state != InputState::PRESSED)
+		{
+			return;
+		}
+
+		// Set cursor to NORMAL once we hit the ESC key
+		GLFWwindow* windowHandle = MainWindow::Get().GetHandle();
+		if (glfwGetInputMode(windowHandle, GLFW_CURSOR) == GLFW_CURSOR_DISABLED)
+		{
+			glfwSetInputMode(windowHandle, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+		}
+
+		// Un-focus the window
+		WindowData.inFocus = false;
 	}
 
 	MainWindow::MainWindow() : glfwWinHandle(nullptr)
@@ -86,6 +135,7 @@ namespace TANG
 		glfwSetWindowUserPointer(glfwWinHandle, this);
 		glfwSetInputMode(glfwWinHandle, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 		glfwSetFramebufferSizeCallback(glfwWinHandle, FramebufferResizeCallback);
+		glfwSetWindowFocusCallback(glfwWinHandle, WindowFocusedCallback);
 
 		// Use raw mouse motion if available, meaning we won't consider any acceleration or other features that
 		// are applied to a desktop mouse to make it "feel" better. Raw mouse motion is better for controlling 3D cameras
@@ -98,6 +148,9 @@ namespace TANG
 			// Let's print a message saying raw mouse motion is not supported
 			LogInfo("Raw mouse motion is not supported!");
 		}
+
+		REGISTER_MOUSE_BUTTON_CALLBACK(MouseType::MOUSE_LMB, MainWindow::LMBCallback);
+		REGISTER_KEY_CALLBACK(KeyType::KEY_ESC, MainWindow::ESCCallback);
 	}
 
 	void MainWindow::Update(float deltaTime)
@@ -119,6 +172,9 @@ namespace TANG
 		glfwTerminate();
 
 		glfwWinHandle = nullptr;
+
+		DEREGISTER_MOUSE_BUTTON_CALLBACK(MouseType::MOUSE_LMB, MainWindow::LMBCallback);
+		DEREGISTER_KEY_CALLBACK(KeyType::KEY_ESC, MainWindow::ESCCallback);
 	}
 
 	bool MainWindow::ShouldClose() const
@@ -126,10 +182,15 @@ namespace TANG
 		return glfwWindowShouldClose(glfwWinHandle);
 	}
 
+	bool MainWindow::IsInFocus() const
+	{
+		return WindowData.inFocus;
+	}
+
 	bool MainWindow::WasWindowResized()
 	{
-		bool res = windowResized;
-		windowResized = false;
+		bool res = WindowData.resized;
+		WindowData.resized = false; // Reset the cached value upon reading from it
 
 		return res;
 	}

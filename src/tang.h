@@ -113,6 +113,6 @@ namespace TANG
 	bool IsKeyReleased(int key);
 
 	// Returns the current state of the provided key. This can be either PRESSED, HELD (TODO) or RELEASED.
-	KeyState GetKeyState(int key);
+	InputState GetKeyState(int key);
 
 }

@@ -171,57 +171,57 @@ namespace TANG
 
 	void FreeflyCamera::RegisterMouseCallbacks()
 	{
-		REGISTER_MOUSE_CALLBACK(FreeflyCamera::RotateCamera);
+		REGISTER_MOUSE_MOVED_CALLBACK(FreeflyCamera::RotateCamera);
 	}
 
 	void FreeflyCamera::DeregisterMouseCallbacks()
 	{
-		DEREGISTER_MOUSE_CALLBACK(FreeflyCamera::RotateCamera);
+		REGISTER_MOUSE_MOVED_CALLBACK(FreeflyCamera::RotateCamera);
 	}
 
-	void FreeflyCamera::MoveUp(KeyState state)
+	void FreeflyCamera::MoveUp(InputState state)
 	{
-		if (state == KeyState::PRESSED || state == KeyState::HELD)
+		if (state == InputState::PRESSED || state == InputState::HELD)
 		{
 			displacement.y++;
 		}
 	}
 
-	void FreeflyCamera::MoveDown(KeyState state)
+	void FreeflyCamera::MoveDown(InputState state)
 	{
-		if (state == KeyState::PRESSED || state == KeyState::HELD)
+		if (state == InputState::PRESSED || state == InputState::HELD)
 		{
 			displacement.y--;
 		}
 	}
 
-	void FreeflyCamera::MoveLeft(KeyState state)
+	void FreeflyCamera::MoveLeft(InputState state)
 	{
-		if (state == KeyState::PRESSED || state == KeyState::HELD)
+		if (state == InputState::PRESSED || state == InputState::HELD)
 		{
 			displacement.x--;
 		}
 	}
 
-	void FreeflyCamera::MoveRight(KeyState state)
+	void FreeflyCamera::MoveRight(InputState state)
 	{
-		if (state == KeyState::PRESSED || state == KeyState::HELD)
+		if (state == InputState::PRESSED || state == InputState::HELD)
 		{
 			displacement.x++;
 		}
 	}
 
-	void FreeflyCamera::MoveForward(KeyState state)
+	void FreeflyCamera::MoveForward(InputState state)
 	{
-		if (state == KeyState::PRESSED || state == KeyState::HELD)
+		if (state == InputState::PRESSED || state == InputState::HELD)
 		{
 			displacement.z--;
 		}
 	}
 
-	void FreeflyCamera::MoveBackward(KeyState state)
+	void FreeflyCamera::MoveBackward(InputState state)
 	{
-		if (state == KeyState::PRESSED || state == KeyState::HELD)
+		if (state == InputState::PRESSED || state == InputState::HELD)
 		{
 			displacement.z++;
 		}

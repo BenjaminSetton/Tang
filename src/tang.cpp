@@ -38,7 +38,7 @@ namespace TANG
 	///////////////////////////////////////////////////////////
 	void Initialize()
 	{
-		MainWindow& window = MainWindow::GetInstance();
+		MainWindow& window = MainWindow::Get();
 		Renderer& renderer = Renderer::GetInstance();
 
 		window.Create(CONFIG::WindowWidth, CONFIG::WindowHeight);
@@ -53,7 +53,7 @@ namespace TANG
 
 	void Update(float deltaTime)
 	{
-		MainWindow& window = MainWindow::GetInstance();
+		MainWindow& window = MainWindow::Get();
 		Renderer& renderer = Renderer::GetInstance();
 		InputManager& inputManager = InputManager::GetInstance();
 
@@ -61,7 +61,17 @@ namespace TANG
 
 		inputManager.Update();
 
-		camera.Update(deltaTime);
+		// Only move the camera if the window is focused, otherwise the 
+		// mouse cursor can freely move around
+		if (window.IsInFocus())
+		{
+			camera.Update(deltaTime);
+		}
+		else
+		{
+			// Reset the internal mouse delta of the input manager to prevent snapping
+			inputManager.ResetMouseDeltaCache();
+		}
 
 		// Poll the main window for resizes, rather than doing it through events
 		if (window.WasWindowResized())
@@ -90,7 +100,7 @@ namespace TANG
 		LoaderUtils::UnloadAll();
 		Renderer::GetInstance().Shutdown();
 		InputManager::GetInstance().Shutdown();
-		MainWindow::GetInstance().Destroy();
+		MainWindow::Get().Destroy();
 	}
 
 	///////////////////////////////////////////////////////////
@@ -100,7 +110,7 @@ namespace TANG
 	///////////////////////////////////////////////////////////
 	bool WindowShouldClose()
 	{
-		return MainWindow::GetInstance().ShouldClose();
+		return MainWindow::Get().ShouldClose();
 	}
 
 	UUID LoadAsset(const char* filepath)
@@ -198,7 +208,7 @@ namespace TANG
 		return InputManager::GetInstance().IsKeyReleased(key);
 	}
 
-	KeyState GetKeyState(int key)
+	InputState GetKeyState(int key)
 	{
 		return InputManager::GetInstance().GetKeyState(key);
 	}

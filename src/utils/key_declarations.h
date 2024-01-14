@@ -1,19 +1,8 @@
 #ifndef KEY_DECLARATIONS_H
 #define KEY_DECLARATIONS_H
 
-// Needed to include GLFW key types for mapping
-#include "glfw/glfw3.h"
-
 namespace TANG
 {
-	enum class KeyState
-	{
-		INVALID = -1,
-		RELEASED,
-		PRESSED,
-		HELD,
-	};
-
 	enum class KeyType
 	{
 		// Numbers

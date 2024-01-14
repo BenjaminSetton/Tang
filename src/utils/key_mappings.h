@@ -3,19 +3,11 @@
 
 #include <unordered_map>
 
+#include "glfw/glfw3.h"
 #include "key_declarations.h"
 
 namespace TANG
 {
-
-	static const std::unordered_map<int, KeyState> KeyStateMappings =
-	{
-		{ -1          , KeyState::INVALID  },
-		{ GLFW_RELEASE, KeyState::RELEASED },
-		{ GLFW_PRESS  , KeyState::PRESSED  },
-		{ GLFW_REPEAT , KeyState::HELD     },
-	};
-
 	static const std::unordered_map<int, KeyType> KeyTypeMappings =
 	{
 		// Numbers

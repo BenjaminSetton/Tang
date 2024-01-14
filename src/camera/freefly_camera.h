@@ -3,10 +3,11 @@
 
 #include "base_camera.h"
 
-#include "../utils/key_declarations.h"
-
 namespace TANG
 {
+	// Forward declarations
+	enum class InputState;
+
 	class FreeflyCamera : public BaseCamera
 	{
 	public:
@@ -49,12 +50,12 @@ namespace TANG
 		void DeregisterMouseCallbacks() override;
 
 		// Key callback functions
-		void MoveUp(KeyState state);
-		void MoveDown(KeyState state);
-		void MoveLeft(KeyState state);
-		void MoveRight(KeyState state);
-		void MoveForward(KeyState state);
-		void MoveBackward(KeyState state);
+		void MoveUp(InputState state);
+		void MoveDown(InputState state);
+		void MoveLeft(InputState state);
+		void MoveRight(InputState state);
+		void MoveForward(InputState state);
+		void MoveBackward(InputState state);
 
 		// Mouse callback functions
 		void RotateCamera(double xDelta, double yDelta);

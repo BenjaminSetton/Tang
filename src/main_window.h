@@ -9,10 +9,6 @@ namespace TANG
 	class MainWindow
 	{
 
-	private:
-
-		MainWindow();
-
 	public:
 
 		~MainWindow();
@@ -20,7 +16,7 @@ namespace TANG
 		MainWindow(MainWindow&& other) noexcept;
 		MainWindow& operator=(const MainWindow& other);
 
-		static MainWindow& GetInstance()
+		static MainWindow& Get()
 		{
 			static MainWindow instance;
 			return instance;
@@ -33,6 +29,7 @@ namespace TANG
 		void Destroy();
 
 		bool ShouldClose() const;
+		bool IsInFocus() const;
 
 		// Returns true once the window is resized. Whenever true is returned, it MUST be handled appropriately
 		// since it will not be returned more than once unless the window is constantly being resized
@@ -45,8 +42,11 @@ namespace TANG
 		// The two out parameters are populated with the windows' size after it's maximized
 		void BlockIfMinimized(uint32_t* outWidth, uint32_t* outHeight);
 
-		// Set to true only by the GLFW callback, set to false and read only by WasWindowResized
-		bool windowResized;
+	private:
+
+		MainWindow();
+		void LMBCallback(InputState state);
+		void ESCCallback(InputState state);
 
 	private:
 
