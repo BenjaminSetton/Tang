@@ -12,7 +12,7 @@ namespace TANG
 		SKYBOX,
 		LDR,
 		IRRADIANCE_SAMPLING,
-		PREFILTER_SKYBOX
+		PREFILTER_MAP
 	};
 
 	enum class ShaderStage

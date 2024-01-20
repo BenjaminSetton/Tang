@@ -8,13 +8,13 @@ namespace TANG
 	// Forward declarations
 	class CubemapPreprocessingRenderPass;
 
-	class PrefilterSkyboxPipeline : public BasePipeline
+	class PrefilterMapPipeline : public BasePipeline
 	{
 	public:
 
-		PrefilterSkyboxPipeline();
-		~PrefilterSkyboxPipeline();
-		PrefilterSkyboxPipeline(PrefilterSkyboxPipeline&& other) noexcept;
+		PrefilterMapPipeline();
+		~PrefilterMapPipeline();
+		PrefilterMapPipeline(PrefilterMapPipeline&& other) noexcept;
 
 		void SetData(const CubemapPreprocessingRenderPass* renderPass, const SetLayoutCache* setLayoutCache, VkExtent2D viewportSize);
 

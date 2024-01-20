@@ -8,26 +8,26 @@
 #include "../utils/sanity_check.h"
 #include "../utils/logger.h"
 #include "../vertex_types.h"
-#include "prefilter_skybox_pipeline.h"
+#include "prefilter_map_pipeline.h"
 
 namespace TANG
 {
-	PrefilterSkyboxPipeline::PrefilterSkyboxPipeline()
+	PrefilterMapPipeline::PrefilterMapPipeline()
 	{
 		FlushData();
 	}
 
-	PrefilterSkyboxPipeline::~PrefilterSkyboxPipeline()
+	PrefilterMapPipeline::~PrefilterMapPipeline()
 	{
 		FlushData();
 	}
 
-	PrefilterSkyboxPipeline::PrefilterSkyboxPipeline(PrefilterSkyboxPipeline&& other) noexcept : BasePipeline(std::move(other))
+	PrefilterMapPipeline::PrefilterMapPipeline(PrefilterMapPipeline&& other) noexcept : BasePipeline(std::move(other))
 	{
 	}
 
 	// Get references to the data required in Create(), it's not needed
-	void PrefilterSkyboxPipeline::SetData(const CubemapPreprocessingRenderPass* _renderPass, const SetLayoutCache* _setLayoutCache, VkExtent2D _viewportSize)
+	void PrefilterMapPipeline::SetData(const CubemapPreprocessingRenderPass* _renderPass, const SetLayoutCache* _setLayoutCache, VkExtent2D _viewportSize)
 	{
 		renderPass = _renderPass;
 		setLayoutCache = _setLayoutCache;
@@ -36,7 +36,7 @@ namespace TANG
 		wasDataSet = true;
 	}
 
-	void PrefilterSkyboxPipeline::Create()
+	void PrefilterMapPipeline::Create()
 	{
 		if (!wasDataSet)
 		{
@@ -49,7 +49,7 @@ namespace TANG
 		//        same functionality
 		Shader vertexShader(ShaderType::CUBEMAP_PREPROCESSING, ShaderStage::VERTEX_SHADER);
 		Shader geometryShader(ShaderType::CUBEMAP_PREPROCESSING, ShaderStage::GEOMETRY_SHADER);
-		Shader fragmentShader(ShaderType::PREFILTER_SKYBOX, ShaderStage::FRAGMENT_SHADER);
+		Shader fragmentShader(ShaderType::PREFILTER_MAP, ShaderStage::FRAGMENT_SHADER);
 
 		VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
 		vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -233,7 +233,7 @@ namespace TANG
 		}
 	}
 
-	void PrefilterSkyboxPipeline::FlushData()
+	void PrefilterMapPipeline::FlushData()
 	{
 		renderPass = nullptr;
 		setLayoutCache = nullptr;

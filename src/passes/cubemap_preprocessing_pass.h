@@ -6,6 +6,7 @@
 #include "../framebuffer.h"
 #include "../pipelines/cubemap_preprocessing_pipeline.h"
 #include "../pipelines/irradiance_sampling_pipeline.h"
+#include "../pipelines/prefilter_map_pipeline.h"
 #include "../pipelines/skybox_pipeline.h"
 #include "../render_passes/cubemap_preprocessing_render_pass.h"
 #include "../texture_resource.h"
@@ -38,6 +39,7 @@ namespace TANG
 		// For example, this performs all IBL calculations
 		void Preprocess(PrimaryCommandBuffer* cmdBuffer, AssetResources* asset);
 
+		// No-op, all the work is done during Preprocessing()
 		void Draw(uint32_t currentFrame, const DrawData& data) override;
 
 		const TextureResource* GetSkyboxCubemap() const;
@@ -57,12 +59,13 @@ namespace TANG
 
 		void CalculateSkyboxCubemap(PrimaryCommandBuffer* cmdBuffer, AssetResources* asset);
 		void CalculateIrradianceMap(PrimaryCommandBuffer* cmdBuffer, AssetResources* asset);
+		void CalculatePrefilterMap(PrimaryCommandBuffer* cmdBuffer, AssetResources* asset);
 
 		void ResetBorrowedData() override;
 
 		CubemapPreprocessingPipeline cubemapPreprocessingPipeline;
 		CubemapPreprocessingRenderPass cubemapPreprocessingRenderPass;
-		SetLayoutCache cubemapPreprocessingSetLayoutCache;
+		SetLayoutCache cubemapPreprocessingSetLayoutCache; // Used by cubemap preprocessing + irradiance sampling
 		TextureResource skyboxTexture;
 		TextureResource skyboxCubemap;
 		Framebuffer cubemapPreprocessingFramebuffer;
@@ -71,10 +74,15 @@ namespace TANG
 		DescriptorSet cubemapPreprocessingDescriptorSets[6];
 
 		IrradianceSamplingPipeline irradianceSamplingPipeline;
-		SetLayoutCache irradianceSamplingSetLayoutCache;
 		DescriptorSet irradianceSamplingsDescriptorSets[6];
 		TextureResource irradianceMap;
 		Framebuffer irradianceSamplingFramebuffer;
+
+		PrefilterMapPipeline prefilterMapPipeline;
+		SetLayoutCache prefilterMapSetLayoutCache;
+		DescriptorSet prefilterMapDescriptorSets[6];
+		TextureResource prefilterMap;
+		Framebuffer prefilterMapFramebuffer[6]; // Represents one cubemap mip level
 
 		struct
 		{

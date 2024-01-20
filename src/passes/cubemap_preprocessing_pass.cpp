@@ -74,7 +74,6 @@ namespace TANG
 
 	void CubemapPreprocessingPass::Destroy()
 	{
-		irradianceSamplingSetLayoutCache.DestroyLayouts();
 		cubemapPreprocessingSetLayoutCache.DestroyLayouts();
 
 		vkDestroyFence(GetLogicalDevice(), fence, nullptr);
@@ -149,6 +148,11 @@ namespace TANG
 		baseImageInfo.width = CONFIG::IrradianceMapSize;
 		baseImageInfo.height = CONFIG::IrradianceMapSize;
 		irradianceMap.Create(&baseImageInfo, &viewCreateInfo, &samplerInfo);
+
+		baseImageInfo.width = CONFIG::PrefilterMapSize;
+		baseImageInfo.height = CONFIG::PrefilterMapSize;
+		baseImageInfo.mipLevels = CONFIG::PrefilterMapMaxMips; 
+		prefilterMap.Create(&baseImageInfo, &viewCreateInfo, &samplerInfo);
 	}
 
 	void CubemapPreprocessingPass::Preprocess(PrimaryCommandBuffer* cmdBuffer, AssetResources* asset)
@@ -158,6 +162,7 @@ namespace TANG
 		skyboxCubemap.TransitionLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, cmdBuffer);
 
 		CalculateIrradianceMap(cmdBuffer, asset);
+		CalculatePrefilterMap(cmdBuffer, asset);
 	}
 
 	void CubemapPreprocessingPass::Draw(uint32_t currentFrame, const DrawData& data)
@@ -214,6 +219,24 @@ namespace TANG
 
 			irradianceSamplingFramebuffer.Create(framebufferInfo);
 		}
+
+		// Prefilter map
+		{
+			std::array<TextureResource*, 1> attachments =
+			{
+				&prefilterMap
+			};
+
+			FramebufferCreateInfo framebufferInfo{};
+			framebufferInfo.renderPass = &cubemapPreprocessingRenderPass;
+			framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+			framebufferInfo.attachments = attachments.data();
+			framebufferInfo.width = CONFIG::PrefilterMapSize;
+			framebufferInfo.height = CONFIG::PrefilterMapSize;
+			framebufferInfo.layers = 6;
+
+			prefilterMapFramebuffer.Create(framebufferInfo);
+		}
 	}
 
 	void CubemapPreprocessingPass::CreatePipelines()
@@ -223,6 +246,9 @@ namespace TANG
 
 		irradianceSamplingPipeline.SetData(&cubemapPreprocessingRenderPass, &cubemapPreprocessingSetLayoutCache, borrowedData.swapChainExtent);
 		irradianceSamplingPipeline.Create();
+
+		prefilterMapPipeline.SetData(&cubemapPreprocessingRenderPass, &prefilterMapSetLayoutCache, borrowedData.swapChainExtent);
+		prefilterMapPipeline.Create();
 	}
 
 	void CubemapPreprocessingPass::CreateRenderPasses()
@@ -232,13 +258,23 @@ namespace TANG
 
 	void CubemapPreprocessingPass::CreateSetLayoutCaches()
 	{
-		// Cubemap preprocessing
+		// Cubemap preprocessing / irradiance sampling
 		{
 			SetLayoutSummary volatileLayout;
 			volatileLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);			// View/proj matrix
 			volatileLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_GEOMETRY_BIT);			// Cubemap layer
 			volatileLayout.AddBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);	// Equirectangular map
 			cubemapPreprocessingSetLayoutCache.CreateSetLayout(volatileLayout, 0);
+		}
+
+		// Prefilter map
+		{
+			SetLayoutSummary volatileLayout;
+			volatileLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);			// View/proj matrix
+			volatileLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_GEOMETRY_BIT);			// Cubemap layer
+			volatileLayout.AddBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);	// Equirectangular map
+			volatileLayout.AddBinding(2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT);			// Roughness
+			prefilterMapSetLayoutCache.CreateSetLayout(volatileLayout, 0);
 		}
 	}
 
@@ -248,7 +284,7 @@ namespace TANG
 		// NOTE - We're re-using the cubemap preprocessing descriptor set layout because they do have
 		//        the exact same layout, the problem is that we need to update the descriptors separately
 		//        during subsequent render passes, which is why we must create sets for irradiance sampling
-		const LayoutCache& cache = cubemapPreprocessingSetLayoutCache.GetLayoutCache();
+		const LayoutCache& cubemapPreprocessingCache = cubemapPreprocessingSetLayoutCache.GetLayoutCache();
 		if (cubemapPreprocessingSetLayoutCache.GetLayoutCount() != 1)
 		{
 			TNG_ASSERT_MSG(false, "Failed to create skybox pass descriptor sets!");
@@ -257,8 +293,21 @@ namespace TANG
 
 		for (uint32_t i = 0; i < 6; i++)
 		{
-			cubemapPreprocessingDescriptorSets[i].Create(*(borrowedData.descriptorPool), cache.begin()->second);
-			irradianceSamplingsDescriptorSets[i].Create(*(borrowedData.descriptorPool), cache.begin()->second);
+			cubemapPreprocessingDescriptorSets[i].Create(*(borrowedData.descriptorPool), cubemapPreprocessingCache.begin()->second);
+			irradianceSamplingsDescriptorSets[i].Create(*(borrowedData.descriptorPool), cubemapPreprocessingCache.begin()->second);
+		}
+
+		// Prefilter map
+		const LayoutCache& prefilterMapCache = prefilterMapSetLayoutCache.GetLayoutCache();
+		if (cubemapPreprocessingSetLayoutCache.GetLayoutCount() != 1)
+		{
+			TNG_ASSERT_MSG(false, "Failed to create skybox pass descriptor sets!");
+			return;
+		}
+
+		for (uint32_t i = 0; i < 6; i++)
+		{
+			prefilterMapDescriptorSets[i].Create(*(borrowedData.descriptorPool), prefilterMapCache.begin()->second);
 		}
 	}
 
@@ -382,6 +431,11 @@ namespace TANG
 		}
 
 		cmdBuffer->CMD_EndRenderPass();
+	}
+
+	void CubemapPreprocessingPass::CalculatePrefilterMap(PrimaryCommandBuffer* cmdBuffer, AssetResources* asset)
+	{
+
 	}
 
 	void CubemapPreprocessingPass::ResetBorrowedData()
