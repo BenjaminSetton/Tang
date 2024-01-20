@@ -1,4 +1,6 @@
 
+#include <cstdarg>
+
 #include "asset_loader.h"
 #include "camera/freefly_camera.h"
 #include "config.h"
@@ -36,12 +38,14 @@ namespace TANG
 	//		CORE
 	// 
 	///////////////////////////////////////////////////////////
-	void Initialize()
+	void Initialize(const char* windowTitle)
 	{
 		MainWindow& window = MainWindow::Get();
 		Renderer& renderer = Renderer::GetInstance();
 
-		window.Create(CONFIG::WindowWidth, CONFIG::WindowHeight);
+		const char* title = windowTitle == nullptr ? "TANG" : windowTitle;
+		window.Create(CONFIG::WindowWidth, CONFIG::WindowHeight, title);
+
 		InputManager::GetInstance().Initialize(window.GetHandle());
 		renderer.Initialize(window.GetHandle(), CONFIG::WindowWidth, CONFIG::WindowHeight);
 		camera.Initialize({ 0.0f, 5.0f, 15.0f }, { 0.0f, 0.0f, 0.0f }); // Start the camera facing towards negative Z
@@ -111,6 +115,17 @@ namespace TANG
 	bool WindowShouldClose()
 	{
 		return MainWindow::Get().ShouldClose();
+	}
+
+	void SetWindowTitle(const char* format, ...)
+	{
+		char buffer[100];
+		va_list va;
+		va_start(va, format);
+		vsprintf_s(buffer, format, va);
+		va_end(va);
+
+		MainWindow::Get().SetWindowTitle(buffer);
 	}
 
 	UUID LoadAsset(const char* filepath)

@@ -273,7 +273,7 @@ namespace TANG
 			volatileLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);			// View/proj matrix
 			volatileLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_GEOMETRY_BIT);			// Cubemap layer
 			volatileLayout.AddBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);	// Equirectangular map
-			volatileLayout.AddBinding(2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT);			// Roughness
+			volatileLayout.AddBinding(3, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT);			// Roughness
 			prefilterMapSetLayoutCache.CreateSetLayout(volatileLayout, 0);
 		}
 	}
@@ -435,7 +435,9 @@ namespace TANG
 
 	void CubemapPreprocessingPass::CalculatePrefilterMap(PrimaryCommandBuffer* cmdBuffer, AssetResources* asset)
 	{
-
+		UNUSED(cmdBuffer);
+		UNUSED(asset);
+		//TNG_TODO();
 	}
 
 	void CubemapPreprocessingPass::ResetBorrowedData()

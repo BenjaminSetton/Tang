@@ -24,12 +24,13 @@ namespace TANG
 
 		GLFWwindow* GetHandle() const;
 
-		void Create(uint32_t width, uint32_t height);
+		void Create(uint32_t width, uint32_t height, const char* windowTitle);
 		void Update(float deltaTime);
 		void Destroy();
 
 		bool ShouldClose() const;
 		bool IsInFocus() const;
+		void SetWindowTitle(const char* windowTitle);
 
 		// Returns true once the window is resized. Whenever true is returned, it MUST be handled appropriately
 		// since it will not be returned more than once unless the window is constantly being resized

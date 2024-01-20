@@ -78,14 +78,34 @@ int main(uint32_t argc, const char** argv)
     TANG::SetCameraSpeed(5.0f);
     TANG::SetCameraSensitivity(5.0f);
 
-    float elapsedTime = 0;
+    const float fpsUpdateCycle = 1.0f;
+    float fpsUpdateTimer = 0.0f;
+    float accumulatedDT = 0.0f;
+    uint32_t fpsSampleCount = 0;
+
+    float elapsedTime = 0.0f;
     auto startTime = std::chrono::high_resolution_clock::now();
     while (!TANG::WindowShouldClose())
     {
 		float dt = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - startTime).count();
         elapsedTime += dt;
-
         startTime = std::chrono::high_resolution_clock::now();
+
+        // Variables for FPS tracking
+        accumulatedDT += dt;
+        fpsSampleCount++;
+        fpsUpdateTimer += dt;
+
+        if (fpsUpdateTimer > fpsUpdateCycle)
+        {
+            float averageDT = accumulatedDT / static_cast<float>(fpsSampleCount);
+            uint32_t frameFPS = static_cast<uint32_t>(1.0f / averageDT);
+            TANG::SetWindowTitle("TANG - %u FPS", frameFPS);
+
+            fpsUpdateTimer -= fpsUpdateCycle;
+            accumulatedDT = 0.0f;
+            fpsSampleCount = 0;
+        }
 
 		for (auto& asset : assets)
 		{

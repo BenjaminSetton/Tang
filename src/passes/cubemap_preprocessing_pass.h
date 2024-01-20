@@ -82,7 +82,7 @@ namespace TANG
 		SetLayoutCache prefilterMapSetLayoutCache;
 		DescriptorSet prefilterMapDescriptorSets[6];
 		TextureResource prefilterMap;
-		Framebuffer prefilterMapFramebuffer[6]; // Represents one cubemap mip level
+		Framebuffer prefilterMapFramebuffer; // Represents one cubemap mip level
 
 		struct
 		{

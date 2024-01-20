@@ -38,18 +38,22 @@ namespace TANG
 	// 
 	///////////////////////////////////////////////////////////
 
-	// Initializes the TANG renderer and sets up internal objects
-	// NOTE - This must be the FIRST API function call
-	void Initialize();
+	// Initializes the TANG renderer and sets up internal objects. The windowTitle parameter
+	// is optional. In the case it's left to nullptr, a default window title will be used instead.
+	// Note that the window title can be changed later on using the SetWindowTitle() function.
+	// 
+	// NOTE - This must be the FIRST API function call.
+	void Initialize(const char* windowTitle = nullptr);
 
-	// TODO
+	// Core API update loop
 	void Update(float deltaTime);
 
-	// TODO
+	// Core API draw loop. Simply calls the renderer system Draw() call
 	void Draw();
 
 	// Shuts down the TANG renderer and cleans up internal objects
-	// NOTE - This must be the LAST API function call
+	// NOTE - This must be the LAST API function call. All other API calls
+	//        after this are invalid
 	void Shutdown();
 
 	///////////////////////////////////////////////////////////
@@ -61,6 +65,9 @@ namespace TANG
 	// Returns true if the window should close. This can happen for many reasons, but usually
 	// this is because the user clicked the close (X) button on the window
 	bool WindowShouldClose();
+
+	// Sets the title of the window using a format buffer. This may only be called after TANG::Initialize()
+	void SetWindowTitle(const char* format, ...);
 
 	// Loads an asset given the filepath to the asset file on disk. If the asset has not been
 	// imported before, this function will import any of the supported asset types: FBX and OBJ. 

@@ -9,7 +9,7 @@ layout(location = 0) in vec3 inLocalPos;
 layout(location = 0) out vec4 outColor;
 
 layout(set = 0, binding = 2) uniform samplerCube environmentMap;
-layout(set = 0, binding = 3) uniform struct
+layout(set = 0, binding = 3) uniform Roughness
 {
     float value;
 } roughness;
@@ -67,7 +67,7 @@ void main()
     for(uint i = 0u; i < SAMPLE_COUNT; ++i)
     {
         vec2 Xi = Hammersley(i, SAMPLE_COUNT);
-        vec3 H  = ImportanceSampleGGX(Xi, N, roughness);
+        vec3 H  = ImportanceSampleGGX(Xi, N, roughness.value);
         vec3 L  = normalize(2.0 * dot(V, H) * H - V);
 
         float NdotL = max(dot(N, L), 0.0);

@@ -142,7 +142,7 @@ void main()
     normal = normalize( inTBN * normal );
 
     vec3 cameraPos = cameraData.position.xyz;
-    vec3 light = -normalize(vec3(-0.4, -0.75, -1.0));
+    vec3 light = -normalize(vec3(0.4, -0.75, 1.0));
     vec3 view = normalize(cameraPos - inPosition);
     vec3 halfVector = normalize(light + view);
     vec3 albedo = texture(diffuseSampler, inUV).rgb;

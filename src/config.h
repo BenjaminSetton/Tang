@@ -7,8 +7,8 @@ namespace TANG
 {
 	namespace CONFIG
 	{
-		static constexpr uint32_t WindowWidth = 1280;
-		static constexpr uint32_t WindowHeight = 720;
+		static constexpr uint32_t WindowWidth = 1920;
+		static constexpr uint32_t WindowHeight = 1080;
 
 		static const std::string SkyboxCubeMeshFilePath = "../src/data/assets/cube.fbx";
 		static const std::string SkyboxTextureFilePath = "../src/data/textures/cubemaps/skybox_sunny.hdr";

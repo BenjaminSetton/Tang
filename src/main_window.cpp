@@ -119,7 +119,7 @@ namespace TANG
 		return glfwWinHandle;
 	}
 
-	void MainWindow::Create(uint32_t width, uint32_t height)
+	void MainWindow::Create(uint32_t width, uint32_t height, const char* windowTitle)
 	{
 		if (glfwWinHandle != nullptr)
 		{
@@ -131,7 +131,7 @@ namespace TANG
 
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
-		glfwWinHandle = glfwCreateWindow(width, height, "TANG", nullptr, nullptr);
+		glfwWinHandle = glfwCreateWindow(width, height, windowTitle, nullptr, nullptr);
 		glfwSetWindowUserPointer(glfwWinHandle, this);
 		glfwSetInputMode(glfwWinHandle, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 		glfwSetFramebufferSizeCallback(glfwWinHandle, FramebufferResizeCallback);
@@ -185,6 +185,11 @@ namespace TANG
 	bool MainWindow::IsInFocus() const
 	{
 		return WindowData.inFocus;
+	}
+
+	void MainWindow::SetWindowTitle(const char* windowTitle)
+	{
+		glfwSetWindowTitle(glfwWinHandle, windowTitle);
 	}
 
 	bool MainWindow::WasWindowResized()
