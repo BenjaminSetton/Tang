@@ -2,6 +2,7 @@
 #include "../asset_types.h" // AssetResources
 #include "../data_buffer/index_buffer.h" // GetIndexType()
 #include "../device_cache.h"
+#include "../pipelines/base_pipeline.h" // BasePipeline
 #include "../utils/logger.h"
 #include "../utils/sanity_check.h"
 #include "command_buffer.h"
@@ -135,7 +136,7 @@ namespace TANG
 		vkCmdBindIndexBuffer(commandBuffer, resources->indexBuffer.GetBuffer(), 0, resources->indexBuffer.GetIndexType());
 	}
 
-	void CommandBuffer::CMD_BindDescriptorSets(VkPipelineLayout pipelineLayout, uint32_t descriptorSetCount, VkDescriptorSet* descriptorSets)
+	void CommandBuffer::CMD_BindDescriptorSets(const BasePipeline* pipeline, uint32_t descriptorSetCount, VkDescriptorSet* descriptorSets)
 	{
 		if (!IsCommandBufferValid() || !IsRecording())
 		{
@@ -143,10 +144,10 @@ namespace TANG
 			return;
 		}
 
-		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, descriptorSetCount, descriptorSets, 0, nullptr);
+		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->GetPipelineLayout(), 0, descriptorSetCount, descriptorSets, 0, nullptr);
 	}
 
-	void CommandBuffer::CMD_BindGraphicsPipeline(VkPipeline graphicsPipeline)
+	void CommandBuffer::CMD_BindGraphicsPipeline(const BasePipeline* graphicsPipeline)
 	{
 		if (!IsCommandBufferValid() || !IsRecording())
 		{
@@ -154,7 +155,7 @@ namespace TANG
 			return;
 		}
 
-		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline->GetPipeline());
 	}
 
 	void CommandBuffer::CMD_SetViewport(float width, float height)
@@ -200,7 +201,7 @@ namespace TANG
 		vkCmdDraw(commandBuffer, vertexCount, 1, 0, 0);
 	}
 
-	void CommandBuffer::CMD_DrawIndexed(uint32_t indexCount)
+	void CommandBuffer::CMD_DrawIndexed(uint64_t indexCount)
 	{
 		if (!IsCommandBufferValid() || !IsRecording())
 		{
@@ -208,7 +209,12 @@ namespace TANG
 			return;
 		}
 
-		vkCmdDrawIndexed(commandBuffer, indexCount, 1, 0, 0, 0);
+		if (indexCount > std::numeric_limits<uint32_t>::max())
+		{
+			LogError("Index count in draw indexed call exceeds uint32_t::max allowed by Vulkan API call! Only a portion of the mesh will be rendered");
+		}
+
+		vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indexCount), 1, 0, 0, 0);
 	}
 
 	void CommandBuffer::CMD_DrawIndexedInstanced(uint32_t indexCount, uint32_t instanceCount)

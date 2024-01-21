@@ -1747,11 +1747,11 @@ namespace TANG
 		cmdBuffer->BeginRecording(VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT | VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT, &inheritanceInfo);
 
 		cmdBuffer->CMD_BindMesh(resources);
-		cmdBuffer->CMD_BindDescriptorSets(pbrPipeline.GetPipelineLayout(), static_cast<uint32_t>(vkDescSets.size()), vkDescSets.data());
-		cmdBuffer->CMD_BindGraphicsPipeline(pbrPipeline.GetPipeline());
+		cmdBuffer->CMD_BindDescriptorSets(&pbrPipeline, static_cast<uint32_t>(vkDescSets.size()), vkDescSets.data());
+		cmdBuffer->CMD_BindGraphicsPipeline(&pbrPipeline);
 		cmdBuffer->CMD_SetScissor({ 0, 0 }, swapChainExtent);
 		cmdBuffer->CMD_SetViewport(static_cast<float>(swapChainExtent.width), static_cast<float>(swapChainExtent.height));
-		cmdBuffer->CMD_DrawIndexed(static_cast<uint32_t>(resources->indexCount));
+		cmdBuffer->CMD_DrawIndexed(resources->indexCount);
 
 		cmdBuffer->EndRecording();
 	}
@@ -1766,10 +1766,10 @@ namespace TANG
 
 		cmdBuffer->CMD_SetScissor({ 0, 0 }, swapChainExtent);
 		cmdBuffer->CMD_SetViewport(static_cast<float>(swapChainExtent.width), static_cast<float>(swapChainExtent.height));
-		cmdBuffer->CMD_BindGraphicsPipeline(ldrPipeline.GetPipeline());
-		cmdBuffer->CMD_BindDescriptorSets(ldrPipeline.GetPipelineLayout(), 1, reinterpret_cast<VkDescriptorSet*>(&frameData->ldrDescriptorSet));
+		cmdBuffer->CMD_BindGraphicsPipeline(&ldrPipeline);
+		cmdBuffer->CMD_BindDescriptorSets(&ldrPipeline, 1, reinterpret_cast<VkDescriptorSet*>(&frameData->ldrDescriptorSet));
 		cmdBuffer->CMD_BindMesh(fullscreenQuadAsset);
-		cmdBuffer->CMD_DrawIndexed(static_cast<uint32_t>(fullscreenQuadAsset->indexCount));
+		cmdBuffer->CMD_DrawIndexed(fullscreenQuadAsset->indexCount);
 
 		// NOTE - color attachment is cleared at the beginning of the frame, so transitioning the layout to something
 		//        else won't make a difference

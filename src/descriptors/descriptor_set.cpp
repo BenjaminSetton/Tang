@@ -93,6 +93,11 @@ namespace TANG
 			return;
 		}
 
+		if (writeDescriptorSets.GetRemainingImageSamplerSlots() > 0 || writeDescriptorSets.GetRemainingUniformBufferSlots() > 0)
+		{
+			LogWarning("Promised to write more image samplers or uniform buffers than were actually written during descriptor set update. Please reduce the number to the exact amount");
+		}
+
 		uint32_t numWriteDescriptorSets = writeDescriptorSets.GetWriteDescriptorSetCount();
 
 		vkUpdateDescriptorSets(GetLogicalDevice(), numWriteDescriptorSets, writeDescriptorSets.GetWriteDescriptorSets(), 0, nullptr);

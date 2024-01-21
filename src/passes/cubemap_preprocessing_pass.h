@@ -57,9 +57,9 @@ namespace TANG
 
 		void InitializeShaderParameters();
 
-		void CalculateSkyboxCubemap(PrimaryCommandBuffer* cmdBuffer, AssetResources* asset);
-		void CalculateIrradianceMap(PrimaryCommandBuffer* cmdBuffer, AssetResources* asset);
-		void CalculatePrefilterMap(PrimaryCommandBuffer* cmdBuffer, AssetResources* asset);
+		void CalculateSkyboxCubemap(PrimaryCommandBuffer* cmdBuffer, const AssetResources* asset);
+		void CalculateIrradianceMap(PrimaryCommandBuffer* cmdBuffer, const AssetResources* asset);
+		void CalculatePrefilterMap(PrimaryCommandBuffer* cmdBuffer, const AssetResources* asset);
 
 		void ResetBorrowedData() override;
 
@@ -74,12 +74,13 @@ namespace TANG
 		DescriptorSet cubemapPreprocessingDescriptorSets[6];
 
 		IrradianceSamplingPipeline irradianceSamplingPipeline;
-		DescriptorSet irradianceSamplingsDescriptorSets[6];
+		DescriptorSet irradianceSamplingDescriptorSets[6];
 		TextureResource irradianceMap;
 		Framebuffer irradianceSamplingFramebuffer;
 
 		PrefilterMapPipeline prefilterMapPipeline;
 		SetLayoutCache prefilterMapSetLayoutCache;
+		UniformBuffer prefilterMapRoughnessUBO[6];
 		DescriptorSet prefilterMapDescriptorSets[6];
 		TextureResource prefilterMap;
 		Framebuffer prefilterMapFramebuffer; // Represents one cubemap mip level

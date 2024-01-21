@@ -29,6 +29,9 @@ namespace TANG
 		uint32_t GetWriteDescriptorSetCount() const;
 		const VkWriteDescriptorSet* GetWriteDescriptorSets() const;
 
+		uint32_t GetRemainingUniformBufferSlots() const;
+		uint32_t GetRemainingImageSamplerSlots() const;
+
 	private:
 
 		std::vector<VkWriteDescriptorSet> writeDescriptorSets;

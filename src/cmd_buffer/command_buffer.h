@@ -22,6 +22,7 @@ namespace TANG
 
 	// Forward declarations
 	struct AssetResources;
+	class BasePipeline;
 
 	// Pure virtual base command buffer class. This encapsulates all basic functionality shared between
 	// a primary and secondary command buffer, both of which derive from this class
@@ -42,13 +43,13 @@ namespace TANG
 		void EndRecording();
 
 		void CMD_BindMesh(const AssetResources* resources);
-		void CMD_BindDescriptorSets(VkPipelineLayout pipelineLayout, uint32_t descriptorSetCount, VkDescriptorSet* descriptorSets);
-		void CMD_BindGraphicsPipeline(VkPipeline graphicsPipeline);
+		void CMD_BindDescriptorSets(const BasePipeline* pipeline, uint32_t descriptorSetCount, VkDescriptorSet* descriptorSets);
+		void CMD_BindGraphicsPipeline(const BasePipeline* graphicsPipeline);
 		void CMD_SetViewport(float width, float height);
 		void CMD_SetScissor(VkOffset2D scissorOffset, VkExtent2D scissorExtent);
 
 		void CMD_Draw(uint32_t vertexCount);
-		void CMD_DrawIndexed(uint32_t indexCount);
+		void CMD_DrawIndexed(uint64_t indexCount);
 		void CMD_DrawIndexedInstanced(uint32_t indexCount, uint32_t instanceCount);
 
 		void Reset(bool releaseMemory = false);

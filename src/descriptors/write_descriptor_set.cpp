@@ -110,4 +110,14 @@ namespace TANG
 	{
 		return writeDescriptorSets.data();
 	}
+
+	uint32_t WriteDescriptorSets::GetRemainingUniformBufferSlots() const
+	{
+		return numBuffers;
+	}
+
+	uint32_t WriteDescriptorSets::GetRemainingImageSamplerSlots() const
+	{
+		return numImages;
+	}
 }

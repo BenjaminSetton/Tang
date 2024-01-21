@@ -162,7 +162,7 @@ namespace TANG
 		skyboxCubemap.TransitionLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, cmdBuffer);
 
 		CalculateIrradianceMap(cmdBuffer, asset);
-		CalculatePrefilterMap(cmdBuffer, asset);
+		//CalculatePrefilterMap(cmdBuffer, asset);
 	}
 
 	void CubemapPreprocessingPass::Draw(uint32_t currentFrame, const DrawData& data)
@@ -294,14 +294,14 @@ namespace TANG
 		for (uint32_t i = 0; i < 6; i++)
 		{
 			cubemapPreprocessingDescriptorSets[i].Create(*(borrowedData.descriptorPool), cubemapPreprocessingCache.begin()->second);
-			irradianceSamplingsDescriptorSets[i].Create(*(borrowedData.descriptorPool), cubemapPreprocessingCache.begin()->second);
+			irradianceSamplingDescriptorSets[i].Create(*(borrowedData.descriptorPool), cubemapPreprocessingCache.begin()->second);
 		}
 
 		// Prefilter map
 		const LayoutCache& prefilterMapCache = prefilterMapSetLayoutCache.GetLayoutCache();
 		if (cubemapPreprocessingSetLayoutCache.GetLayoutCount() != 1)
 		{
-			TNG_ASSERT_MSG(false, "Failed to create skybox pass descriptor sets!");
+			TNG_ASSERT_MSG(false, "Failed to create prefilter map descriptor sets!");
 			return;
 		}
 
@@ -314,16 +314,29 @@ namespace TANG
 	void CubemapPreprocessingPass::CreateUniformBuffers()
 	{
 		// Cubemap preprocessing
-		VkDeviceSize viewProjSize = sizeof(ViewProjUBO);
-		VkDeviceSize cubemapLayerSize = sizeof(uint32_t);
-
-		for (uint32_t i = 0; i < 6; i++)
 		{
-			cubemapPreprocessingViewProjUBO[i].Create(viewProjSize);
-			cubemapPreprocessingViewProjUBO[i].MapMemory();
+			VkDeviceSize viewProjSize = sizeof(ViewProjUBO);
+			VkDeviceSize cubemapLayerSize = sizeof(uint32_t);
 
-			cubemapPreprocessingCubemapLayerUBO[i].Create(cubemapLayerSize);
-			cubemapPreprocessingCubemapLayerUBO[i].MapMemory();
+			for (uint32_t i = 0; i < 6; i++)
+			{
+				cubemapPreprocessingViewProjUBO[i].Create(viewProjSize);
+				cubemapPreprocessingViewProjUBO[i].MapMemory();
+
+				cubemapPreprocessingCubemapLayerUBO[i].Create(cubemapLayerSize);
+				cubemapPreprocessingCubemapLayerUBO[i].MapMemory();
+			}
+		}
+
+		// Prefilter map
+		{
+			VkDeviceSize roughnessSize = sizeof(float);
+
+			for (uint32_t i = 0; i < 6; i++)
+			{
+				prefilterMapRoughnessUBO[i].Create(roughnessSize);
+				prefilterMapRoughnessUBO[i].MapMemory();
+			}
 		}
 	}
 
@@ -351,7 +364,12 @@ namespace TANG
 			viewProj.view = cubemapViewMatrices[i];
 			viewProj.proj = projMatrix;
 
+			// Update the view/proj matrices to look at each cubemap face
 			cubemapPreprocessingViewProjUBO[i].UpdateData(&viewProj, sizeof(viewProj));
+
+			// Update the roughness values for the prefilter map, so each mip uses a higher roughness value
+			float prefilterMapRoughness = CONFIG::PrefilterMapMaxMips * (i / 6.0f);
+			prefilterMapRoughnessUBO->UpdateData(&prefilterMapRoughness, sizeof(prefilterMapRoughness));
 
 			// https://registry.khronos.org/OpenGL-Refpages/gl4/html/gl_Layer.xhtml
 			uint32_t cubemapLayer = i;
@@ -359,34 +377,38 @@ namespace TANG
 
 			// Cubemap preprocessing
 			{
-				WriteDescriptorSets writeDescSets(2, 0);
+				WriteDescriptorSets writeDescSets(2, 1);
 				writeDescSets.AddUniformBuffer(cubemapPreprocessingDescriptorSets[i].GetDescriptorSet(), 0, &cubemapPreprocessingViewProjUBO[i]);
 				writeDescSets.AddUniformBuffer(cubemapPreprocessingDescriptorSets[i].GetDescriptorSet(), 1, &cubemapPreprocessingCubemapLayerUBO[i]);
+				writeDescSets.AddImageSampler(cubemapPreprocessingDescriptorSets[i].GetDescriptorSet(),  2, &skyboxTexture);
 				cubemapPreprocessingDescriptorSets[i].Update(writeDescSets);
 			}
 
 			// Irradiance sampling
 			{
-				WriteDescriptorSets writeDescSets(2, 0);
-				writeDescSets.AddUniformBuffer(irradianceSamplingsDescriptorSets[i].GetDescriptorSet(), 0, &cubemapPreprocessingViewProjUBO[i]);
-				writeDescSets.AddUniformBuffer(irradianceSamplingsDescriptorSets[i].GetDescriptorSet(), 1, &cubemapPreprocessingCubemapLayerUBO[i]);
-				irradianceSamplingsDescriptorSets[i].Update(writeDescSets);
+				WriteDescriptorSets writeDescSets(2, 1);
+				writeDescSets.AddUniformBuffer(irradianceSamplingDescriptorSets[i].GetDescriptorSet(), 0, &cubemapPreprocessingViewProjUBO[i]);
+				writeDescSets.AddUniformBuffer(irradianceSamplingDescriptorSets[i].GetDescriptorSet(), 1, &cubemapPreprocessingCubemapLayerUBO[i]);
+				writeDescSets.AddImageSampler(irradianceSamplingDescriptorSets[i].GetDescriptorSet(),  2, &skyboxCubemap);
+				irradianceSamplingDescriptorSets[i].Update(writeDescSets);
+			}
+
+			// Prefilter map
+			{
+				WriteDescriptorSets writeDescSets(3, 1);
+				writeDescSets.AddUniformBuffer(prefilterMapDescriptorSets[i].GetDescriptorSet(), 0, &cubemapPreprocessingViewProjUBO[i]);
+				writeDescSets.AddUniformBuffer(prefilterMapDescriptorSets[i].GetDescriptorSet(), 1, &cubemapPreprocessingCubemapLayerUBO[i]);
+				writeDescSets.AddImageSampler(prefilterMapDescriptorSets[i].GetDescriptorSet(),  2, &skyboxCubemap);
+				writeDescSets.AddUniformBuffer(prefilterMapDescriptorSets[i].GetDescriptorSet(), 3, &(prefilterMapRoughnessUBO[i]));
+				prefilterMapDescriptorSets[i].Update(writeDescSets);
 			}
 		}
 	}
 
-	void CubemapPreprocessingPass::CalculateSkyboxCubemap(PrimaryCommandBuffer* cmdBuffer, AssetResources* asset)
+	void CubemapPreprocessingPass::CalculateSkyboxCubemap(PrimaryCommandBuffer* cmdBuffer, const AssetResources* asset)
 	{
-		// Update the descriptor set with the skybox texture
-		for (uint32_t i = 0; i < 6; i++)
-		{
-			WriteDescriptorSets writeDescSets(0, 1);
-			writeDescSets.AddImageSampler(cubemapPreprocessingDescriptorSets[i].GetDescriptorSet(), 2, &skyboxTexture);
-			cubemapPreprocessingDescriptorSets[i].Update(writeDescSets);
-		}
-
 		cmdBuffer->CMD_BeginRenderPass(&cubemapPreprocessingRenderPass, &cubemapPreprocessingFramebuffer, { CONFIG::SkyboxResolutionSize, CONFIG::SkyboxResolutionSize }, false, true);
-		cmdBuffer->CMD_BindGraphicsPipeline(cubemapPreprocessingPipeline.GetPipeline());
+		cmdBuffer->CMD_BindGraphicsPipeline(&cubemapPreprocessingPipeline);
 		cmdBuffer->CMD_SetScissor({ 0, 0 }, { CONFIG::SkyboxResolutionSize, CONFIG::SkyboxResolutionSize });
 		cmdBuffer->CMD_SetViewport(static_cast<float>(CONFIG::SkyboxResolutionSize), static_cast<float>(CONFIG::SkyboxResolutionSize));
 		cmdBuffer->CMD_BindMesh(asset);
@@ -396,26 +418,18 @@ namespace TANG
 		for (uint32_t i = 0; i < 6; i++)
 		{
 			VkDescriptorSet descriptors[1] = { cubemapPreprocessingDescriptorSets[i].GetDescriptorSet() };
-			cmdBuffer->CMD_BindDescriptorSets(cubemapPreprocessingPipeline.GetPipelineLayout(), 1, descriptors);
+			cmdBuffer->CMD_BindDescriptorSets(&cubemapPreprocessingPipeline, 1, descriptors);
 
-			cmdBuffer->CMD_DrawIndexed(static_cast<uint32_t>(asset->indexCount));
+			cmdBuffer->CMD_DrawIndexed(asset->indexCount);
 		}
 
 		cmdBuffer->CMD_EndRenderPass();
 	}
 
-	void CubemapPreprocessingPass::CalculateIrradianceMap(PrimaryCommandBuffer* cmdBuffer, AssetResources* asset)
+	void CubemapPreprocessingPass::CalculateIrradianceMap(PrimaryCommandBuffer* cmdBuffer, const AssetResources* asset)
 	{
-		// Update the descriptor set with the skybox texture
-		for (uint32_t i = 0; i < 6; i++)
-		{
-			WriteDescriptorSets writeDescSets(0, 1);
-			writeDescSets.AddImageSampler(irradianceSamplingsDescriptorSets[i].GetDescriptorSet(), 2, &skyboxCubemap);
-			irradianceSamplingsDescriptorSets[i].Update(writeDescSets);
-		}
-
 		cmdBuffer->CMD_BeginRenderPass(&cubemapPreprocessingRenderPass, &irradianceSamplingFramebuffer, { CONFIG::IrradianceMapSize, CONFIG::IrradianceMapSize }, false, true);
-		cmdBuffer->CMD_BindGraphicsPipeline(irradianceSamplingPipeline.GetPipeline());
+		cmdBuffer->CMD_BindGraphicsPipeline(&irradianceSamplingPipeline);
 		cmdBuffer->CMD_SetScissor({ 0, 0 }, { CONFIG::IrradianceMapSize, CONFIG::IrradianceMapSize });
 		cmdBuffer->CMD_SetViewport(static_cast<float>(CONFIG::IrradianceMapSize), static_cast<float>(CONFIG::IrradianceMapSize));
 		cmdBuffer->CMD_BindMesh(asset);
@@ -424,20 +438,34 @@ namespace TANG
 		// a different texture each pass) 
 		for (uint32_t i = 0; i < 6; i++)
 		{
-			VkDescriptorSet descriptors[1] = { irradianceSamplingsDescriptorSets[i].GetDescriptorSet() };
-			cmdBuffer->CMD_BindDescriptorSets(irradianceSamplingPipeline.GetPipelineLayout(), 1, descriptors);
+			VkDescriptorSet descriptors[1] = { irradianceSamplingDescriptorSets[i].GetDescriptorSet() };
+			cmdBuffer->CMD_BindDescriptorSets(&irradianceSamplingPipeline, 1, descriptors);
 
-			cmdBuffer->CMD_DrawIndexed(static_cast<uint32_t>(asset->indexCount));
+			cmdBuffer->CMD_DrawIndexed(asset->indexCount);
 		}
 
 		cmdBuffer->CMD_EndRenderPass();
 	}
 
-	void CubemapPreprocessingPass::CalculatePrefilterMap(PrimaryCommandBuffer* cmdBuffer, AssetResources* asset)
+	void CubemapPreprocessingPass::CalculatePrefilterMap(PrimaryCommandBuffer* cmdBuffer, const AssetResources* asset)
 	{
-		UNUSED(cmdBuffer);
-		UNUSED(asset);
-		//TNG_TODO();
+		cmdBuffer->CMD_BeginRenderPass(&cubemapPreprocessingRenderPass, &irradianceSamplingFramebuffer, { CONFIG::PrefilterMapSize, CONFIG::PrefilterMapSize }, false, true);
+		cmdBuffer->CMD_BindGraphicsPipeline(&prefilterMapPipeline);
+		cmdBuffer->CMD_SetScissor({ 0, 0 }, { CONFIG::PrefilterMapSize, CONFIG::PrefilterMapSize });
+		cmdBuffer->CMD_SetViewport(static_cast<float>(CONFIG::PrefilterMapSize), static_cast<float>(CONFIG::PrefilterMapSize));
+		cmdBuffer->CMD_BindMesh(asset);
+
+		// For every face of the cube, we must change our camera's view direction, change the framebuffer (since we're rendering to
+		// a different texture each pass) 
+		for (uint32_t i = 0; i < 6; i++)
+		{
+			VkDescriptorSet descriptors[1] = { prefilterMapDescriptorSets[i].GetDescriptorSet() };
+			cmdBuffer->CMD_BindDescriptorSets(&prefilterMapPipeline, 1, descriptors);
+
+			cmdBuffer->CMD_DrawIndexed(asset->indexCount);
+		}
+
+		cmdBuffer->CMD_EndRenderPass();
 	}
 
 	void CubemapPreprocessingPass::ResetBorrowedData()

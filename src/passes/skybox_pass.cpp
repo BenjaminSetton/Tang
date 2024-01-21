@@ -94,10 +94,10 @@ namespace TANG
 
 		data.cmdBuffer->CMD_SetScissor({ 0, 0 }, { data.framebufferWidth, data.framebufferHeight });
 		data.cmdBuffer->CMD_SetViewport(static_cast<float>(data.framebufferWidth), static_cast<float>(data.framebufferHeight));
-		data.cmdBuffer->CMD_BindGraphicsPipeline(skyboxPipeline.GetPipeline());
+		data.cmdBuffer->CMD_BindGraphicsPipeline(&skyboxPipeline);
 		data.cmdBuffer->CMD_BindMesh(data.asset);
-		data.cmdBuffer->CMD_BindDescriptorSets(skyboxPipeline.GetPipelineLayout(), static_cast<uint32_t>(skyboxDescriptorSets.size()), reinterpret_cast<VkDescriptorSet*>(skyboxDescriptorSets[currentFrame].data()));
-		data.cmdBuffer->CMD_DrawIndexed(static_cast<uint32_t>(data.asset->indexCount));
+		data.cmdBuffer->CMD_BindDescriptorSets(&skyboxPipeline, static_cast<uint32_t>(skyboxDescriptorSets.size()), reinterpret_cast<VkDescriptorSet*>(skyboxDescriptorSets[currentFrame].data()));
+		data.cmdBuffer->CMD_DrawIndexed(data.asset->indexCount);
 
 		data.cmdBuffer->EndRecording();
 	}
