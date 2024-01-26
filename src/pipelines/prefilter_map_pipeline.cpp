@@ -27,10 +27,11 @@ namespace TANG
 	}
 
 	// Get references to the data required in Create(), it's not needed
-	void PrefilterMapPipeline::SetData(const CubemapPreprocessingRenderPass* _renderPass, const SetLayoutCache* _setLayoutCache, VkExtent2D _viewportSize)
+	void PrefilterMapPipeline::SetData(const CubemapPreprocessingRenderPass* _renderPass, const SetLayoutCache* _cubemapSetLayoutCache, const SetLayoutCache* _roughnessSetLayoutCache, VkExtent2D _viewportSize)
 	{
 		renderPass = _renderPass;
-		setLayoutCache = _setLayoutCache;
+		cubemapSetLayoutCache = _cubemapSetLayoutCache;
+		roughnessSetLayoutCache = _roughnessSetLayoutCache;
 		viewportSize = _viewportSize;
 
 		wasDataSet = true;
@@ -191,15 +192,18 @@ namespace TANG
 
 		// Pipeline layout
 		std::vector<VkDescriptorSetLayout> vkDescSetLayouts;
-		const LayoutCache& cache = setLayoutCache->GetLayoutCache();
-		for (auto& iter : cache)
+		for (auto& iter : cubemapSetLayoutCache->GetLayoutCache())
+		{
+			vkDescSetLayouts.push_back(iter.second.GetLayout());
+		}
+		for (auto& iter : roughnessSetLayoutCache->GetLayoutCache())
 		{
 			vkDescSetLayouts.push_back(iter.second.GetLayout());
 		}
 
 		VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 		pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-		pipelineLayoutInfo.setLayoutCount = setLayoutCache->GetLayoutCount();
+		pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(vkDescSetLayouts.size());
 		pipelineLayoutInfo.pSetLayouts = vkDescSetLayouts.data();
 		pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
 		pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
@@ -236,7 +240,8 @@ namespace TANG
 	void PrefilterMapPipeline::FlushData()
 	{
 		renderPass = nullptr;
-		setLayoutCache = nullptr;
+		cubemapSetLayoutCache = nullptr;
+		roughnessSetLayoutCache = nullptr;
 		viewportSize = VkExtent2D();
 
 		wasDataSet = false;

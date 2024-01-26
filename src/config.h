@@ -12,7 +12,7 @@ namespace TANG
 
 		static const std::string SkyboxCubeMeshFilePath = "../src/data/assets/cube.fbx";
 		static const std::string SkyboxTextureFilePath = "../src/data/textures/cubemaps/skybox_sunny.hdr";
-		static const uint32_t SkyboxResolutionSize = 1024;
+		static const uint32_t SkyboxCubemapResolutionSize = 512;
 		static const uint32_t IrradianceMapSize = 32;
 		static const uint32_t PrefilterMapSize = 128;
 		static const uint32_t PrefilterMapMaxMips = 5; // Ensure 2 to the power of this value does not exceed PrefilterMapSize above!

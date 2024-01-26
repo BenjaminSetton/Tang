@@ -16,7 +16,7 @@ namespace TANG
 		~PrefilterMapPipeline();
 		PrefilterMapPipeline(PrefilterMapPipeline&& other) noexcept;
 
-		void SetData(const CubemapPreprocessingRenderPass* renderPass, const SetLayoutCache* setLayoutCache, VkExtent2D viewportSize);
+		void SetData(const CubemapPreprocessingRenderPass* renderPass, const SetLayoutCache* cubemapSetLayoutCache, const SetLayoutCache* roughnessSetLayoutCache, VkExtent2D viewportSize);
 
 		void Create() override;
 
@@ -25,7 +25,8 @@ namespace TANG
 		void FlushData() override;
 
 		const CubemapPreprocessingRenderPass* renderPass;
-		const SetLayoutCache* setLayoutCache;
+		const SetLayoutCache* cubemapSetLayoutCache;
+		const SetLayoutCache* roughnessSetLayoutCache;
 		VkExtent2D viewportSize;
 
 	};

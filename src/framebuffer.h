@@ -14,8 +14,8 @@ namespace TANG
 	struct FramebufferCreateInfo
 	{
 		BaseRenderPass* renderPass;
-		TextureResource** attachments;
-		uint32_t attachmentCount;
+		std::vector<TextureResource*> attachments;
+		std::vector<uint32_t> imageViewIndices;		// Stores the image view index of every attachment. Size should be equal to attachments
 		uint32_t width;
 		uint32_t height;
 		uint32_t layers;
@@ -37,8 +37,7 @@ namespace TANG
 		VkFramebuffer GetFramebuffer();
 		const VkFramebuffer GetFramebuffer() const;
 
-		TextureResource** GetAttachmentImages();
-		uint32_t GetAttachmentCount();
+		std::vector<TextureResource*> GetAttachmentImages();
 
 	private:
 		VkFramebuffer framebuffer;
@@ -46,7 +45,7 @@ namespace TANG
 		// Hold a pointer to all the attachments so that we know which images make up the framebuffer
 		// In theory this should be fine, since if the images become invalid at any point the
 		// framebuffer should be re-created.
-		std::vector<TextureResource*> attachments;
+		std::vector<TextureResource*> attachmentsCache;
 	};
 }
 

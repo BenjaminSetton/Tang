@@ -68,6 +68,7 @@ namespace TANG
 		SetLayoutCache cubemapPreprocessingSetLayoutCache; // Used by cubemap preprocessing + irradiance sampling
 		TextureResource skyboxTexture;
 		TextureResource skyboxCubemap;
+		TextureResource skyboxCubemapMipped; // NOTE - Mips are generated from skyboxCubemap. We can't generate mips on skyboxCubemap directly because it's bound to the framebuffer and consequently the command buffer
 		Framebuffer cubemapPreprocessingFramebuffer;
 		UniformBuffer cubemapPreprocessingViewProjUBO[6];
 		UniformBuffer cubemapPreprocessingCubemapLayerUBO[6];
@@ -79,11 +80,13 @@ namespace TANG
 		Framebuffer irradianceSamplingFramebuffer;
 
 		PrefilterMapPipeline prefilterMapPipeline;
-		SetLayoutCache prefilterMapSetLayoutCache;
+		SetLayoutCache prefilterMapCubemapSetLayoutCache;
+		SetLayoutCache prefilterMapRoughnessSetLayoutCache;
 		UniformBuffer prefilterMapRoughnessUBO[6];
-		DescriptorSet prefilterMapDescriptorSets[6];
+		DescriptorSet prefilterMapCubemapDescriptorSets[6];
+		DescriptorSet prefilterMapRoughnessDescriptorSets[6];
 		TextureResource prefilterMap;
-		Framebuffer prefilterMapFramebuffer; // Represents one cubemap mip level
+		Framebuffer prefilterMapFramebuffers[CONFIG::PrefilterMapMaxMips]; // One framebuffer per mip level
 
 		struct
 		{

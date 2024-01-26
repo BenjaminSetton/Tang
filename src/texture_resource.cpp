@@ -37,19 +37,17 @@ namespace TANG
 		}
 	}
 
-	TextureResource::TextureResource(const TextureResource& other) : name(other.name), width(other.width),
-		height(other.height), mipLevels(other.mipLevels), baseImage(other.baseImage),
-		imageMemory(other.imageMemory), imageView(other.imageView), sampler(other.sampler), format(other.format),
-		layout(other.layout)
+	TextureResource::TextureResource(const TextureResource& other) : name(other.name), isValid(other.isValid), bytesPerPixel(other.bytesPerPixel),
+		layout(other.layout), generatedMips(other.generatedMips), baseImageInfo(other.baseImageInfo), imageViewInfo(other.imageViewInfo), samplerInfo(other.samplerInfo), 
+		baseImage(other.baseImage), imageMemory(other.imageMemory), imageViews(other.imageViews), sampler(other.sampler)
 	{
 		// TODO - Deep copy??
 		LogInfo("Texture resource shallow-copied (copy-constructor)");
 	}
 
-	TextureResource::TextureResource(TextureResource&& other) noexcept : name(std::move(other.name)), width(std::move(other.width)),
-		height(std::move(other.height)), mipLevels(std::move(other.mipLevels)), baseImage(std::move(other.baseImage)),
-		imageMemory(std::move(other.imageMemory)), imageView(std::move(other.imageView)), sampler(std::move(other.sampler)),
-		format(std::move(other.format)), layout(std::move(other.layout))
+	TextureResource::TextureResource(TextureResource&& other) noexcept : name(std::move(other.name)), isValid(std::move(other.isValid)), bytesPerPixel(std::move(other.bytesPerPixel)),
+		layout(std::move(other.layout)), generatedMips(std::move(other.generatedMips)), baseImageInfo(std::move(other.baseImageInfo)), imageViewInfo(std::move(other.imageViewInfo)), samplerInfo(std::move(other.samplerInfo)),
+		baseImage(std::move(other.baseImage)), imageMemory(std::move(other.imageMemory)), imageViews(std::move(other.imageViews)), sampler(std::move(other.sampler))
 	{
 		other.ResetMembers();
 	}
@@ -62,15 +60,19 @@ namespace TANG
 		}
 
 		name = other.name;
-		width = other.width;
-		height = other.height;
-		mipLevels = other.mipLevels;
+		isValid = other.isValid;
+		bytesPerPixel = other.bytesPerPixel;
+		layout = other.layout;
+		generatedMips = other.generatedMips;
+
+		baseImageInfo = other.baseImageInfo;
+		imageViewInfo = other.imageViewInfo;
+		samplerInfo = other.samplerInfo;
+
 		baseImage = other.baseImage;
 		imageMemory = other.imageMemory;
-		imageView = other.imageView;
+		imageViews = other.imageViews;
 		sampler = other.sampler;
-		format = other.format;
-		layout = other.layout;
 
 		// TODO - Deep copy??
 		LogInfo("Texture resource shallow-copied (copy-assignment)");
@@ -78,18 +80,18 @@ namespace TANG
 		return *this;
 	}
 
-	void TextureResource::Create(const BaseImageCreateInfo* baseImageInfo, const ImageViewCreateInfo* viewInfo, const SamplerCreateInfo* samplerInfo)
+	void TextureResource::Create(const BaseImageCreateInfo* _baseImageInfo, const ImageViewCreateInfo* _viewInfo, const SamplerCreateInfo* _samplerInfo)
 	{
-		if(baseImageInfo != nullptr) CreateBaseImage_Helper(baseImageInfo);
-		if(viewInfo != nullptr)      CreateImageView(viewInfo);
-		if(samplerInfo != nullptr)   CreateSampler(samplerInfo);
+		if(_baseImageInfo != nullptr) CreateBaseImage_Helper(_baseImageInfo);
+		if(_viewInfo != nullptr)      CreateImageViews(_viewInfo);
+		if(_samplerInfo != nullptr)   CreateSampler(_samplerInfo);
 	}
 
-	void TextureResource::CreateFromFile(std::string_view fileName, const BaseImageCreateInfo* createInfo, const ImageViewCreateInfo* viewInfo, const SamplerCreateInfo* samplerInfo)
+	void TextureResource::CreateFromFile(std::string_view fileName, const BaseImageCreateInfo* createInfo, const ImageViewCreateInfo* viewInfo, const SamplerCreateInfo* _samplerInfo)
 	{
 		CreateBaseImageFromFile(fileName, createInfo);
-		if(viewInfo != nullptr) CreateImageView(viewInfo);
-		if(samplerInfo != nullptr) CreateSampler(samplerInfo);
+		if(viewInfo != nullptr) CreateImageViews(viewInfo);
+		if(_samplerInfo != nullptr) CreateSampler(_samplerInfo);
 	}
 
 	void TextureResource::Destroy()
@@ -98,77 +100,56 @@ namespace TANG
 
 		if (sampler != VK_NULL_HANDLE) vkDestroySampler(logicalDevice, sampler, nullptr);
 
-		DestroyImageView();
-
-		if (baseImage != VK_NULL_HANDLE) vkDestroyImage(logicalDevice, baseImage, nullptr);
-		if (imageMemory != VK_NULL_HANDLE) vkFreeMemory(logicalDevice, imageMemory, nullptr);
+		DestroyImageViews();
+		DestroyBaseImage();
 
 		ResetMembers();
 	}
 
-	void TextureResource::DestroyImageView()
+	void TextureResource::DestroyBaseImage()
 	{
-		if (imageView != VK_NULL_HANDLE)
+		VkDevice logicalDevice = GetLogicalDevice();
+
+		if (baseImage != VK_NULL_HANDLE)
 		{
-			vkDestroyImageView(GetLogicalDevice(), imageView, nullptr);
-			imageView = VK_NULL_HANDLE;
+			vkDestroyImage(logicalDevice, baseImage, nullptr);
+			baseImage = VK_NULL_HANDLE;
+		}
+
+		if (imageMemory != VK_NULL_HANDLE)
+		{
+			vkFreeMemory(logicalDevice, imageMemory, nullptr);
+			imageMemory = VK_NULL_HANDLE;
 		}
 	}
 
-	void TextureResource::TransitionLayout(VkImageLayout destinationLayout, PrimaryCommandBuffer* commandBuffer)
+	void TextureResource::DestroyImageViews()
 	{
-		VkPipelineStageFlags sourceStage = 0;
-		VkPipelineStageFlags destinationStage = 0;
-		QueueType queueType = QueueType::GRAPHICS;
-
-		std::optional<VkImageMemoryBarrier> barrier = TransitionLayout_Helper(destinationLayout, sourceStage, destinationStage, queueType);
-
-		if (!barrier.has_value())
+		auto logicalDevice = GetLogicalDevice();
+		for (auto& imageView : imageViews)
 		{
-			return;
+			if (imageView != VK_NULL_HANDLE)
+			{
+				vkDestroyImageView(logicalDevice, imageView, nullptr);
+				imageView = VK_NULL_HANDLE;
+			}
 		}
 
-		vkCmdPipelineBarrier(
-			commandBuffer->GetBuffer(),
-			sourceStage, destinationStage,
-			0,
-			0, nullptr,
-			0, nullptr,
-			1, &barrier.value()
-		);
-
-		// Success!
-		layout = destinationLayout;
+		imageViews.clear();
 	}
 
-	void TextureResource::TransitionLayout_Immediate(VkImageLayout destinationLayout)
+	void TextureResource::TransitionLayout(PrimaryCommandBuffer* commandBuffer, VkImageLayout sourceLayout, VkImageLayout destinationLayout)
 	{
-		VkPipelineStageFlags sourceStage = 0;
-		VkPipelineStageFlags destinationStage = 0;
-		QueueType queueType = QueueType::GRAPHICS;
-
-		std::optional<VkImageMemoryBarrier> barrier = TransitionLayout_Helper(destinationLayout, sourceStage, destinationStage, queueType);
-
-		if (!barrier.has_value())
+		if (commandBuffer)
 		{
-			return;
+			TransitionLayout_Internal(commandBuffer->GetBuffer(), this, sourceLayout, destinationLayout);
 		}
+	}
 
-		{
-			DisposableCommand command(queueType, true);
-
-			vkCmdPipelineBarrier(
-				command.GetBuffer(),
-				sourceStage, destinationStage,
-				0,
-				0, nullptr,
-				0, nullptr,
-				1, &barrier.value()
-			);
-		}
-
-		// Success!
-		layout = destinationLayout;
+	void TextureResource::TransitionLayout_Immediate(VkImageLayout sourceLayout, VkImageLayout destinationLayout)
+	{
+		DisposableCommand command(QueueType::GRAPHICS, true);
+		TransitionLayout_Internal(command.GetBuffer(), this, sourceLayout, destinationLayout);
 	}
 
 	void TextureResource::TransitionLayout_Force(VkImageLayout destinationLayout)
@@ -176,9 +157,26 @@ namespace TANG
 		layout = destinationLayout;
 	}
 
-	VkImageView TextureResource::GetImageView() const 
+	void TextureResource::GenerateMipmaps(PrimaryCommandBuffer* cmdBuffer, uint32_t mipCount)
 	{
-		return imageView;
+		GenerateMipmaps_Helper(cmdBuffer->GetBuffer(), mipCount);
+	}
+
+	void TextureResource::GenerateMipmaps_Immediate(uint32_t mipCount)
+	{
+		DisposableCommand cmdBuffer(QueueType::GRAPHICS, true);
+		GenerateMipmaps_Helper(cmdBuffer.GetBuffer(), mipCount);
+	}
+
+	VkImageView TextureResource::GetImageView(uint32_t viewIndex) const 
+	{
+		if (viewIndex < 0 || viewIndex >= imageViews.size())
+		{
+			LogWarning("Image view index out of range!");
+			return VK_NULL_HANDLE;
+		}
+
+		return imageViews.at(viewIndex);
 	}
 
 	VkSampler TextureResource::GetSampler() const
@@ -188,7 +186,7 @@ namespace TANG
 
 	VkFormat TextureResource::GetFormat() const
 	{
-		return format;
+		return baseImageInfo.format;
 	}
 
 	VkImageLayout TextureResource::GetLayout() const
@@ -201,19 +199,61 @@ namespace TANG
 		return !isValid;
 	}
 
+	bool TextureResource::IsDepthTexture() const
+	{
+		switch (baseImageInfo.format)
+		{
+		case VK_FORMAT_D32_SFLOAT_S8_UINT:
+		case VK_FORMAT_D16_UNORM_S8_UINT:
+		case VK_FORMAT_D24_UNORM_S8_UINT:
+		case VK_FORMAT_D32_SFLOAT:
+		case VK_FORMAT_D16_UNORM:
+		{
+			return true;
+		}
+		}
+
+		return false;
+	}
+
+	bool TextureResource::HasStencilComponent() const
+	{
+		switch (baseImageInfo.format)
+		{
+		case VK_FORMAT_D16_UNORM_S8_UINT:
+		case VK_FORMAT_D24_UNORM_S8_UINT:
+		case VK_FORMAT_D32_SFLOAT_S8_UINT:
+		{
+			return true;
+		}
+		}
+		
+		return false;
+	}
+
 	uint32_t TextureResource::GetWidth() const
 	{
-		return width;
+		return baseImageInfo.width;
 	}
 
 	uint32_t TextureResource::GetHeight() const
 	{
-		return height;
+		return baseImageInfo.height;
 	}
 
-	void TextureResource::CreateBaseImage(const BaseImageCreateInfo* baseImageInfo)
+	uint32_t TextureResource::GetAllocatedMipLevels() const
 	{
-		CreateBaseImage_Helper(baseImageInfo);
+		return baseImageInfo.mipLevels;
+	}
+
+	uint32_t TextureResource::GetGeneratedMipLevels() const
+	{
+		return generatedMips;
+	}
+
+	void TextureResource::CreateBaseImage(const BaseImageCreateInfo* _baseImageInfo)
+	{
+		CreateBaseImage_Helper(_baseImageInfo);
 	}
 
 	void TextureResource::CreateBaseImageFromFile(std::string_view filePath, const BaseImageCreateInfo* createInfo)
@@ -238,72 +278,166 @@ namespace TANG
 		// Get the fileName from the path
 		name = filePath.substr(filePath.rfind("/") + 1, filePath.size());
 
-		// Calculate amount of mipmaps
-		uint32_t exactMips = CalculateMipLevelsFromSize(_width, _height);
-
-		BaseImageCreateInfo baseImageInfo{};
-		baseImageInfo.width = _width;
-		baseImageInfo.height = _height;
-		baseImageInfo.format = createInfo->format;
-		baseImageInfo.usage = createInfo->usage;
-		baseImageInfo.mipLevels = exactMips;
-		baseImageInfo.samples = createInfo->samples;
-		CreateBaseImage_Helper(&baseImageInfo);
+		BaseImageCreateInfo _baseImageInfo = *createInfo;
+		_baseImageInfo.width = _width;
+		_baseImageInfo.height = _height;
+		CreateBaseImage_Helper(&_baseImageInfo);
 
 		VkDeviceSize imageSize = _width * _height * bytesPerPixel;
-		CopyDataIntoImage(data, imageSize);
+		CopyFromData(data, imageSize);
 
 		// Now that we've copied over the data to the texture image, we don't need the original pixels array anymore
 		stbi_image_free(data);
 
-		GenerateMipmaps(); // This sets the usage to SHADER_READ_ONLY after it's done
+		TransitionLayout_Immediate(layout, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	}
 
-	void TextureResource::CreateImageView(const ImageViewCreateInfo* viewInfo)
+	void TextureResource::GenerateMipmaps_Helper(VkCommandBuffer cmdBuffer, uint32_t mipCount)
 	{
-		VkDevice logicalDevice = GetLogicalDevice();
-
 		if (IsInvalid())
 		{
-			LogError("Attempting to create image view, but base image has not yet been created!");
+			LogError("Attempting to generate mipmaps but base image has not yet been created!");
 			return;
 		}
 
-		VkImageViewCreateInfo createInfo{};
-		createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-		createInfo.image = baseImage;
-		createInfo.viewType = viewInfo->viewType;
-		createInfo.format = format;
-		createInfo.subresourceRange.aspectMask = viewInfo->aspect;
-		createInfo.subresourceRange.baseMipLevel = 0;
-		createInfo.subresourceRange.levelCount = mipLevels;
-		createInfo.subresourceRange.baseArrayLayer = 0;
-		createInfo.subresourceRange.layerCount = 1;
-
-		if (viewInfo->viewType == VK_IMAGE_VIEW_TYPE_CUBE)
+		// Not enough allocated mip levels
+		if (mipCount > baseImageInfo.mipLevels)
 		{
-			createInfo.subresourceRange.layerCount = 6;
+			return;
 		}
 
-		if (vkCreateImageView(logicalDevice, &createInfo, nullptr, &imageView) != VK_SUCCESS)
+		// We've already generated all the mips, no point in doing it again
+		if (generatedMips >= mipCount)
 		{
-			LogError(false, "Failed to create texture image view!");
+			return;
 		}
+
+		VkPhysicalDevice physicalDevice = GetPhysicalDevice();
+
+		// Check if the texture format we want to use supports linear blitting
+		VkFormatProperties formatProperties;
+		vkGetPhysicalDeviceFormatProperties(physicalDevice, baseImageInfo.format, &formatProperties);
+		if (!(formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT))
+		{
+			TNG_ASSERT_MSG(false, "Texture image does not support linear blitting!");
+		}
+
+		VkImageMemoryBarrier barrier{};
+		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		barrier.image = baseImage;
+		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		barrier.subresourceRange.baseMipLevel = generatedMips;
+		barrier.subresourceRange.levelCount = 1;
+		barrier.subresourceRange.baseArrayLayer = 0;
+		barrier.subresourceRange.layerCount = baseImageInfo.arrayLayers;
+
+		uint32_t mipWidth = baseImageInfo.width >> (generatedMips - 1);
+		uint32_t mipHeight = baseImageInfo.height >> (generatedMips - 1);
+
+		for (uint32_t i = generatedMips; i < mipCount; i++)
+		{
+			// Transition image from transfer dst optimal to transfer src optimal, since we're reading from this image
+			barrier.subresourceRange.baseMipLevel = i - 1;
+			barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+			barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+			barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+
+			vkCmdPipelineBarrier(cmdBuffer,
+				VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+				0, nullptr,
+				0, nullptr,
+				1, &barrier);
+
+			VkImageBlit blit{};
+			blit.srcOffsets[0] = { 0, 0, 0 };
+			blit.srcOffsets[1] = { static_cast<int32_t>(mipWidth), static_cast<int32_t>(mipHeight), 1 };
+			blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			blit.srcSubresource.mipLevel = i - 1;
+			blit.srcSubresource.baseArrayLayer = 0;
+			blit.srcSubresource.layerCount = baseImageInfo.arrayLayers;
+			blit.dstOffsets[0] = { 0, 0, 0 };
+			blit.dstOffsets[1] = { static_cast<int32_t>(mipWidth) > 1 ? static_cast<int32_t>(mipWidth >> 1) : 1, static_cast<int32_t>(mipHeight) > 1 ? static_cast<int32_t>(mipHeight >> 1) : 1, 1 };
+			blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			blit.dstSubresource.mipLevel = i;
+			blit.dstSubresource.baseArrayLayer = 0;
+			blit.dstSubresource.layerCount = baseImageInfo.arrayLayers;
+
+			vkCmdBlitImage(cmdBuffer,
+				baseImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				baseImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				1, &blit,
+				VK_FILTER_LINEAR);
+
+			// Transition image from src transfer optimal to shader read only
+			barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+			barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+			barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+			vkCmdPipelineBarrier(cmdBuffer,
+				VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+				0, nullptr,
+				0, nullptr,
+				1, &barrier);
+
+			if (mipWidth > 1u) mipWidth >>= 1;
+			if (mipHeight > 1u) mipHeight >>= 1;
+		}
+
+		// Transfer the last mip level to shader read-only because this wasn't handled by the loop above
+		// (since we didn't blit from the last image)
+		barrier.subresourceRange.baseMipLevel = mipCount - 1;
+		barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+		vkCmdPipelineBarrier(cmdBuffer,
+			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+			0, nullptr,
+			0, nullptr,
+			1, &barrier);
+
+		// Success!
+		layout = barrier.newLayout;
+		generatedMips = mipCount;
 	}
 
-	void TextureResource::CreateSampler(const SamplerCreateInfo* samplerInfo)
+	void TextureResource::CreateImageViews(const ImageViewCreateInfo* _viewInfo)
+	{
+		if (IsInvalid())
+		{
+			LogError("Attempting to create image view(s), but base image has not yet been created!");
+			return;
+		}
+
+		if (imageViews.size() > 0)
+		{
+			// This is just a warning because RecreateImageViews will actually clean up the existing image views.
+			// When this function is called there usually aren't any image views to begin with.
+			LogWarning("Attempting to create image view(s), but image views have already been created!");
+		}
+
+		RecreateImageViews(_viewInfo);
+
+	}
+
+	void TextureResource::CreateSampler(const SamplerCreateInfo* _samplerInfo)
 	{
 		VkDevice logicalDevice = GetLogicalDevice();
 
 		VkSamplerCreateInfo createInfo{};
 		createInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-		createInfo.magFilter = samplerInfo->magnificationFilter;
-		createInfo.minFilter = samplerInfo->minificationFilter;
-		createInfo.addressModeU = samplerInfo->addressModeUVW;
-		createInfo.addressModeV = samplerInfo->addressModeUVW;
-		createInfo.addressModeW = samplerInfo->addressModeUVW;
+		createInfo.magFilter = _samplerInfo->magnificationFilter;
+		createInfo.minFilter = _samplerInfo->minificationFilter;
+		createInfo.addressModeU = _samplerInfo->addressModeUVW;
+		createInfo.addressModeV = _samplerInfo->addressModeUVW;
+		createInfo.addressModeW = _samplerInfo->addressModeUVW;
 		createInfo.anisotropyEnable = VK_TRUE;
-		createInfo.maxAnisotropy = samplerInfo->maxAnisotropy;
+		createInfo.maxAnisotropy = _samplerInfo->maxAnisotropy;
 		createInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
 		createInfo.unnormalizedCoordinates = VK_FALSE;
 		createInfo.compareEnable = VK_FALSE;
@@ -311,57 +445,55 @@ namespace TANG
 		createInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
 		createInfo.mipLodBias = 0.0f;
 		createInfo.minLod = 0.0f;
-		createInfo.maxLod = static_cast<float>(mipLevels);
+		createInfo.maxLod = static_cast<float>(baseImageInfo.mipLevels);
 
 		if (vkCreateSampler(logicalDevice, &createInfo, nullptr, &sampler) != VK_SUCCESS)
 		{
 			LogError(false, "Failed to create texture sampler!");
+			return;
 		}
+
+		samplerInfo = *_samplerInfo;
 	}
 
-	void TextureResource::CreateBaseImage_Helper(const BaseImageCreateInfo* baseImageInfo)
+	void TextureResource::CreateBaseImage_Helper(const BaseImageCreateInfo* _baseImageInfo)
 	{
 		VkDevice logicalDevice = GetLogicalDevice();
 
+		// Re-calculate mip count, if necessary. Vulkan disallows 0 mip levels
+		uint32_t mipsToUse = 1;
+		if (_baseImageInfo->mipLevels == 0)
+		{
+			mipsToUse = CalculateMipLevelsFromSize(_baseImageInfo->width, _baseImageInfo->height);
+			LogWarning("Texture resource specified an invalid 0 mip levels for a %ux%u, using %u mip levels instead", _baseImageInfo->width, _baseImageInfo->height, mipsToUse);
+		}
+		else
+		{
+			mipsToUse = _baseImageInfo->mipLevels;
+		}
 
 		VkImageCreateInfo imageInfo{};
 		imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 		imageInfo.imageType = VK_IMAGE_TYPE_2D;
-		imageInfo.extent.width = baseImageInfo->width;
-		imageInfo.extent.height = baseImageInfo->height;
+		imageInfo.extent.width = _baseImageInfo->width;
+		imageInfo.extent.height = _baseImageInfo->height;
 		imageInfo.extent.depth = 1;
-		imageInfo.mipLevels = baseImageInfo->mipLevels;
-		imageInfo.arrayLayers = baseImageInfo->arrayLayers;
-		imageInfo.format = baseImageInfo->format;
+		imageInfo.mipLevels = mipsToUse;
+		imageInfo.arrayLayers = _baseImageInfo->arrayLayers;
+		imageInfo.format = _baseImageInfo->format;
 		imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
 		imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		imageInfo.usage = baseImageInfo->usage;
+		imageInfo.usage = _baseImageInfo->usage;
 		imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-		imageInfo.samples = baseImageInfo->samples;
-		imageInfo.flags = baseImageInfo->flags;
-
-		// Calculate mip count if baseImageInfo->mipLevels is equal to 0. The Vulkan spec disallows this, so this is a valid alternative
-		if (imageInfo.mipLevels == 0)
-		{
-			uint32_t calculatedMips = CalculateMipLevelsFromSize(imageInfo.extent.width, imageInfo.extent.height);
-			LogInfo("Texture resource specified an invalid 0 mip levels for a %ux%u, using %u mip levels instead", imageInfo.extent.width, imageInfo.extent.height, calculatedMips);
-			
-			imageInfo.mipLevels = calculatedMips;
-		}
+		imageInfo.samples = _baseImageInfo->samples;
+		imageInfo.flags = _baseImageInfo->flags;
 
 		// Create the image
 		if (vkCreateImage(logicalDevice, &imageInfo, nullptr, &baseImage) != VK_SUCCESS)
 		{
-			TNG_ASSERT_MSG(false, "Failed to create image!");
+			LogError("Failed to create image!");
+			return;
 		}
-
-		// Cache some of the image data
-		width = baseImageInfo->width;
-		height = baseImageInfo->height;
-		mipLevels = baseImageInfo->mipLevels;
-		format = baseImageInfo->format;
-		bytesPerPixel = GetBytesPerPixelFromFormat(baseImageInfo->format);
-		arrayLayers = baseImageInfo->arrayLayers;
 
 		VkMemoryRequirements memRequirements;
 		vkGetImageMemoryRequirements(logicalDevice, baseImage, &memRequirements);
@@ -373,12 +505,26 @@ namespace TANG
 
 		if (vkAllocateMemory(logicalDevice, &allocInfo, nullptr, &imageMemory) != VK_SUCCESS)
 		{
-			TNG_ASSERT_MSG(false, "Failed to allocate image memory!");
+			LogError("Failed to allocate image memory!");
+			return; // No need to clean-up image since we couldn't allocate the memory anyway
 		}
 
 		vkBindImageMemory(logicalDevice, baseImage, imageMemory, 0);
 
+		// Cache some of the image data
+		bytesPerPixel = GetBytesPerPixelFromFormat(_baseImageInfo->format);
+		baseImageInfo = *_baseImageInfo;
+		baseImageInfo.mipLevels = mipsToUse;
 		isValid = true;
+		generatedMips = 1;
+
+		// Calculate mip levels
+		if (baseImageInfo.generateMipMaps && mipsToUse > 1)
+		{
+			// Source layout should always be UNDEFINED here
+			TransitionLayout_Immediate(layout, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+			GenerateMipmaps_Immediate(_baseImageInfo->mipLevels);
+		}
 	}
 
 	void TextureResource::CreateImageViewFromBase(VkImage _baseImage, VkFormat _format, uint32_t _mipLevels, VkImageAspectFlags _aspect)
@@ -396,13 +542,17 @@ namespace TANG
 		createInfo.subresourceRange.baseArrayLayer = 0;
 		createInfo.subresourceRange.layerCount = 1;
 
+		// NOTE - This function will only ever create a single image view for the entire image. This is equivalent
+		//        to calling Create() and passing in viewInfo->viewScope as ImageViewScope::ENTIRE_IMAGE
+		imageViews.resize(1);
+		VkImageView& imageView = imageViews.at(0);
 		if (vkCreateImageView(logicalDevice, &createInfo, nullptr, &imageView) != VK_SUCCESS)
 		{
 			LogError(false, "Failed to create texture image view!");
 		}
 	}
 
-	void TextureResource::CopyDataIntoImage(void* data, VkDeviceSize bytes)
+	void TextureResource::CopyFromData(void* data, VkDeviceSize bytes)
 	{
 		if (IsInvalid())
 		{
@@ -417,7 +567,7 @@ namespace TANG
 		}
 
 		// If bytes is greater than the image size, then allocate up until the image size (and produce a warning)
-		VkDeviceSize imageSize = width * height * bytesPerPixel;
+		VkDeviceSize imageSize = baseImageInfo.width * baseImageInfo.height * bytesPerPixel;
 		if (bytes > imageSize)
 		{
 			LogWarning("Attempting to copy %u bytes into texture image, when the image size is only %u. Only %u bytes will be copied.", bytes, imageSize, imageSize);
@@ -431,17 +581,164 @@ namespace TANG
 
 		VkImageLayout oldLayout = layout;
 
-		TransitionLayout_Immediate(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-		CopyFromBuffer(stagingBuffer.GetBuffer());
+		TransitionLayout_Immediate(oldLayout, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+		CopyFromBuffer(stagingBuffer.GetBuffer(), 0);
+
 		if (oldLayout != VK_IMAGE_LAYOUT_UNDEFINED)
 		{
-			TransitionLayout_Immediate(oldLayout);
+			TransitionLayout_Immediate(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, oldLayout);
 		}
 
 		stagingBuffer.Destroy();
 	}
 
-	void TextureResource::CopyFromBuffer(VkBuffer buffer)
+	void TextureResource::CopyFromTexture(PrimaryCommandBuffer* cmdBuffer, TextureResource* sourceTexture, uint32_t mipCount)
+	{
+		// Either source or destination (this) textures are invalid
+		if (sourceTexture == nullptr || baseImage == VK_NULL_HANDLE)
+		{
+			return;
+		}
+
+		// No work to be done
+		if (mipCount == 0 || sourceTexture == this)
+		{
+			return;
+		}
+
+		if (sourceTexture->baseImageInfo.arrayLayers != baseImageInfo.arrayLayers)
+		{
+			LogWarning("Failed to copy from texture. Mismatched array layers: source (%u) vs. destination (%u)", sourceTexture->baseImageInfo.arrayLayers, baseImageInfo.arrayLayers);
+			return;
+		}
+		else if ((sourceTexture->baseImageInfo.width != baseImageInfo.width) || (sourceTexture->baseImageInfo.height != baseImageInfo.height))
+		{
+			LogWarning("Failed to copy from texture. Mismatched texture size: source (%ux%u) vs. destination (%ux%u)",
+				sourceTexture->baseImageInfo.width, sourceTexture->baseImageInfo.height,
+				baseImageInfo.width, baseImageInfo.height);
+			return;
+		}
+		else if (mipCount > sourceTexture->baseImageInfo.mipLevels || mipCount > baseImageInfo.mipLevels)
+		{
+			LogWarning("Failed to copy from texture. Requested more mips than are allocated in source and/or destination textures: source (%u) vs. destination (%u).",
+				sourceTexture->baseImageInfo.mipLevels, baseImageInfo.mipLevels);
+			return;
+		}
+
+		VkImageLayout oldDestinationLayout = layout;
+		VkImageLayout oldSourceLayout = sourceTexture->layout;
+
+		// Transition the source image to TRANSFER_SRC_OPTIMAL and the destination to TRANSFER_DST_OPTIMAL
+		TransitionLayout_Internal(cmdBuffer->GetBuffer(), sourceTexture, sourceTexture->layout, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+		TransitionLayout_Internal(cmdBuffer->GetBuffer(), this, layout, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+		uint32_t mipWidth = baseImageInfo.width;
+		uint32_t mipHeight = baseImageInfo.height;
+
+		VkImageCopy copyRegion{};
+		copyRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		copyRegion.srcSubresource.baseArrayLayer = 0;
+		copyRegion.srcSubresource.layerCount = sourceTexture->baseImageInfo.arrayLayers;
+		copyRegion.srcOffset = { 0, 0, 0 };
+		copyRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		copyRegion.dstSubresource.baseArrayLayer = 0;
+		copyRegion.dstSubresource.layerCount = baseImageInfo.arrayLayers;
+		copyRegion.dstOffset = { 0, 0, 0 };
+
+		std::vector<VkImageCopy> regions;
+		regions.reserve(mipCount);
+
+		// Generate all the regions we're going to copy over
+		for (uint32_t i = 0; i < mipCount; i++)
+		{
+			copyRegion.srcSubresource.mipLevel = i;
+			copyRegion.dstSubresource.mipLevel = i;
+			copyRegion.extent = { mipWidth, mipHeight, 1u };
+
+			regions.push_back(copyRegion);
+
+			if (mipWidth > 1) mipWidth >>= 1;
+			if (mipHeight > 1) mipHeight >>= 1;
+		}
+
+		vkCmdCopyImage(cmdBuffer->GetBuffer(),
+			sourceTexture->baseImage, sourceTexture->layout,
+			baseImage, layout,
+			static_cast<uint32_t>(regions.size()), regions.data());
+
+		// Transfer the textures to their old layouts, unless their old layout was undefined
+		if (oldSourceLayout != VK_IMAGE_LAYOUT_UNDEFINED) TransitionLayout_Internal(cmdBuffer->GetBuffer(), sourceTexture, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, oldSourceLayout);
+		if (oldDestinationLayout != VK_IMAGE_LAYOUT_UNDEFINED) TransitionLayout_Internal(cmdBuffer->GetBuffer(), this, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, oldDestinationLayout);
+	
+		// We didn't technically "generate" them, but for all practical purposes this is 
+		// the amount of valid mips we have
+		generatedMips = mipCount;
+	}
+
+
+	void TextureResource::RecreateImageViews(const ImageViewCreateInfo* _viewInfo)
+	{
+		DestroyImageViews();
+
+		VkDevice logicalDevice = GetLogicalDevice();
+
+		VkImageViewCreateInfo createInfo{};
+		createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		createInfo.image = baseImage;
+		createInfo.viewType = _viewInfo->viewType;
+		createInfo.format = baseImageInfo.format;
+		createInfo.subresourceRange.aspectMask = _viewInfo->aspect;
+		createInfo.subresourceRange.baseMipLevel = 0;
+		createInfo.subresourceRange.levelCount = baseImageInfo.mipLevels;
+		createInfo.subresourceRange.baseArrayLayer = 0;
+		createInfo.subresourceRange.layerCount = 1;
+
+		// Consider view type
+		if (_viewInfo->viewType == VK_IMAGE_VIEW_TYPE_CUBE)
+		{
+			createInfo.subresourceRange.layerCount = 6;
+		}
+
+		// Consider view scope
+		switch (_viewInfo->viewScope)
+		{
+		case ImageViewScope::ENTIRE_IMAGE:
+		{
+			imageViews.resize(1);
+			VkImageView& imageView = imageViews.at(0);
+			if (vkCreateImageView(logicalDevice, &createInfo, nullptr, &imageView) != VK_SUCCESS)
+			{
+				LogError("Failed to create texture image view!");
+			}
+
+			break;
+		}
+		case ImageViewScope::PER_MIP_LEVEL:
+		{
+			createInfo.subresourceRange.levelCount = 1;
+
+			imageViews.resize(baseImageInfo.mipLevels);
+			for (uint32_t i = 0; i < baseImageInfo.mipLevels; i++)
+			{
+				// We set the base mip level to the current mip level in the iteration and levelCount will remain as 1
+				createInfo.subresourceRange.baseMipLevel = i;
+
+				VkImageView& imageView = imageViews.at(i);
+				if (vkCreateImageView(logicalDevice, &createInfo, nullptr, &imageView) != VK_SUCCESS)
+				{
+					LogError("Failed to create texture image view!");
+				}
+			}
+
+			break;
+		}
+		}
+
+		imageViewInfo = *_viewInfo;
+	}
+
+	void TextureResource::CopyFromBuffer(VkBuffer buffer, uint32_t destinationMipLevel)
 	{
 		if (IsInvalid())
 		{
@@ -449,155 +746,81 @@ namespace TANG
 			return;
 		}
 
-		DisposableCommand command(QueueType::TRANSFER, true);
+		{
+			DisposableCommand command(QueueType::TRANSFER, true);
 
-		VkBufferImageCopy region{};
-		region.bufferOffset = 0;
-		region.bufferRowLength = 0;
-		region.bufferImageHeight = 0;
+			VkBufferImageCopy region{};
+			region.bufferOffset = 0;
+			region.bufferRowLength = 0;
+			region.bufferImageHeight = 0;
 
-		region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		region.imageSubresource.mipLevel = 0;
-		region.imageSubresource.baseArrayLayer = 0;
-		region.imageSubresource.layerCount = 1;
+			region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			region.imageSubresource.mipLevel = destinationMipLevel;
+			region.imageSubresource.baseArrayLayer = 0;
+			region.imageSubresource.layerCount = baseImageInfo.arrayLayers;
 
-		region.imageOffset = { 0, 0, 0 };
-		region.imageExtent = { width, height, 1 };
+			region.imageOffset = { 0, 0, 0 };
+			region.imageExtent = { baseImageInfo.width, baseImageInfo.height, 1 };
 
-		vkCmdCopyBufferToImage(command.GetBuffer(), buffer, baseImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+			vkCmdCopyBufferToImage(command.GetBuffer(), buffer, baseImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+		}
 	}
 
-	void TextureResource::GenerateMipmaps()
+	void TextureResource::TransitionLayout_Internal(VkCommandBuffer commandBuffer, TextureResource* baseTexture, VkImageLayout sourceLayout, VkImageLayout destinationLayout)
 	{
-		VkPhysicalDevice physicalDevice = GetPhysicalDevice();
+		VkPipelineStageFlags sourceStage = 0;
+		VkPipelineStageFlags destinationStage = 0;
+		QueueType queueType = QueueType::GRAPHICS;
 
-		if (IsInvalid())
+		std::optional<VkImageMemoryBarrier> barrier = TransitionLayout_Helper(baseTexture, sourceLayout, destinationLayout, sourceStage, destinationStage, queueType);
+
+		if (!barrier.has_value())
 		{
-			LogError("Attempting to generate mipmaps but base image has not yet been created!");
 			return;
 		}
 
-		// Check if the texture format we want to use supports linear blitting
-		VkFormatProperties formatProperties;
-		vkGetPhysicalDeviceFormatProperties(physicalDevice, format, &formatProperties);
-		if (!(formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT))
-		{
-			TNG_ASSERT_MSG(false, "Texture image does not support linear blitting!");
-		}
-
-		DisposableCommand command(QueueType::GRAPHICS, true);
-
-		VkImageMemoryBarrier barrier{};
-		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-		barrier.image = baseImage;
-		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		barrier.subresourceRange.baseArrayLayer = 0;
-		barrier.subresourceRange.layerCount = 1;
-		barrier.subresourceRange.levelCount = 1;
-
-		int32_t mipWidth = width;
-		int32_t mipHeight = height;
-
-		for (uint32_t i = 1; i < mipLevels; i++)
-		{
-
-			// Transition image from transfer dst optimal to transfer src optimal, since we're reading from this image
-			barrier.subresourceRange.baseMipLevel = i - 1;
-			barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-			barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-			barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-			barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-
-			vkCmdPipelineBarrier(command.GetBuffer(),
-				VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
-				0, nullptr,
-				0, nullptr,
-				1, &barrier);
-
-			VkImageBlit blit{};
-			blit.srcOffsets[0] = { 0, 0, 0 };
-			blit.srcOffsets[1] = { mipWidth, mipHeight, 1 };
-			blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			blit.srcSubresource.mipLevel = i - 1;
-			blit.srcSubresource.baseArrayLayer = 0;
-			blit.srcSubresource.layerCount = 1;
-			blit.dstOffsets[0] = { 0, 0, 0 };
-			blit.dstOffsets[1] = { mipWidth > 1 ? mipWidth / 2 : 1, mipHeight > 1 ? mipHeight / 2 : 1, 1 };
-			blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			blit.dstSubresource.mipLevel = i;
-			blit.dstSubresource.baseArrayLayer = 0;
-			blit.dstSubresource.layerCount = 1;
-
-			vkCmdBlitImage(command.GetBuffer(),
-				baseImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-				baseImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-				1, &blit,
-				VK_FILTER_LINEAR);
-
-			// Transition image from src transfer optimal to shader read only
-			barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-			barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-			barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-			barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-			vkCmdPipelineBarrier(command.GetBuffer(),
-				VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
-				0, nullptr,
-				0, nullptr,
-				1, &barrier);
-
-			if (mipWidth > 1) mipWidth /= 2;
-			if (mipHeight > 1) mipHeight /= 2;
-		}
-
-		// Transfer the last mip level to shader read-only because this wasn't handled by the loop above
-		// (since we didn't blit from the last image)
-		barrier.subresourceRange.baseMipLevel = mipLevels - 1;
-		barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-		barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-		vkCmdPipelineBarrier(command.GetBuffer(),
-			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+		vkCmdPipelineBarrier(
+			commandBuffer,
+			sourceStage, destinationStage,
+			0,
 			0, nullptr,
 			0, nullptr,
-			1, &barrier);
+			1, &barrier.value()
+		);
 
 		// Success!
-		layout = barrier.newLayout;
+		baseTexture->layout = destinationLayout;
 	}
 
-	std::optional<VkImageMemoryBarrier> TextureResource::TransitionLayout_Helper(VkImageLayout destinationLayout, 
+	std::optional<VkImageMemoryBarrier> TextureResource::TransitionLayout_Helper(const TextureResource* baseTexture, VkImageLayout sourceLayout,
+		VkImageLayout destinationLayout, 
 		VkPipelineStageFlags& out_sourceStage, 
 		VkPipelineStageFlags& out_destinationStage,
 		QueueType& out_queueType)
 	{
-		if (IsInvalid())
+		if (baseTexture && baseTexture->IsInvalid())
 		{
 			LogError("Attempting to transition layout of invalid texture!");
 			return {};
 		}
 
-		if (layout == destinationLayout)
+		if (sourceLayout == destinationLayout)
 		{
 			return {};
 		}
 
 		VkImageMemoryBarrier barrier{};
 		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-		barrier.oldLayout = layout;
+		barrier.oldLayout = sourceLayout;
 		barrier.newLayout = destinationLayout;
 		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		barrier.image = baseImage;
+		barrier.image = baseTexture->baseImage;
 		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 		barrier.subresourceRange.baseMipLevel = 0;
-		barrier.subresourceRange.levelCount = mipLevels;
+		barrier.subresourceRange.levelCount = baseTexture->baseImageInfo.mipLevels;
 		barrier.subresourceRange.baseArrayLayer = 0;
-		barrier.subresourceRange.layerCount = arrayLayers;
+		barrier.subresourceRange.layerCount = baseTexture->baseImageInfo.arrayLayers;
 		barrier.srcAccessMask = 0; // These are set below
 		barrier.dstAccessMask = 0; // These are set below
 
@@ -609,7 +832,7 @@ namespace TANG
 		{
 			barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
 
-			if (HasStencilComponent(format))
+			if (HasStencilComponent())
 			{
 				barrier.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
 			}
@@ -619,7 +842,7 @@ namespace TANG
 			barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 		}
 
-		if (layout == VK_IMAGE_LAYOUT_UNDEFINED && destinationLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+		if (sourceLayout == VK_IMAGE_LAYOUT_UNDEFINED && destinationLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
 		{
 			barrier.srcAccessMask = 0;
 			barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
@@ -629,7 +852,37 @@ namespace TANG
 
 			commandQueueType = QueueType::TRANSFER;
 		}
-		else if (layout == VK_IMAGE_LAYOUT_UNDEFINED && destinationLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+		else if (sourceLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && destinationLayout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
+		{
+			barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+
+			sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+			destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+
+			commandQueueType = QueueType::TRANSFER;
+		}
+		else if (sourceLayout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL && destinationLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+		{
+			barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+			barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+			sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+			destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+
+			commandQueueType = QueueType::TRANSFER;
+		}
+		else if (sourceLayout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL && destinationLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+		{
+			barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+			barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+			sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+			destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+
+			commandQueueType = QueueType::GRAPHICS;
+		}
+		else if (sourceLayout == VK_IMAGE_LAYOUT_UNDEFINED && destinationLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
 		{
 			barrier.srcAccessMask = 0;
 			barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
@@ -639,7 +892,7 @@ namespace TANG
 
 			commandQueueType = QueueType::GRAPHICS;
 		}
-		else if (layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && destinationLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+		else if (sourceLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && destinationLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
 		{
 			barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 			barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
@@ -649,7 +902,7 @@ namespace TANG
 
 			commandQueueType = QueueType::GRAPHICS;
 		}
-		else if (layout == VK_IMAGE_LAYOUT_UNDEFINED && destinationLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+		else if (sourceLayout == VK_IMAGE_LAYOUT_UNDEFINED && destinationLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
 		{
 			barrier.srcAccessMask = 0;
 			barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
@@ -659,7 +912,7 @@ namespace TANG
 
 			commandQueueType = QueueType::GRAPHICS;
 		}
-		else if (layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL && destinationLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+		else if (sourceLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL && destinationLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
 		{
 			// We're probably converting the color attachment after doing the LDR conversion
 
@@ -671,7 +924,27 @@ namespace TANG
 
 			commandQueueType = QueueType::GRAPHICS;
 		}
-		else if (layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL && destinationLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+		else if (sourceLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL && destinationLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+		{
+			barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+			barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+			sourceStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+			destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+
+			commandQueueType = QueueType::GRAPHICS;
+		}
+		else if (sourceLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL && destinationLayout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
+		{
+			barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+			barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+
+			sourceStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+			destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+
+			commandQueueType = QueueType::GRAPHICS;
+		}
+		else if (sourceLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL && destinationLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
 		{
 			// We're probably converting the color attachment before doing the LDR conversion
 
@@ -683,7 +956,7 @@ namespace TANG
 
 			commandQueueType = QueueType::GRAPHICS;
 		}
-		else if (layout == VK_IMAGE_LAYOUT_UNDEFINED && destinationLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+		else if (sourceLayout == VK_IMAGE_LAYOUT_UNDEFINED && destinationLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
 		{
 			barrier.srcAccessMask = 0;
 			barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
@@ -707,26 +980,20 @@ namespace TANG
 
 	void TextureResource::ResetMembers()
 	{
-		LogInfo("Resetting texture resource members. Ensure memory was cleaned up, otherwise this is a leak");
-
 		name = "";
-		mipLevels = 0;
-		width = 0;
-		height = 0;
-		bytesPerPixel = 0;
-		arrayLayers = 1;
 		isValid = false;
+		bytesPerPixel = 0;
+		layout = VK_IMAGE_LAYOUT_UNDEFINED;
+		generatedMips = 0;
+
+		baseImageInfo = BaseImageCreateInfo();
+		imageViewInfo = ImageViewCreateInfo();
+		samplerInfo = SamplerCreateInfo();
+
 		baseImage = VK_NULL_HANDLE;
 		imageMemory = VK_NULL_HANDLE;
-		imageView = VK_NULL_HANDLE;
+		imageViews.clear();
 		sampler = VK_NULL_HANDLE;
-		format = VK_FORMAT_UNDEFINED;
-		layout = VK_IMAGE_LAYOUT_UNDEFINED;
-	}
-
-	bool TextureResource::HasStencilComponent(VkFormat _format)
-	{
-		return _format == VK_FORMAT_D32_SFLOAT_S8_UINT || _format == VK_FORMAT_D24_UNORM_S8_UINT;
 	}
 
 	uint32_t TextureResource::FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
@@ -741,7 +1008,7 @@ namespace TANG
 			}
 		}
 
-		TNG_ASSERT_MSG(false, "Failed to find suitable memory type!");
+		LogError("Failed to find suitable memory type!");
 		return std::numeric_limits<uint32_t>::max();
 	}
 

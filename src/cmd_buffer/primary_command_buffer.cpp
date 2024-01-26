@@ -156,10 +156,9 @@ namespace TANG
 		renderPassState = PRIMARY_COMMAND_RENDER_PASS_STATE::ENDED;
 
 		// Forcefully transition the attachments
-		TextureResource** attachmentImages = framebuffer->GetAttachmentImages();
+		std::vector<TextureResource*> attachmentImages = framebuffer->GetAttachmentImages();
 		const VkImageLayout* finalImageLayouts = renderPass->GetFinalImageLayouts();
-		uint32_t attachmentCount = framebuffer->GetAttachmentCount();
-		for (uint32_t i = 0; i < attachmentCount; i++)
+		for (uint32_t i = 0; i < attachmentImages.size(); i++)
 		{
 			attachmentImages[i]->TransitionLayout_Force(finalImageLayouts[i]);
 		}

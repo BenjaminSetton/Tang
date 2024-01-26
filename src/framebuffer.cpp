@@ -22,7 +22,7 @@ namespace TANG
 		}
 
 		framebuffer = VK_NULL_HANDLE;
-		attachments.clear();
+		attachmentsCache.clear();
 	}
 
 	Framebuffer::Framebuffer(Framebuffer&& other) : framebuffer(std::move(other.framebuffer))
@@ -37,7 +37,7 @@ namespace TANG
 			return;
 		}
 
-		if (createInfo.attachments == nullptr)
+		if (createInfo.attachments.size() == 0)
 		{
 			LogWarning("Attempting to create a framebuffer with no attachments!");
 			return;
@@ -55,18 +55,33 @@ namespace TANG
 			return;
 		}
 
-		std::vector<VkImageView> imageViews;
-		imageViews.resize(createInfo.attachmentCount);
-
-		for (uint32_t i = 0; i < createInfo.attachmentCount; i++)
+		if (createInfo.imageViewIndices.size() == 0)
 		{
-			imageViews[i] = (createInfo.attachments[i]->GetImageView());
+			LogWarning("Attempting to create framebuffer with no image view indices! Every attachment must have a corresponding image view index");
+			return;
+		}
+
+		if (createInfo.attachments.size() != createInfo.imageViewIndices.size())
+		{
+			LogWarning("Attempting to create framebuffer with mismatched attachment and image view index counts! Every attachment must have a corresponding image view index");
+			return;
+		}
+
+		uint32_t attachmentCount = static_cast<uint32_t>(createInfo.attachments.size());
+
+		std::vector<VkImageView> imageViews;
+		imageViews.resize(attachmentCount);
+
+		for (uint32_t i = 0; i < attachmentCount; i++)
+		{
+			uint32_t imageViewIndex = createInfo.imageViewIndices[i];
+			imageViews[i] = (createInfo.attachments[i]->GetImageView(imageViewIndex));
 		}
 
 		VkFramebufferCreateInfo framebufferInfo{};
 		framebufferInfo.sType			=	VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 		framebufferInfo.renderPass		= createInfo.renderPass->GetRenderPass();
-		framebufferInfo.attachmentCount = createInfo.attachmentCount;
+		framebufferInfo.attachmentCount = attachmentCount;
 		framebufferInfo.pAttachments	= imageViews.data();
 		framebufferInfo.width			= createInfo.width;
 		framebufferInfo.height			= createInfo.height;
@@ -77,20 +92,16 @@ namespace TANG
 			LogError("Failed to create framebuffer!");
 		}
 
-		// Cache the images
-		uint32_t attachmentCount = createInfo.attachmentCount;
-
-		attachments.resize(attachmentCount);
-		for (uint32_t i = 0; i < attachmentCount; i++)
-		{
-			attachments[i] = createInfo.attachments[i];
-		}
+		// Cache the attachments
+		attachmentsCache = createInfo.attachments;
 	}
 
 	void Framebuffer::Destroy()
 	{
 		vkDestroyFramebuffer(GetLogicalDevice(), framebuffer, nullptr);
 		framebuffer = VK_NULL_HANDLE;
+
+		attachmentsCache.clear();
 	}
 
 	VkFramebuffer Framebuffer::GetFramebuffer()
@@ -103,13 +114,8 @@ namespace TANG
 		return framebuffer;
 	}
 
-	TextureResource** Framebuffer::GetAttachmentImages()
+	std::vector<TextureResource*> Framebuffer::GetAttachmentImages()
 	{
-		return attachments.data();
-	}
-
-	uint32_t Framebuffer::GetAttachmentCount()
-	{
-		return static_cast<uint32_t>(attachments.size());
+		return attachmentsCache;
 	}
 }

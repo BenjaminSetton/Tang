@@ -10,6 +10,12 @@
 
 namespace TANG
 {
+	enum class ImageViewScope
+	{
+		ENTIRE_IMAGE,		// Generates an image view for the entire image, including all mip levels and cubemap faces (in cases where image is a cubemap)
+		PER_MIP_LEVEL		// Generates an image view for every mip level
+	};
+
 	// Holds all the information necessary to create an image view for a TextureResource object.
 	// This is similar to Vulkan's VkImageViewCreateInfo struct, but this separate struct exists
 	// for a few reasons:
@@ -19,6 +25,7 @@ namespace TANG
 	{
 		VkImageAspectFlags aspect;
 		VkImageViewType viewType		= VK_IMAGE_VIEW_TYPE_2D;
+		ImageViewScope viewScope		= ImageViewScope::ENTIRE_IMAGE;
 	};
 
 	// Holds all the information necessary to create a sampler for a TextureResource object.
@@ -41,6 +48,7 @@ namespace TANG
 		VkSampleCountFlagBits samples	= VK_SAMPLE_COUNT_1_BIT;
 		uint32_t arrayLayers			= 1;
 		VkImageCreateFlags flags		= 0;
+		bool generateMipMaps			= true;
 	};
 
 	// Forward declarations
@@ -69,51 +77,67 @@ namespace TANG
 		// Copies an arbitrary amount of data into the texture image buffer, up to the maximum size declared when creating the texture
 		// NOTE - The usage of the texture will remain the same, EXCEPT if it has an UNDEFINED usage. In that case the usage will become
 		//        TRANSFER_DST_OPTIMAL
-		void CopyDataIntoImage(void* data, VkDeviceSize bytes);
+		void CopyFromData(void* data, VkDeviceSize bytes);
+
+		// Copies the image data from the provided source texture, including all the specified mips
+		void CopyFromTexture(PrimaryCommandBuffer* cmdBuffer, TextureResource* sourceTexture, uint32_t mipCount);
+
+		// Deletes the existing image views (if any) and creates them depending on the data contained within the viewInfo parameter
+		void RecreateImageViews(const ImageViewCreateInfo* viewInfo);
 
 		void Destroy();
-		void DestroyImageView();
+		void DestroyBaseImage();
+		void DestroyImageViews();
 
-		void TransitionLayout(VkImageLayout destinationLayout, PrimaryCommandBuffer* commandBuffer);
-		void TransitionLayout_Immediate(VkImageLayout destinationLayout);
+		void TransitionLayout(PrimaryCommandBuffer* commandBuffer, VkImageLayout sourceLayout, VkImageLayout destinationLayout);
+		void TransitionLayout_Immediate(VkImageLayout sourceLayout, VkImageLayout destinationLayout);
+		void TransitionLayout_Force(VkImageLayout destinationLayout); // This function must only be used to reflect implicit layout transitions which happen after the render pass ends. It does not introduce a pipeline barrier like the other TransitionLayout() functions
 
-		// This function must only be used to reflect implicit layout transitions which happen after the
-		// render pass ends. It does not introduce a pipeline barrier like the other TransitionLayout() functions
-		void TransitionLayout_Force(VkImageLayout destinationLayout);
+		void GenerateMipmaps(PrimaryCommandBuffer* cmdBuffer, uint32_t mipCount);
 
-		VkImageView GetImageView() const;
+		VkImageView GetImageView(uint32_t viewIndex) const;
 		VkSampler GetSampler() const;
 		VkFormat GetFormat() const;
 		VkImageLayout GetLayout() const;
 		bool IsInvalid() const;
 
+		bool IsDepthTexture() const;
+		bool HasStencilComponent() const;
+
 		uint32_t GetWidth() const;
 		uint32_t GetHeight() const;
+
+		uint32_t GetAllocatedMipLevels() const;
+		uint32_t GetGeneratedMipLevels() const;
 
 	private:
 
 		void CreateBaseImage(const BaseImageCreateInfo* baseImageInfo);
 		void CreateBaseImageFromFile(std::string_view filePath, const BaseImageCreateInfo* createInfo);
 
+		// NOTE - This function stalls the graphics queue twice!
+		void GenerateMipmaps_Immediate(uint32_t mipCount);
+		void GenerateMipmaps_Helper(VkCommandBuffer cmdBuffer, uint32_t mipCount);
+
 		// Create image view from a previously-created base image (through CreateBaseImage or CreateBaseImageFromFile)
-		void CreateImageView(const ImageViewCreateInfo* viewInfo);
+		void CreateImageViews(const ImageViewCreateInfo* viewInfo);
 
 		void CreateSampler(const SamplerCreateInfo* samplerInfo);
 
 		void CreateBaseImage_Helper(const BaseImageCreateInfo* baseImageInfo);
 
-		void CopyFromBuffer(VkBuffer buffer);
-		void GenerateMipmaps();
+		void CopyFromBuffer(VkBuffer buffer, uint32_t destinationMipLevel);
 
-		[[nodiscard]] std::optional<VkImageMemoryBarrier> TransitionLayout_Helper(VkImageLayout destinationLayout, 
+		void TransitionLayout_Internal(VkCommandBuffer commandBuffer, TextureResource* baseTexture, VkImageLayout sourceLayout, VkImageLayout destinationLayout);
+
+		[[nodiscard]] std::optional<VkImageMemoryBarrier> TransitionLayout_Helper(const TextureResource* baseTexture, VkImageLayout sourceLayout,
+			VkImageLayout destinationLayout, 
 			VkPipelineStageFlags& out_sourceStage, 
 			VkPipelineStageFlags& out_destinationStage,
 			QueueType& out_queueType);
 
 		// NOTE - This function does NOT clean up the allocated memory!!
 		void ResetMembers();
-
-		bool HasStencilComponent(VkFormat format);
 
 		uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 
@@ -124,19 +148,20 @@ namespace TANG
 	private:
 
 		std::string name;
-		uint32_t mipLevels;
-		uint32_t width;
-		uint32_t height;
-		uint32_t bytesPerPixel;
-		uint32_t arrayLayers;
 		bool isValid;
+		uint32_t bytesPerPixel;
+		VkImageLayout layout;
+		uint32_t generatedMips; // Defines the number of mipmaps that have been generated through GenerateMipmaps()
+
+		BaseImageCreateInfo baseImageInfo;
+		ImageViewCreateInfo imageViewInfo;
+		SamplerCreateInfo samplerInfo;
 
 		VkImage baseImage;
 		VkDeviceMemory imageMemory;
-		VkImageView imageView;
+		std::vector<VkImageView> imageViews;
 		VkSampler sampler;
-		VkFormat format;
-		VkImageLayout layout;
+
 
 	};
 }

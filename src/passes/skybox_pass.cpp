@@ -74,6 +74,7 @@ namespace TANG
 	void SkyboxPass::Destroy()
 	{
 		skyboxSetLayoutCache.DestroyLayouts();
+		skyboxPipeline.Destroy();
 	}
 
 	void SkyboxPass::Draw(uint32_t currentFrame, const DrawData& data)

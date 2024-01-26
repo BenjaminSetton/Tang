@@ -103,8 +103,8 @@ namespace TANG
 		camera.Shutdown();
 		LoaderUtils::UnloadAll();
 		Renderer::GetInstance().Shutdown();
-		InputManager::GetInstance().Shutdown();
 		MainWindow::Get().Destroy();
+		InputManager::GetInstance().Shutdown();
 	}
 
 	///////////////////////////////////////////////////////////

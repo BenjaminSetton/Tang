@@ -83,7 +83,7 @@ namespace TANG
 		descriptorImageInfo.emplace_back(std::move(VkDescriptorImageInfo()));
 		VkDescriptorImageInfo& imageInfo = descriptorImageInfo.back();
 		imageInfo.imageLayout = texResource->GetLayout();
-		imageInfo.imageView = texResource->GetImageView();
+		imageInfo.imageView = texResource->GetImageView(0); // 0 represent either the entire image (ImageViewScope::ENTIRE_IMAGE) or the first mip level (highest quality/resolution - ImageViewScope::PER_MIP_LEVEL)
 		imageInfo.sampler = texResource->GetSampler();
 
 		VkWriteDescriptorSet writeDescSet{};

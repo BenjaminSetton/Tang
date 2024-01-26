@@ -19,7 +19,6 @@
 
 #pragma warning(pop) 
 
-#include <array>
 #include <chrono>
 #include <cstdlib>
 #include <cstdint>
@@ -194,6 +193,7 @@ namespace TANG
 		CleanupSwapChain();
 
 		cubemapPreprocessingPass.Destroy();
+		skyboxPass.Destroy();
 
 		ldrSetLayoutCache.DestroyLayouts();
 		pbrSetLayoutCache.DestroyLayouts();
@@ -371,7 +371,7 @@ namespace TANG
 		baseImageInfo.height = 0; // Unused
 		baseImageInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
 		baseImageInfo.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-		baseImageInfo.mipLevels = 0; // Unused
+		baseImageInfo.mipLevels = 1;
 		baseImageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 		baseImageInfo.arrayLayers = 1;
 		baseImageInfo.flags = 0;
@@ -418,8 +418,8 @@ namespace TANG
 
 				TextureResource& texResource = out_resources.material[i];
 				texResource.Create(&fallbackBaseImageInfo, &viewCreateInfo, &samplerInfo);
-				texResource.CopyDataIntoImage(static_cast<void*>(&data), sizeof(data));
-				texResource.TransitionLayout_Immediate(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+				texResource.CopyFromData(static_cast<void*>(&data), sizeof(data));
+				texResource.TransitionLayout_Immediate(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 			}
 		}
 
@@ -1371,16 +1371,22 @@ namespace TANG
 
 		for (size_t i = 0; i < GetSWIDDSize(); i++)
 		{
-			std::array<TextureResource*, 2> attachments =
+			std::vector<TextureResource*> attachments =
 			{
 				&colorAttachment,
 				&swidd[i].swapChainImage
 			};
 
+			std::vector<uint32_t> imageViewIndices =
+			{
+				0,
+				0
+			};
+
 			FramebufferCreateInfo framebufferInfo{};
 			framebufferInfo.renderPass = &ldrRenderPass;
-			framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-			framebufferInfo.attachments = attachments.data();
+			framebufferInfo.attachments = attachments;
+			framebufferInfo.imageViewIndices = imageViewIndices;
 			framebufferInfo.width = swapChainExtent.width;
 			framebufferInfo.height = swapChainExtent.height;
 			framebufferInfo.layers = 1;
@@ -1391,10 +1397,16 @@ namespace TANG
 
 	void Renderer::CreateHDRFramebuffers()
 	{
-		std::array<TextureResource*, 2> attachments =
+		std::vector<TextureResource*> attachments =
 		{
 			&hdrAttachment,
 			&hdrDepthBuffer
+		};
+
+		std::vector<uint32_t> imageViewIndices =
+		{
+			0,
+			0
 		};
 
 		for (uint32_t i = 0; i < GetFDDSize(); i++)
@@ -1403,8 +1415,8 @@ namespace TANG
 
 			FramebufferCreateInfo framebufferInfo{};
 			framebufferInfo.renderPass = &hdrRenderPass;
-			framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-			framebufferInfo.attachments = attachments.data();
+			framebufferInfo.attachments = attachments;
+			framebufferInfo.imageViewIndices = imageViewIndices;
 			framebufferInfo.width = swapChainExtent.width;
 			framebufferInfo.height = swapChainExtent.height;
 			framebufferInfo.layers = 1;
@@ -1808,7 +1820,7 @@ namespace TANG
 
 		for (auto& swidd : swapChainImageDependentData)
 		{
-			swidd.swapChainImage.DestroyImageView();
+			swidd.swapChainImage.DestroyImageViews();
 		}
 
 		vkDestroySwapchainKHR(logicalDevice, swapChain, nullptr);
