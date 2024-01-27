@@ -1,13 +1,12 @@
 
+#include <array>
+
 #include "../render_passes/hdr_render_pass.h"
 #include "../shader.h"
 #include "../utils/sanity_check.h"
 #include "../utils/logger.h"
 #include "../vertex_types.h"
 #include "skybox_pipeline.h"
-
-#include <array>
-#include <vector>
 
 namespace TANG
 {
@@ -100,7 +99,7 @@ namespace TANG
 		// meaning a pipeline is created and never changed. This allows
 		// the GPU to heavily optimize for the pipelines defined. In this
 		// case though, we face a negligible penalty for making these dynamic.
-		std::vector<VkDynamicState> dynamicStates =
+		std::array<VkDynamicState, 2> dynamicStates =
 		{
 			VK_DYNAMIC_STATE_VIEWPORT,
 			VK_DYNAMIC_STATE_SCISSOR

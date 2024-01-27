@@ -446,6 +446,12 @@ namespace TANG
 
 	void Renderer::CreateSkyboxAssetResources(AssetDisk* asset, AssetResources& out_resources)
 	{
+		if (fullscreenQuadAssetUUID == INVALID_UUID)
+		{
+			LogError("Failed to load skybox. Fullscreen quad asset is not loaded when it's required to preprocess the skybox BRDF convolution map!");
+			return;
+		}
+
 		uint64_t totalIndexCount = 0;
 		uint32_t vBufferOffset = 0;
 
@@ -488,7 +494,7 @@ namespace TANG
 		cmdBuffer.Create(GetCommandPool(QueueType::GRAPHICS));
 		cmdBuffer.BeginRecording(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, nullptr);
 
-		cubemapPreprocessingPass.Preprocess(&cmdBuffer, &out_resources);
+		cubemapPreprocessingPass.Preprocess(&cmdBuffer, &out_resources, GetAssetResourcesFromUUID(fullscreenQuadAssetUUID));
 
 		cmdBuffer.EndRecording();
 
@@ -1355,7 +1361,7 @@ namespace TANG
 		hdrRenderPass.SetData(VK_FORMAT_R32G32B32A32_SFLOAT, depthAttachmentFormat);
 		hdrRenderPass.Create();
 
-		ldrRenderPass.SetData(VK_FORMAT_B8G8R8A8_SRGB, depthAttachmentFormat);
+		ldrRenderPass.SetData(VK_FORMAT_B8G8R8A8_SRGB);
 		ldrRenderPass.Create();
 	}
 

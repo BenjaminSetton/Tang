@@ -80,6 +80,7 @@ namespace TANG
 
 		vkDestroyFence(GetLogicalDevice(), fence, nullptr);
 
+		brdfConvolutionFramebuffer.Destroy();
 		for (auto& prefilterMapFramebuffer : prefilterMapFramebuffers)
 		{
 			prefilterMapFramebuffer.Destroy();
@@ -87,6 +88,7 @@ namespace TANG
 		irradianceSamplingFramebuffer.Destroy();
 		cubemapPreprocessingFramebuffer.Destroy();
 
+		brdfConvolutionMap.Destroy();
 		prefilterMap.Destroy();
 		irradianceMap.Destroy();
 		skyboxCubemapMipped.Destroy();
@@ -99,10 +101,12 @@ namespace TANG
 			prefilterMapRoughnessUBO[i].Destroy();
 		}
 
+		brdfConvolutionPipeline.Destroy();
 		prefilterMapPipeline.Destroy();
 		irradianceSamplingPipeline.Destroy();
 		cubemapPreprocessingPipeline.Destroy();
 
+		brdfConvolutionRenderPass.Destroy();
 		cubemapPreprocessingRenderPass.Destroy();
 
 		wasCreated = false;
@@ -131,61 +135,94 @@ namespace TANG
 		samplerInfo.minificationFilter = VK_FILTER_LINEAR;
 		samplerInfo.magnificationFilter = VK_FILTER_LINEAR;
 		samplerInfo.addressModeUVW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		samplerInfo.maxAnisotropy = 1.0f; // Is this an appropriate value??
+		samplerInfo.enableAnisotropicFiltering = false;
+		samplerInfo.maxAnisotropy = 1.0f;
 
 		skyboxTexture.CreateFromFile(CONFIG::SkyboxTextureFilePath, &baseImageInfo, &viewCreateInfo, &samplerInfo);
 
 		//
 		// Create the offscreen textures that we'll render the cube faces to
 		//
-		baseImageInfo.width = CONFIG::SkyboxCubemapResolutionSize;
-		baseImageInfo.height = CONFIG::SkyboxCubemapResolutionSize;
-		baseImageInfo.format = texFormat;
-		baseImageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-		baseImageInfo.mipLevels = 1;
-		baseImageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-		baseImageInfo.arrayLayers = 6;
-		baseImageInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
-		baseImageInfo.generateMipMaps = false;
 
-		viewCreateInfo.aspect = VK_IMAGE_ASPECT_COLOR_BIT;
-		viewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
-		viewCreateInfo.viewScope = ImageViewScope::ENTIRE_IMAGE;
+		// Skybox cubemap
+		{
+			baseImageInfo.width = CONFIG::SkyboxCubemapSize;
+			baseImageInfo.height = CONFIG::SkyboxCubemapSize;
+			baseImageInfo.format = texFormat;
+			baseImageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+			baseImageInfo.mipLevels = 1;
+			baseImageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+			baseImageInfo.arrayLayers = 6;
+			baseImageInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+			baseImageInfo.generateMipMaps = false;
 
-		samplerInfo.minificationFilter = VK_FILTER_LINEAR;
-		samplerInfo.magnificationFilter = VK_FILTER_LINEAR;
-		samplerInfo.addressModeUVW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		samplerInfo.maxAnisotropy = 1.0f; // Is this an appropriate value??
+			viewCreateInfo.aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+			viewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
+			viewCreateInfo.viewScope = ImageViewScope::ENTIRE_IMAGE;
 
-		skyboxCubemap.Create(&baseImageInfo, &viewCreateInfo, &samplerInfo);
+			samplerInfo.minificationFilter = VK_FILTER_LINEAR;
+			samplerInfo.magnificationFilter = VK_FILTER_LINEAR;
+			samplerInfo.addressModeUVW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 
-		baseImageInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-		baseImageInfo.mipLevels = CONFIG::PrefilterMapMaxMips;
-		baseImageInfo.generateMipMaps = false;
+			skyboxCubemap.Create(&baseImageInfo, &viewCreateInfo, &samplerInfo);
+		}
 
-		skyboxCubemapMipped.Create(&baseImageInfo, &viewCreateInfo, &samplerInfo);
+		// Skybox cubemap mipped
+		{
+			baseImageInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+			baseImageInfo.mipLevels = CONFIG::PrefilterMapMaxMips;
+			baseImageInfo.generateMipMaps = false;
 
-		baseImageInfo.width = CONFIG::IrradianceMapSize;
-		baseImageInfo.height = CONFIG::IrradianceMapSize;
-		baseImageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-		baseImageInfo.mipLevels = 1;
-		baseImageInfo.generateMipMaps = false;
+			skyboxCubemapMipped.Create(&baseImageInfo, &viewCreateInfo, &samplerInfo);
+		}
 
-		irradianceMap.Create(&baseImageInfo, &viewCreateInfo, &samplerInfo);
+		// Irradiance map
+		{
+			baseImageInfo.width = CONFIG::IrradianceMapSize;
+			baseImageInfo.height = CONFIG::IrradianceMapSize;
+			baseImageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+			baseImageInfo.mipLevels = 1;
+			baseImageInfo.generateMipMaps = false;
 
-		baseImageInfo.width = CONFIG::PrefilterMapSize;
-		baseImageInfo.height = CONFIG::PrefilterMapSize;
-		baseImageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-		baseImageInfo.mipLevels = CONFIG::PrefilterMapMaxMips;
-		baseImageInfo.generateMipMaps = true;
+			irradianceMap.Create(&baseImageInfo, &viewCreateInfo, &samplerInfo);
+		}
 
-		viewCreateInfo.viewScope = ImageViewScope::PER_MIP_LEVEL;
-		prefilterMap.Create(&baseImageInfo, &viewCreateInfo, &samplerInfo);
+		// Prefilter map
+		{
+			baseImageInfo.width = CONFIG::PrefilterMapSize;
+			baseImageInfo.height = CONFIG::PrefilterMapSize;
+			baseImageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+			baseImageInfo.mipLevels = CONFIG::PrefilterMapMaxMips;
+			baseImageInfo.generateMipMaps = true;
+
+			viewCreateInfo.viewScope = ImageViewScope::PER_MIP_LEVEL;
+
+			prefilterMap.Create(&baseImageInfo, &viewCreateInfo, &samplerInfo);
+		}
+
+		// BRDF convolution map
+		{
+			baseImageInfo.width = CONFIG::BRDFConvolutionMapSize;
+			baseImageInfo.height = CONFIG::BRDFConvolutionMapSize;
+			baseImageInfo.format = VK_FORMAT_R16G16_SFLOAT; // Two 16-bit components, floating point precision format
+			baseImageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+			baseImageInfo.flags = 0;
+			baseImageInfo.arrayLayers = 1;
+			baseImageInfo.mipLevels = 1;
+			baseImageInfo.generateMipMaps = false;
+
+			viewCreateInfo.viewScope = ImageViewScope::ENTIRE_IMAGE;
+			viewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+
+			samplerInfo.addressModeUVW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+
+			brdfConvolutionMap.Create(&baseImageInfo, &viewCreateInfo, &samplerInfo);
+		}
 	}
 
-	void CubemapPreprocessingPass::Preprocess(PrimaryCommandBuffer* cmdBuffer, AssetResources* asset)
+	void CubemapPreprocessingPass::Preprocess(PrimaryCommandBuffer* cmdBuffer, AssetResources* cubemap, AssetResources* fullscreenQuad)
 	{
-		CalculateSkyboxCubemap(cmdBuffer, asset);
+		CalculateSkyboxCubemap(cmdBuffer, cubemap);
 
 		// Copy the skybox cubemap over to the mipped texture and generate the mip maps
 		skyboxCubemapMipped.CopyFromTexture(cmdBuffer, &skyboxCubemap, 1);
@@ -210,8 +247,9 @@ namespace TANG
 			}
 		}
 
-		CalculateIrradianceMap(cmdBuffer, asset);
-		CalculatePrefilterMap(cmdBuffer, asset);
+		CalculateIrradianceMap(cmdBuffer, cubemap);
+		CalculatePrefilterMap(cmdBuffer, cubemap);
+		CalculateBRDFConvolution(cmdBuffer, fullscreenQuad);
 	}
 
 	void CubemapPreprocessingPass::Draw(uint32_t currentFrame, const DrawData& data)
@@ -233,7 +271,7 @@ namespace TANG
 
 	void CubemapPreprocessingPass::CreateFramebuffers()
 	{
-		// Cubemap preprocessing
+		// Skybox cubemap
 		{
 			std::vector<TextureResource*> attachments =
 			{
@@ -249,8 +287,8 @@ namespace TANG
 			framebufferInfo.renderPass = &cubemapPreprocessingRenderPass;
 			framebufferInfo.attachments = attachments;
 			framebufferInfo.imageViewIndices = imageViewIndices;
-			framebufferInfo.width = CONFIG::SkyboxCubemapResolutionSize;
-			framebufferInfo.height = CONFIG::SkyboxCubemapResolutionSize;
+			framebufferInfo.width = CONFIG::SkyboxCubemapSize;
+			framebufferInfo.height = CONFIG::SkyboxCubemapSize;
 			framebufferInfo.layers = 6;
 
 			cubemapPreprocessingFramebuffer.Create(framebufferInfo);
@@ -310,25 +348,51 @@ namespace TANG
 				framebufferInfo.width >>= 1;
 				framebufferInfo.height >>= 1;
 			}
+		}
 
+		// BRDF convolution map
+		{
+			std::vector<TextureResource*> attachments =
+			{
+				&brdfConvolutionMap
+			};
+
+			std::vector<uint32_t> imageViewIndices =
+			{
+				0
+			};
+
+			FramebufferCreateInfo framebufferInfo{};
+			framebufferInfo.renderPass = &brdfConvolutionRenderPass;
+			framebufferInfo.attachments = attachments;
+			framebufferInfo.imageViewIndices = imageViewIndices;
+			framebufferInfo.width = CONFIG::BRDFConvolutionMapSize;
+			framebufferInfo.height = CONFIG::BRDFConvolutionMapSize;
+			framebufferInfo.layers = 1;
+
+			irradianceSamplingFramebuffer.Create(framebufferInfo);
 		}
 	}
 
 	void CubemapPreprocessingPass::CreatePipelines()
 	{
-		cubemapPreprocessingPipeline.SetData(&cubemapPreprocessingRenderPass, &cubemapPreprocessingSetLayoutCache, borrowedData.swapChainExtent);
+		cubemapPreprocessingPipeline.SetData(&cubemapPreprocessingRenderPass, &cubemapPreprocessingSetLayoutCache, { CONFIG::SkyboxCubemapSize, CONFIG::SkyboxCubemapSize });
 		cubemapPreprocessingPipeline.Create();
 
-		irradianceSamplingPipeline.SetData(&cubemapPreprocessingRenderPass, &cubemapPreprocessingSetLayoutCache, borrowedData.swapChainExtent);
+		irradianceSamplingPipeline.SetData(&cubemapPreprocessingRenderPass, &cubemapPreprocessingSetLayoutCache, { CONFIG::IrradianceMapSize, CONFIG::IrradianceMapSize });
 		irradianceSamplingPipeline.Create();
 
-		prefilterMapPipeline.SetData(&cubemapPreprocessingRenderPass, &prefilterMapCubemapSetLayoutCache, &prefilterMapRoughnessSetLayoutCache, borrowedData.swapChainExtent);
+		prefilterMapPipeline.SetData(&cubemapPreprocessingRenderPass, &prefilterMapCubemapSetLayoutCache, &prefilterMapRoughnessSetLayoutCache, { CONFIG::PrefilterMapSize, CONFIG::PrefilterMapSize });
 		prefilterMapPipeline.Create();
+
+		brdfConvolutionPipeline.SetData(&brdfConvolutionRenderPass, { CONFIG::BRDFConvolutionMapSize, CONFIG::BRDFConvolutionMapSize });
+		brdfConvolutionPipeline.Create();
 	}
 
 	void CubemapPreprocessingPass::CreateRenderPasses()
 	{
 		cubemapPreprocessingRenderPass.Create();
+		brdfConvolutionRenderPass.Create();
 	}
 
 	void CubemapPreprocessingPass::CreateSetLayoutCaches()
@@ -496,10 +560,10 @@ namespace TANG
 
 	void CubemapPreprocessingPass::CalculateSkyboxCubemap(PrimaryCommandBuffer* cmdBuffer, const AssetResources* asset)
 	{
-		cmdBuffer->CMD_BeginRenderPass(&cubemapPreprocessingRenderPass, &cubemapPreprocessingFramebuffer, { CONFIG::SkyboxCubemapResolutionSize, CONFIG::SkyboxCubemapResolutionSize }, false, true);
+		cmdBuffer->CMD_BeginRenderPass(&cubemapPreprocessingRenderPass, &cubemapPreprocessingFramebuffer, { CONFIG::SkyboxCubemapSize, CONFIG::SkyboxCubemapSize }, false, true);
 		cmdBuffer->CMD_BindGraphicsPipeline(&cubemapPreprocessingPipeline);
-		cmdBuffer->CMD_SetScissor({ 0, 0 }, { CONFIG::SkyboxCubemapResolutionSize, CONFIG::SkyboxCubemapResolutionSize });
-		cmdBuffer->CMD_SetViewport(static_cast<float>(CONFIG::SkyboxCubemapResolutionSize), static_cast<float>(CONFIG::SkyboxCubemapResolutionSize));
+		cmdBuffer->CMD_SetScissor({ 0, 0 }, { CONFIG::SkyboxCubemapSize, CONFIG::SkyboxCubemapSize });
+		cmdBuffer->CMD_SetViewport(static_cast<float>(CONFIG::SkyboxCubemapSize), static_cast<float>(CONFIG::SkyboxCubemapSize));
 		cmdBuffer->CMD_BindMesh(asset);
 
 		// For every face of the cube, we must change our camera's view direction, change the framebuffer (since we're rendering to
@@ -569,6 +633,18 @@ namespace TANG
 			// both the width and height the effective size reduction is actually 4x (2x in every dimension)
 			renderAreaSize /= 2;
 		}
+	}
+
+	void CubemapPreprocessingPass::CalculateBRDFConvolution(PrimaryCommandBuffer* cmdBuffer, const AssetResources* fullscreenQuad)
+	{
+		cmdBuffer->CMD_BeginRenderPass(&brdfConvolutionRenderPass, &brdfConvolutionFramebuffer, { CONFIG::BRDFConvolutionMapSize, CONFIG::BRDFConvolutionMapSize }, false, true);
+		cmdBuffer->CMD_BindGraphicsPipeline(&brdfConvolutionPipeline);
+		cmdBuffer->CMD_SetScissor({ 0, 0 }, { CONFIG::BRDFConvolutionMapSize, CONFIG::BRDFConvolutionMapSize });
+		cmdBuffer->CMD_SetViewport(static_cast<float>(CONFIG::BRDFConvolutionMapSize), static_cast<float>(CONFIG::BRDFConvolutionMapSize));
+		cmdBuffer->CMD_BindMesh(fullscreenQuad);
+		cmdBuffer->CMD_DrawIndexed(fullscreenQuad->indexCount);
+
+		cmdBuffer->CMD_EndRenderPass();
 	}
 
 	void CubemapPreprocessingPass::ResetBorrowedData()

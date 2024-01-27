@@ -111,16 +111,14 @@ namespace TANG
 
 	void SkyboxPass::CreateSetLayoutCaches()
 	{
-		{
-			SetLayoutSummary persistentLayout;
-			persistentLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Skybox texture
-			skyboxSetLayoutCache.CreateSetLayout(persistentLayout, 0);
+		SetLayoutSummary persistentLayout;
+		persistentLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Skybox texture
+		skyboxSetLayoutCache.CreateSetLayout(persistentLayout, 0);
 
-			SetLayoutSummary volatileLayout;
-			volatileLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT); // View matrix
-			volatileLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT); // Projection matrix
-			skyboxSetLayoutCache.CreateSetLayout(volatileLayout, 0);
-		}
+		SetLayoutSummary volatileLayout;
+		volatileLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT); // View matrix
+		volatileLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT); // Projection matrix
+		skyboxSetLayoutCache.CreateSetLayout(volatileLayout, 0);
 	}
 
 	void SkyboxPass::CreateDescriptorSets()

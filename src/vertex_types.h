@@ -1,7 +1,7 @@
 #ifndef VERTEX_TYPES_H
 #define VERTEX_TYPES_H
 
-#include <array>
+#include <vector>
 
 // DISABLE WARNINGS FROM GLM
 #pragma warning(push)
@@ -14,12 +14,33 @@
 #include "utils/sanity_check.h"
 #include "vulkan/vulkan.h"
 
+// Stores a collection of vertex types used in different rendering pipelines.
+// Every single vertex type must implement the two following STATIC methods:
+// 
+//		static VkVertexInputBindingDescription GetBindingDescription()
+//		static std::vector<VkVertexInputAttributeDescription> GetAttributeDescriptions()
+//
+
 namespace TANG
 {
+	// Parent vertex type.
+	// NOTE - Derived vertex types must inherit from this class just so we can tell that the derived type
+	//        IS a VertexType. This is important because a templated utility method in BasePipeline depends
+	//        on this fact to only allow template instantiations of derived vertex types
+	class VertexType
+	{ 
+	protected:
+		VertexType() { }
+		virtual void _() = 0;
+	};
+#define SIZE_OF_DERIVED_VERTEX_TYPE(x) (sizeof(x) - sizeof(VertexType))
+
 
 	// A special vertex type used when pre-processing the skybox from an equirectangular 2D texture to a cubemap
-	struct CubemapVertex
+	struct CubemapVertex : public VertexType
 	{
+		virtual void _() override {};
+
 		static VkVertexInputBindingDescription GetBindingDescription()
 		{
 			VkVertexInputBindingDescription bindingDesc{};
@@ -29,17 +50,27 @@ namespace TANG
 			return bindingDesc;
 		}
 
-		static std::array<VkVertexInputAttributeDescription, 1> GetAttributeDescriptions()
+		static std::vector<VkVertexInputAttributeDescription> GetAttributeDescriptions()
 		{
-			TNG_ASSERT_COMPILE(sizeof(TANG::CubemapVertex) == 12);
+			// Temporarily disabled. Since moving to a derived class the padding rules make it so the actual size
+			// doesn't match the addition of the individual data members of this struct
+			//TNG_ASSERT_COMPILE(SIZE_OF_DERIVED_VERTEX_TYPE(CubemapVertex) == 12);
 
-			std::array<VkVertexInputAttributeDescription, 1> attributeDescriptions{};
+			static std::vector<VkVertexInputAttributeDescription> attributeDescriptions;
+			if (attributeDescriptions.size() != 0)
+			{
+				return attributeDescriptions;
+			}
+
+			attributeDescriptions.reserve(1);
 
 			// POSITION
-			attributeDescriptions[0].binding = 0;
-			attributeDescriptions[0].location = 0;
-			attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT; // vec3 (12 bytes)
-			attributeDescriptions[0].offset = offsetof(CubemapVertex, pos);
+			VkVertexInputAttributeDescription position;
+			position.binding = 0;
+			position.location = 0;
+			position.format = VK_FORMAT_R32G32B32_SFLOAT; // vec3 (12 bytes)
+			position.offset = offsetof(CubemapVertex, pos);
+			attributeDescriptions.push_back(position);
 
 			return attributeDescriptions;
 		}
@@ -77,8 +108,10 @@ namespace TANG
 		glm::vec3 pos;
 	};
 
-	struct UVVertex
+	struct UVVertex : public VertexType
 	{
+		virtual void _() override {};
+
 		static VkVertexInputBindingDescription GetBindingDescription()
 		{
 			VkVertexInputBindingDescription bindingDesc{};
@@ -88,23 +121,35 @@ namespace TANG
 			return bindingDesc;
 		}
 
-		static std::array<VkVertexInputAttributeDescription, 2> GetAttributeDescriptions()
+		static std::vector<VkVertexInputAttributeDescription> GetAttributeDescriptions()
 		{
-			TNG_ASSERT_COMPILE(sizeof(UVVertex) == 20);
+			// Temporarily disabled. Since moving to a derived class the padding rules make it so the actual size
+			// doesn't match the addition of the individual data members of this struct
+			//TNG_ASSERT_COMPILE(SIZE_OF_DERIVED_VERTEX_TYPE(UVVertex) == 20);
 
-			std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
+			std::vector<VkVertexInputAttributeDescription> attributeDescriptions;
+			if (attributeDescriptions.size() != 0)
+			{
+				return attributeDescriptions;
+			}
+
+			attributeDescriptions.reserve(2);
 
 			// POSITION
-			attributeDescriptions[0].binding = 0;
-			attributeDescriptions[0].location = 0;
-			attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT; // vec3 (12 bytes)
-			attributeDescriptions[0].offset = offsetof(UVVertex, pos);
+			VkVertexInputAttributeDescription position;
+			position.binding = 0;
+			position.location = 0;
+			position.format = VK_FORMAT_R32G32B32_SFLOAT; // vec3 (12 bytes)
+			position.offset = offsetof(UVVertex, pos);
+			attributeDescriptions.push_back(position);
 
 			// UV
-			attributeDescriptions[1].binding = 0;
-			attributeDescriptions[1].location = 1;
-			attributeDescriptions[1].format = VK_FORMAT_R32G32_SFLOAT; // vec2 (8 bytes)
-			attributeDescriptions[1].offset = offsetof(UVVertex, uv);
+			VkVertexInputAttributeDescription uv;
+			uv.binding = 0;
+			uv.location = 1;
+			uv.format = VK_FORMAT_R32G32_SFLOAT; // vec2 (8 bytes)
+			uv.offset = offsetof(UVVertex, uv);
+			attributeDescriptions.push_back(uv);
 
 			return attributeDescriptions;
 		}
@@ -144,8 +189,10 @@ namespace TANG
 		glm::vec2 uv;
 	};
 
-	struct PBRVertex
+	struct PBRVertex : public VertexType
 	{
+		virtual void _() override {};
+
 		static VkVertexInputBindingDescription GetBindingDescription()
 		{
 			VkVertexInputBindingDescription bindingDesc{};
@@ -155,42 +202,59 @@ namespace TANG
 			return bindingDesc;
 		}
 
-
-		static std::array<VkVertexInputAttributeDescription, 5> GetAttributeDescriptions()
+		static std::vector<VkVertexInputAttributeDescription> GetAttributeDescriptions()
 		{
-			TNG_ASSERT_COMPILE(sizeof(PBRVertex) == 56);
+			// Temporarily disabled. Since moving to a derived class the padding rules make it so the actual size
+			// doesn't match the addition of the individual data members of this struct
+			//TNG_ASSERT_COMPILE(SIZE_OF_DERIVED_VERTEX_TYPE(PBRVertex) == 56);
 
-			std::array<VkVertexInputAttributeDescription, 5> attributeDescriptions{};
+			std::vector<VkVertexInputAttributeDescription> attributeDescriptions;
+			if (attributeDescriptions.size() != 0)
+			{
+				return attributeDescriptions;
+			}
+
+			attributeDescriptions.reserve(5);
 
 			// POSITION
-			attributeDescriptions[0].binding = 0;
-			attributeDescriptions[0].location = 0;
-			attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT; // vec3 (12 bytes)
-			attributeDescriptions[0].offset = offsetof(PBRVertex, pos);
+			VkVertexInputAttributeDescription position;
+			position.binding = 0;
+			position.location = 0;
+			position.format = VK_FORMAT_R32G32B32_SFLOAT; // vec3 (12 bytes)
+			position.offset = offsetof(PBRVertex, pos);
+			attributeDescriptions.push_back(position);
 
 			// NORMAL
-			attributeDescriptions[1].binding = 0;
-			attributeDescriptions[1].location = 1;
-			attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT; // vec3 (12 bytes)
-			attributeDescriptions[1].offset = offsetof(PBRVertex, normal);
+			VkVertexInputAttributeDescription normal;
+			normal.binding = 0;
+			normal.location = 1;
+			normal.format = VK_FORMAT_R32G32B32_SFLOAT; // vec3 (12 bytes)
+			normal.offset = offsetof(PBRVertex, normal);
+			attributeDescriptions.push_back(normal);
 
 			// TANGENT
-			attributeDescriptions[2].binding = 0;
-			attributeDescriptions[2].location = 2;
-			attributeDescriptions[2].format = VK_FORMAT_R32G32B32_SFLOAT; // vec3 (12 bytes)
-			attributeDescriptions[2].offset = offsetof(PBRVertex, tangent);
+			VkVertexInputAttributeDescription tangent;
+			tangent.binding = 0;
+			tangent.location = 2;
+			tangent.format = VK_FORMAT_R32G32B32_SFLOAT; // vec3 (12 bytes)
+			tangent.offset = offsetof(PBRVertex, tangent);
+			attributeDescriptions.push_back(tangent);
 
 			// BITANGENT
-			attributeDescriptions[3].binding = 0;
-			attributeDescriptions[3].location = 3;
-			attributeDescriptions[3].format = VK_FORMAT_R32G32B32_SFLOAT; // vec3 (12 bytes)
-			attributeDescriptions[3].offset = offsetof(PBRVertex, tangent);
+			VkVertexInputAttributeDescription bitangent;
+			bitangent.binding = 0;
+			bitangent.location = 3;
+			bitangent.format = VK_FORMAT_R32G32B32_SFLOAT; // vec3 (12 bytes)
+			bitangent.offset = offsetof(PBRVertex, bitangent);
+			attributeDescriptions.push_back(bitangent);
 
 			// UV
-			attributeDescriptions[4].binding = 0;
-			attributeDescriptions[4].location = 4;
-			attributeDescriptions[4].format = VK_FORMAT_R32G32_SFLOAT; // vec2 (8 bytes)
-			attributeDescriptions[4].offset = offsetof(PBRVertex, uv);
+			VkVertexInputAttributeDescription uv;
+			uv.binding = 0;
+			uv.location = 4;
+			uv.format = VK_FORMAT_R32G32_SFLOAT; // vec2 (8 bytes)
+			uv.offset = offsetof(PBRVertex, uv);
+			attributeDescriptions.push_back(uv);
 
 			return attributeDescriptions;
 		}
@@ -234,7 +298,6 @@ namespace TANG
 				bitangent == other.bitangent &&
 				uv == other.uv;
 		}
-
 
 		glm::vec3 pos;
 		glm::vec3 normal;

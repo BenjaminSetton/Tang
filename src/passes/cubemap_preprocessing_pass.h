@@ -4,10 +4,12 @@
 #include "../data_buffer/uniform_buffer.h"
 #include "../descriptors/descriptor_set.h"
 #include "../framebuffer.h"
+#include "../pipelines/brdf_convolution_pipeline.h"
 #include "../pipelines/cubemap_preprocessing_pipeline.h"
 #include "../pipelines/irradiance_sampling_pipeline.h"
 #include "../pipelines/prefilter_map_pipeline.h"
 #include "../pipelines/skybox_pipeline.h"
+#include "../render_passes/brdf_convolution_render_pass.h"
 #include "../render_passes/cubemap_preprocessing_render_pass.h"
 #include "../texture_resource.h"
 #include "base_pass.h"
@@ -37,7 +39,7 @@ namespace TANG
 
 		// Performs and pre-processing necessary for the loaded skybox. 
 		// For example, this performs all IBL calculations
-		void Preprocess(PrimaryCommandBuffer* cmdBuffer, AssetResources* asset);
+		void Preprocess(PrimaryCommandBuffer* cmdBuffer, AssetResources* cubemap, AssetResources* fullscreenQuad);
 
 		// No-op, all the work is done during Preprocessing()
 		void Draw(uint32_t currentFrame, const DrawData& data) override;
@@ -57,9 +59,10 @@ namespace TANG
 
 		void InitializeShaderParameters();
 
-		void CalculateSkyboxCubemap(PrimaryCommandBuffer* cmdBuffer, const AssetResources* asset);
-		void CalculateIrradianceMap(PrimaryCommandBuffer* cmdBuffer, const AssetResources* asset);
-		void CalculatePrefilterMap(PrimaryCommandBuffer* cmdBuffer, const AssetResources* asset);
+		void CalculateSkyboxCubemap(PrimaryCommandBuffer* cmdBuffer, const AssetResources* cubemap);
+		void CalculateIrradianceMap(PrimaryCommandBuffer* cmdBuffer, const AssetResources* cubemap);
+		void CalculatePrefilterMap(PrimaryCommandBuffer* cmdBuffer, const AssetResources* cubemap);
+		void CalculateBRDFConvolution(PrimaryCommandBuffer* cmdBuffer, const AssetResources* fullscreenQuad);
 
 		void ResetBorrowedData() override;
 
@@ -87,6 +90,11 @@ namespace TANG
 		DescriptorSet prefilterMapRoughnessDescriptorSets[6];
 		TextureResource prefilterMap;
 		Framebuffer prefilterMapFramebuffers[CONFIG::PrefilterMapMaxMips]; // One framebuffer per mip level
+
+		BRDFConvolutionPipeline brdfConvolutionPipeline;
+		BRDFConvolutionRenderPass brdfConvolutionRenderPass;
+		TextureResource brdfConvolutionMap;
+		Framebuffer brdfConvolutionFramebuffer;
 
 		struct
 		{

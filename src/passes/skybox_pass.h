@@ -1,6 +1,8 @@
 #ifndef SKYBOX_PASS_H
 #define SKYBOX_PASS_H
 
+#include <array>
+
 #include "../data_buffer/uniform_buffer.h"
 #include "../descriptors/descriptor_set.h"
 #include "../pipelines/skybox_pipeline.h"

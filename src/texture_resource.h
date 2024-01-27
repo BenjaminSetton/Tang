@@ -35,6 +35,7 @@ namespace TANG
 		VkFilter minificationFilter				= VK_FILTER_LINEAR;
 		VkFilter magnificationFilter			= VK_FILTER_LINEAR;
 		VkSamplerAddressMode addressModeUVW		= VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		bool enableAnisotropicFiltering			= true;
 		float maxAnisotropy						= 1.0f;
 	};
 

@@ -1,6 +1,5 @@
 
 #include <array>
-#include <vector>
 
 #include "../device_cache.h"
 #include "../render_passes/cubemap_preprocessing_render_pass.h"
@@ -112,7 +111,7 @@ namespace TANG
 		// meaning a pipeline is created and never changed. This allows
 		// the GPU to heavily optimize for the pipelines defined. In this
 		// case though, we face a negligible penalty for making these dynamic.
-		std::vector<VkDynamicState> dynamicStates =
+		std::array<VkDynamicState, 2> dynamicStates =
 		{
 			VK_DYNAMIC_STATE_VIEWPORT,
 			VK_DYNAMIC_STATE_SCISSOR

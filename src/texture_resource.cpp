@@ -427,6 +427,11 @@ namespace TANG
 
 	void TextureResource::CreateSampler(const SamplerCreateInfo* _samplerInfo)
 	{
+		if (_samplerInfo->enableAnisotropicFiltering && _samplerInfo->maxAnisotropy == 1.0)
+		{
+			LogWarning("Anisotropy is enabled for texture resource, but it's max level is set to 1.0. This effectively disables anisotropy. Consider disabling anisotropic filtering or increase max anisotropy!");
+		}
+
 		VkDevice logicalDevice = GetLogicalDevice();
 
 		VkSamplerCreateInfo createInfo{};
@@ -436,7 +441,7 @@ namespace TANG
 		createInfo.addressModeU = _samplerInfo->addressModeUVW;
 		createInfo.addressModeV = _samplerInfo->addressModeUVW;
 		createInfo.addressModeW = _samplerInfo->addressModeUVW;
-		createInfo.anisotropyEnable = VK_TRUE;
+		createInfo.anisotropyEnable = _samplerInfo->enableAnisotropicFiltering;
 		createInfo.maxAnisotropy = _samplerInfo->maxAnisotropy;
 		createInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
 		createInfo.unnormalizedCoordinates = VK_FALSE;

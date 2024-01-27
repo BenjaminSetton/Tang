@@ -3,6 +3,7 @@
 
 #include <utility>
 
+#include "../vertex_types.h"
 #include "../descriptors/set_layout/set_layout_cache.h"
 #include "vulkan/vulkan.h"
 
@@ -15,6 +16,9 @@ namespace TANG
 		SKYBOX,
 		FULLSCREEN_QUAD
 	};
+
+	// Forward declarations
+	class Shader;
 
 	class BasePipeline
 	{
@@ -39,6 +43,56 @@ namespace TANG
 
 		[[nodiscard]] bool CreatePipelineObject(const VkGraphicsPipelineCreateInfo& pipelineCreateInfo);
 		[[nodiscard]] bool CreatePipelineLayout(const VkPipelineLayoutCreateInfo& pipelineLayoutCreateInfo);
+
+		// Populates a generic VkPipelineInputAssemblyStateCreateInfo struct with a triangle strip
+		VkPipelineInputAssemblyStateCreateInfo PopulateInputAssemblyCreateInfo(VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VkBool32 primitiveRestartEnable = VK_FALSE) const;
+
+		VkPipelineDynamicStateCreateInfo PopulateDynamicStateCreateInfo(const VkDynamicState* dynamicStates = nullptr, uint32_t dynamicStateCount = 0) const;
+
+		VkPipelineViewportStateCreateInfo PopulateViewportStateCreateInfo(uint32_t viewportCount = 1, uint32_t scissorCount = 1) const;
+
+		VkPipelineRasterizationStateCreateInfo PopulateRasterizerStateCreateInfo(VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT, VkFrontFace windingOrder = VK_FRONT_FACE_COUNTER_CLOCKWISE);
+
+		VkPipelineMultisampleStateCreateInfo PopulateMultisamplingStateCreateInfo(VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_1_BIT);
+
+		VkPipelineColorBlendAttachmentState PopulateColorBlendAttachment(); // No need for parameters yet...
+
+		VkPipelineColorBlendStateCreateInfo PopulateColorBlendStateCreateInfo(const VkPipelineColorBlendAttachmentState* attachments, uint32_t blendAttachmentCount);
+
+		VkPipelineDepthStencilStateCreateInfo PopulateDepthStencilStateCreateInfo(VkBool32 depthTestEnable = VK_FALSE, VkBool32 depthWriteEnable = VK_FALSE, VkCompareOp compareOp = VK_COMPARE_OP_LESS_OR_EQUAL, VkBool32 depthBoundsTestEnable = VK_FALSE, VkBool32 stencilTestEnable = VK_FALSE);
+
+		VkPipelineLayoutCreateInfo PopulatePipelineLayoutCreateInfo(const VkDescriptorSetLayout* setLayouts, uint32_t setLayoutCount, const VkPushConstantRange* pushConstantRanges, uint32_t pushConstantCount);
+
+		// Populates a VkPipelineShaderStageCreateInfo with shader information depending on the shader parameter
+		VkPipelineShaderStageCreateInfo PopulateShaderCreateInfo(const Shader& shader) const;
+
+		VkViewport PopulateViewportInfo(uint32_t width, uint32_t height) const;
+
+		VkRect2D PopulateScissorInfo(VkExtent2D viewportSize) const;
+
+		template<typename T>
+		VkPipelineVertexInputStateCreateInfo PopulateVertexInputCreateInfo()
+		{
+			if constexpr (std::is_same_v<T, VertexType>)
+			{
+				auto bindingDescription = T::GetBindingDescription();
+				auto attributeDescriptions = T::GetAttributeDescriptions();
+
+				VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+				vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+				vertexInputInfo.vertexBindingDescriptionCount = 1;
+				vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+				vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
+				vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
+
+				return vertexInputInfo;
+			}
+			else
+			{
+				// Do not compile :)
+				return {};
+			}
+		}
 
 		virtual void FlushData() = 0;
 

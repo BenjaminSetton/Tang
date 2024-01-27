@@ -7,47 +7,84 @@
 
 namespace TANG
 {
-	// TODO - Replace std::vector return type with a pointer to allocated data, and have an out parameter for
-	//        the size of the allocated buffer. This actually sounds kinda nasty, so maybe create a small struct?
-	std::vector<char> ReadFile(const std::string& fileName)
+	uint32_t ReadFile(const std::string_view& fileName, char** outBuffer)
 	{
-		std::ifstream file(fileName, std::ios::ate | std::ios::binary);
+		if (outBuffer && (*outBuffer != nullptr))
+		{
+			LogError("Failed to read file, out-buffer must not already contain any data!");
+			return 0;
+		}
+
+		std::ifstream file(fileName.data(), std::ios::ate | std::ios::binary);
 
 		if (!file.is_open())
 		{
-			LogError("Failed to open file %s!", fileName.c_str());
-			return std::vector<char>();
+			LogError("Failed to open file %s!", fileName.data());
+			return 0;
 		}
 
-		size_t fileSize = (size_t)file.tellg();
-		std::vector<char> buffer(fileSize);
+		uint32_t fileSize = static_cast<uint32_t>(file.tellg());
+		*outBuffer = new char[fileSize];
 
 		file.seekg(0);
-		file.read(buffer.data(), fileSize);
+		file.read(*outBuffer, fileSize);
 
 		file.close();
 
-		return buffer;
+		return fileSize;
 	}
 
-	void WriteToFile(const std::string& fileName, const std::string& msg)
+	uint32_t ReadFile(const std::string_view& fileName, char* outBuffer, uint32_t maxBufferSize, bool allowIncompleteRead)
 	{
-		std::ofstream file(fileName);
+		if (outBuffer == nullptr)
+		{
+			LogError("Failed to read file, out-buffer is null!");
+			return 0;
+		}
+
+		std::ifstream file(fileName.data(), std::ios::ate | std::ios::binary);
+
 		if (!file.is_open())
 		{
-			LogError("Failed to write to file '%s'!", fileName.c_str());
+			LogError("Failed to open file '%s'!", fileName.data());
+			return 0;
+		}
+
+		uint32_t fileSize = static_cast<uint32_t>(file.tellg());
+		if (fileSize >= maxBufferSize && !allowIncompleteRead)
+		{
+			LogWarning("Failed to read contents of file '%s', max buffer size (%u) is less than or equal to file size (%u) and incomplete reads are disallowed!", fileName.data(), maxBufferSize, static_cast<uint32_t>(fileSize));
+			return 0;
+		}
+
+		fileSize = std::min(fileSize, maxBufferSize);
+
+		file.seekg(0);
+		file.read(outBuffer, fileSize);
+
+		file.close();
+
+		return fileSize;
+	}
+
+	void WriteToFile(const std::string_view& fileName, const std::string_view& msg)
+	{
+		std::ofstream file(fileName.data());
+		if (!file.is_open())
+		{
+			LogError("Failed to write to file '%s'!", fileName.data());
 		}
 		file << msg;
 
 		file.close();
 	}
 
-	void AppendToFile(const std::string& fileName, const std::string& msg)
+	void AppendToFile(const std::string_view& fileName, const std::string_view& msg)
 	{
-		std::ofstream file(fileName, std::ios::app);
+		std::ofstream file(fileName.data(), std::ios::app);
 		if (!file.is_open())
 		{
-			LogError("Failed to append to file '%s'!", fileName.c_str());
+			LogError("Failed to append to file '%s'!", fileName.data());
 		}
 
 		file << msg;
@@ -55,15 +92,21 @@ namespace TANG
 		file.close();
 	}
 
-	uint32_t FileChecksum(const std::string& fileName)
+	uint32_t FileChecksum(const std::string_view& fileName)
 	{
-		auto contents = ReadFile(fileName);
+		char* contents = nullptr;
+		uint32_t bytesRead = ReadFile(fileName, &contents);
+		if (bytesRead == 0)
+		{
+			// Failed to read file, return invalid checksum
+			return 0;
+		}
 
 		uint32_t checksum = 0;
 		uint32_t shift = 0;
 
-		uint32_t numWords = static_cast<uint32_t>(ceil(contents.size() / 4.0f));
-		uint32_t* data = reinterpret_cast<uint32_t*>(contents.data());
+		uint32_t numWords = static_cast<uint32_t>(ceil(bytesRead / 4.0f));
+		uint32_t* data = reinterpret_cast<uint32_t*>(contents);
 
 		for (uint32_t i = 0; i < numWords; i++)
 		{
@@ -71,6 +114,8 @@ namespace TANG
 			checksum += (currWord << shift);
 			shift = (shift + 8) % 32;
 		}
+
+		delete[] contents;
 
 		return checksum;
 	}

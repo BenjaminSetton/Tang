@@ -11,8 +11,10 @@ namespace TANG
 		CUBEMAP_PREPROCESSING,
 		SKYBOX,
 		LDR,
+		FULLSCREEN_QUAD,
 		IRRADIANCE_SAMPLING,
-		PREFILTER_MAP
+		PREFILTER_MAP,
+		BRDF_CONVOLUTION
 	};
 
 	enum class ShaderStage
@@ -37,12 +39,18 @@ namespace TANG
 		Shader& operator=(const Shader& other) = delete;
 
 		VkShaderModule GetShaderObject() const;
+		ShaderType GetShaderType() const;
+		ShaderStage GetShaderStage() const;
+
+		bool IsValid() const;
 
 	private:
 
 		void Create(const ShaderType& type, const ShaderStage& stage);
 		void Destroy();
 
-		VkShaderModule shaderObject;
+		VkShaderModule object;
+		ShaderType type;
+		ShaderStage stage;
 	};
 }

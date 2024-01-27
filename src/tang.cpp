@@ -50,9 +50,9 @@ namespace TANG
 		renderer.Initialize(window.GetHandle(), CONFIG::WindowWidth, CONFIG::WindowHeight);
 		camera.Initialize({ 0.0f, 5.0f, 15.0f }, { 0.0f, 0.0f, 0.0f }); // Start the camera facing towards negative Z
 
-		// Load special assets
-		LoadAsset(CONFIG::SkyboxCubeMeshFilePath.c_str());
+		// Load core assets
 		LoadAsset(CONFIG::FullscreenQuadMeshFilePath.c_str());
+		LoadAsset(CONFIG::SkyboxCubeMeshFilePath.c_str());
 	}
 
 	void Update(float deltaTime)

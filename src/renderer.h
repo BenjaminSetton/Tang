@@ -1,6 +1,7 @@
 #ifndef RENDERER_H
 #define RENDERER_H
 
+#include <array>
 #include <optional>
 #include <unordered_map>
 #include <vector>

@@ -15,14 +15,13 @@ namespace TANG
 		FlushData();
 	}
 
-	LDRRenderPass::LDRRenderPass(LDRRenderPass&& other) noexcept : colorAttachmentFormat(std::move(other.colorAttachmentFormat)), depthAttachmentFormat(std::move(other.depthAttachmentFormat))
+	LDRRenderPass::LDRRenderPass(LDRRenderPass&& other) noexcept : colorAttachmentFormat(std::move(other.colorAttachmentFormat))
 	{
 	}
 
-	void LDRRenderPass::SetData(VkFormat _colorAttachmentFormat, VkFormat _depthAttachmentFormat)
+	void LDRRenderPass::SetData(VkFormat _colorAttachmentFormat)
 	{
 		colorAttachmentFormat = _colorAttachmentFormat;
-		depthAttachmentFormat = _depthAttachmentFormat;
 
 		wasDataSet = true;
 	}
@@ -91,7 +90,6 @@ namespace TANG
 	void LDRRenderPass::FlushData()
 	{
 		colorAttachmentFormat = VK_FORMAT_UNDEFINED;
-		depthAttachmentFormat = VK_FORMAT_UNDEFINED;
 		wasDataSet = false;
 	}
 }

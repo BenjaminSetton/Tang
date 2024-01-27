@@ -1,5 +1,4 @@
 
-#include <array>
 #include <vector>
 
 #include "../device_cache.h"
@@ -67,7 +66,7 @@ namespace TANG
 		fragShaderStageInfo.module = fragmentShader.GetShaderObject();
 		fragShaderStageInfo.pName = "main";
 
-		std::array<VkPipelineShaderStageCreateInfo, 3> shaderStages =
+		std::vector<VkPipelineShaderStageCreateInfo> shaderStages =
 		{ 
 			vertShaderStageInfo,
 			geoShaderStageInfo,
@@ -104,20 +103,10 @@ namespace TANG
 		scissor.offset = { 0, 0 };
 		scissor.extent = viewportSize;
 
-		// We're declaring these as dynamic states, meaning we can change
-		// them at any point. Usually the pipeline states in Vulkan are static,
-		// meaning a pipeline is created and never changed. This allows
-		// the GPU to heavily optimize for the pipelines defined. In this
-		// case though, we face a negligible penalty for making these dynamic.
-		std::vector<VkDynamicState> dynamicStates =
-		{
-			VK_DYNAMIC_STATE_VIEWPORT,
-			VK_DYNAMIC_STATE_SCISSOR
-		};
 		VkPipelineDynamicStateCreateInfo dynamicState{};
 		dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-		dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
-		dynamicState.pDynamicStates = dynamicStates.data();
+		dynamicState.dynamicStateCount = 0;
+		dynamicState.pDynamicStates = nullptr;
 
 		VkPipelineViewportStateCreateInfo viewportState{};
 		viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
