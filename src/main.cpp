@@ -29,7 +29,7 @@ struct MyAsset
 
 static std::vector<std::string> assetNames =
 {
-    "../src/data/assets/brass_vase/scene.gltf"
+    "../src/data/assets/marble_statue/scene.gltf"
 };
 
 int RandomRangeInt(int min, int max)
@@ -75,7 +75,7 @@ int main(uint32_t argc, const char** argv)
     }
 
     // Set the camera's velocity
-    TANG::SetCameraSpeed(5.0f);
+    TANG::SetCameraSpeed(2.5f);
     TANG::SetCameraSensitivity(5.0f);
 
     const float fpsUpdateCycle = 1.0f;

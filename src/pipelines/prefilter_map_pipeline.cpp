@@ -191,13 +191,15 @@ namespace TANG
 
 		// Pipeline layout
 		std::vector<VkDescriptorSetLayout> vkDescSetLayouts;
-		for (auto& iter : cubemapSetLayoutCache->GetLayoutCache())
+
+		for (uint32_t i = 0; i < cubemapSetLayoutCache->GetLayoutCount(); i++)
 		{
-			vkDescSetLayouts.push_back(iter.second.GetLayout());
+			vkDescSetLayouts.push_back(cubemapSetLayoutCache->GetSetLayout(i).value().GetLayout());
 		}
-		for (auto& iter : roughnessSetLayoutCache->GetLayoutCache())
+
+		for (uint32_t i = 0; i < roughnessSetLayoutCache->GetLayoutCount(); i++)
 		{
-			vkDescSetLayouts.push_back(iter.second.GetLayout());
+			vkDescSetLayouts.push_back(roughnessSetLayoutCache->GetSetLayout(i).value().GetLayout());
 		}
 
 		VkPipelineLayoutCreateInfo pipelineLayoutInfo{};

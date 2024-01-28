@@ -18,13 +18,6 @@ namespace TANG
 	{
 	}
 
-	void BRDFConvolutionRenderPass::SetData(VkFormat _colorAttachmentFormat)
-	{
-		colorAttachmentFormat = _colorAttachmentFormat;
-
-		wasDataSet = true;
-	}
-
 	bool BRDFConvolutionRenderPass::Build(RenderPassBuilder& out_builder)
 	{
 		if (!wasDataSet)
@@ -36,14 +29,14 @@ namespace TANG
 		out_builder.PreAllocateAttachmentReferences(1);
 
 		VkAttachmentDescription colorAttachmentDesc{};
-		colorAttachmentDesc.format = colorAttachmentFormat;
+		colorAttachmentDesc.format = VK_FORMAT_R16G16_SFLOAT;
 		colorAttachmentDesc.samples = VK_SAMPLE_COUNT_1_BIT;
 		colorAttachmentDesc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 		colorAttachmentDesc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 		colorAttachmentDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 		colorAttachmentDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 		colorAttachmentDesc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		colorAttachmentDesc.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; // HACK! We don't want the validation layes to complain when we manually insert a pipeline barrier to transition to SHADER_READ_ONLY
+		colorAttachmentDesc.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
 		VkAttachmentReference& colorAttachmentRef = out_builder.GetNextAttachmentReference();
 		colorAttachmentRef.attachment = 0;
@@ -72,7 +65,7 @@ namespace TANG
 
 	void BRDFConvolutionRenderPass::FlushData()
 	{
-		colorAttachmentFormat = VK_FORMAT_UNDEFINED;
-		wasDataSet = false;
+		// No external data necessary
+		wasDataSet = true;
 	}
 }

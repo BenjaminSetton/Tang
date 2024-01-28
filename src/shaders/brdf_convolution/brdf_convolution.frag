@@ -1,29 +1,20 @@
 
-// TODO - include Hammersley, ImportanceSampleGGX and GeometrySmith from a common file
+//
+// Code adapted from https://learnopengl.com/PBR/IBL/Specular-IBL
+//
 
+#version 450
 
+layout(location = 0) in vec2 inUV;
 
+layout(location = 0) out vec2 outColor;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+#include "pbr_utility.glsl"
 
 vec2 IntegrateBRDF(float NdotV, float roughness)
 {
     vec3 V;
-    V.x = sqrt(1.0 - NdotV*NdotV);
+    V.x = sqrt(1.0 - NdotV * NdotV);
     V.y = 0.0;
     V.z = NdotV;
 
@@ -57,9 +48,9 @@ vec2 IntegrateBRDF(float NdotV, float roughness)
     B /= float(SAMPLE_COUNT);
     return vec2(A, B);
 }
-// ----------------------------------------------------------------------------
+
 void main() 
 {
-    vec2 integratedBRDF = IntegrateBRDF(TexCoords.x, TexCoords.y);
-    FragColor = integratedBRDF;
+    vec2 integratedBRDF = IntegrateBRDF(inUV.x, inUV.y);
+    outColor = integratedBRDF;
 }

@@ -5,18 +5,20 @@
 #include "../../utils/logger.h"
 
 static constexpr uint32_t MAX_BINDINGS = 25;
-static constexpr uint32_t INVALID_BINDING = std::numeric_limits<uint32_t>::max();
+static constexpr uint32_t INVALID_NUMBER = std::numeric_limits<uint32_t>::max();
 
 namespace TANG
 {
 
-	SetLayoutSummary::SetLayoutSummary() : bindingCount(0)
+	SetLayoutSummary::SetLayoutSummary(uint32_t setNumber) : bindingCount(0)
 	{
 		bindings.resize(MAX_BINDINGS);
 		for (uint32_t i = 0; i < MAX_BINDINGS; i++)
 		{
-			bindings[i].binding = INVALID_BINDING;
+			bindings[i].binding = INVALID_NUMBER;
 		}
+
+		set = setNumber;
 	}
 
 	SetLayoutSummary::~SetLayoutSummary()
@@ -24,12 +26,12 @@ namespace TANG
 		// Nothing to do here
 	}
 
-	SetLayoutSummary::SetLayoutSummary(const SetLayoutSummary& other) : bindings(other.bindings), bindingCount(other.bindingCount)
+	SetLayoutSummary::SetLayoutSummary(const SetLayoutSummary& other) : bindings(other.bindings), bindingCount(other.bindingCount), set(other.set)
 	{
 		// Nothing to do here
 	}
 
-	SetLayoutSummary::SetLayoutSummary(SetLayoutSummary&& other) : bindings(std::move(other.bindings)), bindingCount(std::move(other.bindingCount))
+	SetLayoutSummary::SetLayoutSummary(SetLayoutSummary&& other) : bindings(std::move(other.bindings)), bindingCount(std::move(other.bindingCount)), set(std::move(other.set))
 	{
 		// Does std::move() of an integral type take care of this already?
 		//other.bindingCount = 0;
@@ -45,6 +47,7 @@ namespace TANG
 
 		bindings = other.bindings;
 		bindingCount = other.bindingCount;
+		set = other.set;
 
 		return *this;
 	}
@@ -56,13 +59,18 @@ namespace TANG
 			return false;
 		}
 
+		if (set != other.set)
+		{
+			return false;
+		}
+
 		// Check that the bindings are equal. We check for everything EXCEPT pImmutableSamplers
 		for (uint32_t i = 0; i < bindings.size(); i++)
 		{
-			if (bindings[i].binding != other.bindings[i].binding)                 return false;
-			if (bindings[i].descriptorType != other.bindings[i].descriptorType)   return false;
-			if (bindings[i].descriptorCount != other.bindings[i].descriptorCount) return false;
-			if (bindings[i].stageFlags != other.bindings[i].stageFlags)           return false;
+			if (bindings[i].binding != other.bindings[i].binding)					return false;
+			if (bindings[i].descriptorType != other.bindings[i].descriptorType)		return false;
+			if (bindings[i].descriptorCount != other.bindings[i].descriptorCount)	return false;
+			if (bindings[i].stageFlags != other.bindings[i].stageFlags)				return false;
 		}
 
 		return true;
@@ -76,7 +84,7 @@ namespace TANG
 			return;
 		}
 
-		if (bindings[binding].binding != INVALID_BINDING)
+		if (bindings[binding].binding != INVALID_NUMBER)
 		{
 			LogError("Binding %u already in use! Failed to add new binding for set layout", binding);
 			return;
@@ -104,6 +112,11 @@ namespace TANG
 		return bindingCount;
 	}
 
+	uint32_t SetLayoutSummary::GetSet() const
+	{
+		return set;
+	}
+
 	bool SetLayoutSummary::IsValid()
 	{
 		// The vector is full, so we know it must be contiguous if it passed the sanity checks in AddBinding()
@@ -112,7 +125,7 @@ namespace TANG
 		uint32_t count;
 		for (count = 0; count < MAX_BINDINGS; count++)
 		{
-			if (bindings[count].binding == INVALID_BINDING)
+			if (bindings[count].binding == INVALID_NUMBER)
 			{
 				break;
 			}
@@ -129,8 +142,8 @@ namespace TANG
 		// https://vkguide.dev/docs/extra-chapter/abstracting_descriptors/
 		for (auto& binding : bindings)
 		{
-			//pack the binding data into a single int64. Not fully correct but it's ok
-			size_t bindingHash = binding.binding | binding.descriptorType << 8 | binding.descriptorCount << 16 | binding.stageFlags << 24;
+			//pack the binding data into a single int64, including the set. Not fully correct but it's ok
+			size_t bindingHash = binding.binding | binding.descriptorType << 8 | binding.descriptorCount << 16 | binding.stageFlags << 24 | set << 32;
 
 			//shuffle the packed binding data and xor it with the main hash
 			hashResult ^= std::hash<size_t>()(bindingHash);

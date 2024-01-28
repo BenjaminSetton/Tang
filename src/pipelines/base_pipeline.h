@@ -49,7 +49,7 @@ namespace TANG
 
 		VkPipelineDynamicStateCreateInfo PopulateDynamicStateCreateInfo(const VkDynamicState* dynamicStates = nullptr, uint32_t dynamicStateCount = 0) const;
 
-		VkPipelineViewportStateCreateInfo PopulateViewportStateCreateInfo(uint32_t viewportCount = 1, uint32_t scissorCount = 1) const;
+		VkPipelineViewportStateCreateInfo PopulateViewportStateCreateInfo(const VkViewport* viewports, uint32_t viewportCount, const VkRect2D* scissors, uint32_t scissorCount) const;
 
 		VkPipelineRasterizationStateCreateInfo PopulateRasterizerStateCreateInfo(VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT, VkFrontFace windingOrder = VK_FRONT_FACE_COUNTER_CLOCKWISE);
 
@@ -73,10 +73,10 @@ namespace TANG
 		template<typename T>
 		VkPipelineVertexInputStateCreateInfo PopulateVertexInputCreateInfo()
 		{
-			if constexpr (std::is_same_v<T, VertexType>)
+			if constexpr (std::is_base_of_v<VertexType, T>)
 			{
-				auto bindingDescription = T::GetBindingDescription();
-				auto attributeDescriptions = T::GetAttributeDescriptions();
+				auto& bindingDescription = T::GetBindingDescription();
+				auto& attributeDescriptions = T::GetAttributeDescriptions();
 
 				VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
 				vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -87,11 +87,8 @@ namespace TANG
 
 				return vertexInputInfo;
 			}
-			else
-			{
-				// Do not compile :)
-				return {};
-			}
+			
+			// If this function did not compile, please use a derived VertexType!
 		}
 
 		virtual void FlushData() = 0;

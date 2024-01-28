@@ -28,6 +28,7 @@ project "TANG"
 		"src/**.vert",
 		"src/**.geo",
 		"src/**.frag",
+		"src/**.glsl"
 	}
 	
 	includedirs

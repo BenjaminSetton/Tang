@@ -34,6 +34,7 @@ namespace TANG
 	{
 		VkFilter minificationFilter				= VK_FILTER_LINEAR;
 		VkFilter magnificationFilter			= VK_FILTER_LINEAR;
+		VkSamplerMipmapMode mipmapMode			= VK_SAMPLER_MIPMAP_MODE_LINEAR;
 		VkSamplerAddressMode addressModeUVW		= VK_SAMPLER_ADDRESS_MODE_REPEAT;
 		bool enableAnisotropicFiltering			= true;
 		float maxAnisotropy						= 1.0f;

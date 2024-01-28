@@ -360,11 +360,20 @@ namespace TANG
 		samplerInfo.minificationFilter = VK_FILTER_LINEAR;
 		samplerInfo.magnificationFilter = VK_FILTER_LINEAR;
 		samplerInfo.addressModeUVW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		samplerInfo.maxAnisotropy = 1.0f; // Is this an appropriate value??
+		samplerInfo.maxAnisotropy = 4.0;
+		samplerInfo.enableAnisotropicFiltering = true;
+
+		SamplerCreateInfo fallbackSamplerInfo{};
+		samplerInfo.minificationFilter = VK_FILTER_NEAREST;
+		samplerInfo.magnificationFilter = VK_FILTER_NEAREST;
+		samplerInfo.addressModeUVW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerInfo.maxAnisotropy = 1.0;
+		samplerInfo.enableAnisotropicFiltering = false;
 
 		ImageViewCreateInfo viewCreateInfo{};
 		viewCreateInfo.aspect = VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
 		viewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		viewCreateInfo.viewScope = ImageViewScope::ENTIRE_IMAGE;
 
 		BaseImageCreateInfo baseImageInfo{};
 		baseImageInfo.width = 0; // Unused
@@ -412,12 +421,12 @@ namespace TANG
 				TextureResource& texResource = out_resources.material[i];
 				texResource.CreateFromFile(matTexture->fileName, &baseImageInfo, &viewCreateInfo, &samplerInfo);
 			}
-			else
+			else // use fallback
 			{
 				uint32_t data = DEFAULT_MATERIAL.at(texType);
 
 				TextureResource& texResource = out_resources.material[i];
-				texResource.Create(&fallbackBaseImageInfo, &viewCreateInfo, &samplerInfo);
+				texResource.Create(&fallbackBaseImageInfo, &viewCreateInfo, &fallbackSamplerInfo);
 				texResource.CopyFromData(static_cast<void*>(&data), sizeof(data));
 				texResource.TransitionLayout_Immediate(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 			}
@@ -451,6 +460,8 @@ namespace TANG
 			LogError("Failed to load skybox. Fullscreen quad asset is not loaded when it's required to preprocess the skybox BRDF convolution map!");
 			return;
 		}
+
+		LogInfo("Starting cubemap preprocessing...");
 
 		uint64_t totalIndexCount = 0;
 		uint32_t vBufferOffset = 0;
@@ -511,8 +522,6 @@ namespace TANG
 		VkFence cubemapPreprocessingFence = cubemapPreprocessingPass.GetFence();
 		vkResetFences(GetLogicalDevice(), 1, &cubemapPreprocessingFence);
 
-		LogInfo("Starting cubemap preprocessing...");
-
 		if (SubmitQueue(QueueType::GRAPHICS, &submitInfo, 1, cubemapPreprocessingFence) != VK_SUCCESS)
 		{
 			LogError("Failed to execute commands for cubemap preprocessing!");
@@ -522,6 +531,7 @@ namespace TANG
 		// Wait for the GPU to finish preprocessing the cubemap
 		vkWaitForFences(GetLogicalDevice(), 1, &cubemapPreprocessingFence, VK_TRUE, UINT64_MAX);
 
+		cubemapPreprocessingPass.UpdatePrefilterMapViewScope();
 		cubemapPreprocessingPass.DestroyIntermediates();
 
 		LogInfo("Cubemap preprocessing done!");
@@ -1542,23 +1552,27 @@ namespace TANG
 			currentFDD->assetDescriptorDataMap.insert({ uuid, AssetDescriptorData() });
 			AssetDescriptorData& assetDescriptorData = currentFDD->assetDescriptorDataMap[uuid];
 
-			const LayoutCache& cache = pbrSetLayoutCache.GetLayoutCache();
-			for (auto iter : cache)
+			for (uint32_t j = 0; j < pbrSetLayoutCache.GetLayoutCount(); j++)
 			{
 				assetDescriptorData.descriptorSets.push_back(DescriptorSet());
 				DescriptorSet* currentSet = &assetDescriptorData.descriptorSets.back();
 
-				currentSet->Create(descriptorPool, iter.second);
+				std::optional<DescriptorSetLayout> setLayoutOpt = pbrSetLayoutCache.GetSetLayout(j);
+				if (!setLayoutOpt.has_value())
+				{
+					LogError("Failed to create asset descriptor set #%u for asset with UUID '%u'", j, uuid);
+					continue;
+				}
+				currentSet->Create(descriptorPool, setLayoutOpt.value());
 			}
 		}
 	}
 
 	void Renderer::CreateLDRDescriptorSet()
 	{
-		const LayoutCache& cache = ldrSetLayoutCache.GetLayoutCache();
 		if (ldrSetLayoutCache.GetLayoutCount() != 1)
 		{
-			TNG_ASSERT_MSG(false, "Failed to create LDR descriptor set!");
+			LogError("Failed to create LDR descriptor set, invalid layout count! Expected (%u) vs. actual (%u)", 1, ldrSetLayoutCache.GetLayoutCount());
 			return;
 		}
 
@@ -1566,7 +1580,7 @@ namespace TANG
 		{
 			auto frameData = GetFDDAtIndex(i);
 
-			frameData->ldrDescriptorSet.Create(descriptorPool, cache.begin()->second);
+			frameData->ldrDescriptorSet.Create(descriptorPool, ldrSetLayoutCache.GetSetLayout(0).value());
 		}
 	}
 
@@ -1578,30 +1592,26 @@ namespace TANG
 
 	void Renderer::CreatePBRSetLayouts()
 	{
-		//	DIFFUSE = 0,
-		//	NORMAL,
-		//	METALLIC,
-		//	ROUGHNESS,
-		//	LIGHTMAP,
-
 		// Holds PBR textures
-		SetLayoutSummary persistentLayout;
+		SetLayoutSummary persistentLayout(0);
 		persistentLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Diffuse texture
 		persistentLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Normal texture
 		persistentLayout.AddBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Metallic texture
 		persistentLayout.AddBinding(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Roughness texture
 		persistentLayout.AddBinding(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Lightmap texture
-		persistentLayout.AddBinding(5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Irradiance map
+		persistentLayout.AddBinding(5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Irradiance map (diffuse IBL)
+		persistentLayout.AddBinding(6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Prefilter map (specular IBL)
+		persistentLayout.AddBinding(7, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // BRDF convolution map (specular IBL)
 		pbrSetLayoutCache.CreateSetLayout(persistentLayout, 0);
 
 		// Holds ProjUBO
-		SetLayoutSummary unstableLayout;
+		SetLayoutSummary unstableLayout(1);
 		unstableLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);           // Projection matrix
 		unstableLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT);         // Camera exposure
 		pbrSetLayoutCache.CreateSetLayout(unstableLayout, 0);
 
 		// Holds TransformUBO + ViewUBO + CameraDataUBO
-		SetLayoutSummary volatileLayout;
+		SetLayoutSummary volatileLayout(2);
 		volatileLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);   // Transform matrix
 		volatileLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT); // Camera data
 		volatileLayout.AddBinding(2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);   // View matrix
@@ -1610,9 +1620,9 @@ namespace TANG
 
 	void Renderer::CreateLDRSetLayouts()
 	{
-		SetLayoutSummary layout;
-		layout.AddBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // HDR texture
-		layout.AddBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT); // Camera exposure
+		SetLayoutSummary layout(0);
+		layout.AddBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);	// HDR texture
+		layout.AddBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT);			// Camera exposure
 		ldrSetLayoutCache.CreateSetLayout(layout, 0);
 	}
 
@@ -1782,10 +1792,10 @@ namespace TANG
 		AssetResources* fullscreenQuadAsset = GetAssetResourcesFromUUID(fullscreenQuadAssetUUID);
 		auto frameData = GetCurrentFDD();
 
-		cmdBuffer->CMD_SetScissor({ 0, 0 }, swapChainExtent);
-		cmdBuffer->CMD_SetViewport(static_cast<float>(swapChainExtent.width), static_cast<float>(swapChainExtent.height));
 		cmdBuffer->CMD_BindGraphicsPipeline(&ldrPipeline);
 		cmdBuffer->CMD_BindDescriptorSets(&ldrPipeline, 1, reinterpret_cast<VkDescriptorSet*>(&frameData->ldrDescriptorSet));
+		cmdBuffer->CMD_SetScissor({ 0, 0 }, swapChainExtent);
+		cmdBuffer->CMD_SetViewport(static_cast<float>(swapChainExtent.width), static_cast<float>(swapChainExtent.height));
 		cmdBuffer->CMD_BindMesh(fullscreenQuadAsset);
 		cmdBuffer->CMD_DrawIndexed(fullscreenQuadAsset->indexCount);
 
@@ -1874,13 +1884,15 @@ namespace TANG
 		}
 
 		// Update PBR textures
-		WriteDescriptorSets writeDescSets(0, 6);
+		WriteDescriptorSets writeDescSets(0, 8);
 		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 0, &asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::DIFFUSE)]);
 		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 1, &asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::NORMAL)]);
 		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 2, &asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::METALLIC)]);
 		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 3, &asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::ROUGHNESS)]);
 		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 4, &asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::LIGHTMAP)]);
 		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 5, cubemapPreprocessingPass.GetIrradianceMap());
+		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 6, cubemapPreprocessingPass.GetPrefilterMap());
+		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 7, cubemapPreprocessingPass.GetBRDFConvolutionMap());
 
 		descSet.Update(writeDescSets);
 	}

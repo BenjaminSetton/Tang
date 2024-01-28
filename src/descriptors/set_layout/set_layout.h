@@ -1,6 +1,7 @@
 #ifndef SET_LAYOUT_H
 #define SET_LAYOUT_H
 
+#include "../../utils/sanity_check.h"
 #include "vulkan/vulkan.h"
 
 namespace TANG
@@ -25,6 +26,8 @@ namespace TANG
 
 		VkDescriptorSetLayout setLayout;
 	};
+
+	TNG_ASSERT_COMPILE(sizeof(DescriptorSetLayout) == sizeof(VkDescriptorSetLayout));
 }
 
 #endif

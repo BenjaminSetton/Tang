@@ -46,6 +46,13 @@ namespace TANG
 
 		const TextureResource* GetSkyboxCubemap() const;
 		const TextureResource* GetIrradianceMap() const;
+		const TextureResource* GetPrefilterMap() const;
+		const TextureResource* GetBRDFConvolutionMap() const;
+
+		// Updates the view scope of the prefilter map from PER_MIP_LEVEL to ENTIRE_IMAGE so we can
+		// properly sample from all mips. This must be done after we finish rendering to the prefilter map
+		// though, so this must be called by the renderer after we wait for the graphics queue
+		void UpdatePrefilterMapViewScope();
 
 	private:
 

@@ -63,11 +63,13 @@ namespace TANG
 		return dynamicState;
 	}
 
-	VkPipelineViewportStateCreateInfo BasePipeline::PopulateViewportStateCreateInfo(uint32_t viewportCount, uint32_t scissorCount) const
+	VkPipelineViewportStateCreateInfo BasePipeline::PopulateViewportStateCreateInfo(const VkViewport* viewports, uint32_t viewportCount, const VkRect2D* scissors, uint32_t scissorCount) const
 	{
 		VkPipelineViewportStateCreateInfo viewportState{};
 		viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+		viewportState.pViewports = viewports;
 		viewportState.viewportCount = viewportCount;
+		viewportState.pScissors = scissors;
 		viewportState.scissorCount = scissorCount;
 
 		return viewportState;

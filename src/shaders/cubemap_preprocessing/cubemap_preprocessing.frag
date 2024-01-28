@@ -15,7 +15,10 @@ layout (location = 0) in vec3 localPos;
 
 layout(set = 0, binding = 2) uniform sampler2D equirectangularMap;
 
+#include "hdr_utility.glsl"
+
 const vec2 invAtan = vec2(0.1591, 0.3183);
+const float maxLuminosity = 500;
 
 vec2 SampleSphericalMap(vec3 dir)
 {
@@ -29,6 +32,16 @@ void main()
 {		
     vec2 uv = SampleSphericalMap(normalize(localPos));
     vec3 color = texture(equirectangularMap, uv).rgb;
+
+    // Tone-map the sample from the original HDR texture to avoid super high luminosities, which can create artifacts like fireflies during
+    // other rendering processes such as generating the prefilter map for the skybox
+    float colorLuma = Luma(color);
+
+    if(colorLuma > maxLuminosity)
+    {
+        float scale = colorLuma / maxLuminosity;
+        color /= scale;
+    }
     
     outColor = vec4(color, 1.0);
 }

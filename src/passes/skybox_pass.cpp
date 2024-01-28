@@ -111,11 +111,11 @@ namespace TANG
 
 	void SkyboxPass::CreateSetLayoutCaches()
 	{
-		SetLayoutSummary persistentLayout;
+		SetLayoutSummary persistentLayout(0);
 		persistentLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Skybox texture
 		skyboxSetLayoutCache.CreateSetLayout(persistentLayout, 0);
 
-		SetLayoutSummary volatileLayout;
+		SetLayoutSummary volatileLayout(1);
 		volatileLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT); // View matrix
 		volatileLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT); // Projection matrix
 		skyboxSetLayoutCache.CreateSetLayout(volatileLayout, 0);
@@ -123,20 +123,25 @@ namespace TANG
 
 	void SkyboxPass::CreateDescriptorSets()
 	{
-		const LayoutCache& cache = skyboxSetLayoutCache.GetLayoutCache();
-		if (skyboxSetLayoutCache.GetLayoutCount() != 2)
+		uint32_t skyboxSetLayoutCount = skyboxSetLayoutCache.GetLayoutCount();
+		if (skyboxSetLayoutCount != 2)
 		{
-			TNG_ASSERT_MSG(false, "Failed to create skybox descriptor set!");
+			LogError("Failed to create skybox descriptor set, invalid set layout count! Expected (%u) vs. actual (%u)", 2, skyboxSetLayoutCount);
 			return;
 		}
 
 		for (uint32_t i = 0; i < CONFIG::MaxFramesInFlight; i++)
 		{
-			uint32_t j = 0;
-			for (auto& iter : cache)
+			for (uint32_t j = 0; j < skyboxSetLayoutCount; j++)
 			{
-				skyboxDescriptorSets[i][j].Create(*(borrowedData.descriptorPool), iter.second);
-				j++;
+				std::optional<DescriptorSetLayout> setLayoutOpt = skyboxSetLayoutCache.GetSetLayout(j);
+				if (!setLayoutOpt.has_value())
+				{
+					LogWarning("Failed to create skybox descriptor set! Set layout at %u was null", j);
+					continue;
+				}
+
+				skyboxDescriptorSets[i][j].Create(*(borrowedData.descriptorPool), setLayoutOpt.value());
 			}
 		}
 	}

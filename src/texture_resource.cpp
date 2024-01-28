@@ -447,7 +447,7 @@ namespace TANG
 		createInfo.unnormalizedCoordinates = VK_FALSE;
 		createInfo.compareEnable = VK_FALSE;
 		createInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-		createInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+		createInfo.mipmapMode = _samplerInfo->mipmapMode;
 		createInfo.mipLodBias = 0.0f;
 		createInfo.minLod = 0.0f;
 		createInfo.maxLod = static_cast<float>(baseImageInfo.mipLevels);
@@ -1021,6 +1021,7 @@ namespace TANG
 	{
 		switch (texFormat)
 		{
+		case VK_FORMAT_R16G16_SFLOAT:
 		case VK_FORMAT_R8G8B8A8_UNORM:
 		case VK_FORMAT_B8G8R8A8_UNORM:
 		case VK_FORMAT_R8G8B8A8_SRGB:

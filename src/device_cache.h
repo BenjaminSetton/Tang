@@ -1,3 +1,5 @@
+#ifndef DEVICE_CACHE_H
+#define DEVICE_CACHE_H
 
 #include "vulkan/vulkan.h"
 
@@ -67,3 +69,5 @@ namespace TANG
 		return DeviceCache::Get().GetPhysicalDevice();
 	}
 }
+
+#endif

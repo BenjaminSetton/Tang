@@ -69,15 +69,33 @@ namespace TANG
 		layoutCache.clear();
 	}
 
-	const LayoutCache& SetLayoutCache::GetLayoutCache() const
+	std::optional<DescriptorSetLayout> SetLayoutCache::GetSetLayout(uint32_t setNumber) const
 	{
-		return layoutCache;
+		// This is not really efficient, but it does the trick for now
+		// TODO - Optimize
+		for (const auto& iter : layoutCache)
+		{
+			if (iter.first.GetSet() == setNumber)
+			{
+				return iter.second;
+			}
+		}
+
+		return {};
 	}
 
-	DescriptorSetLayout* SetLayoutCache::GetSetLayout(const SetLayoutSummary& summary)
+	std::optional<DescriptorSetLayout> SetLayoutCache::GetSetLayout(const SetLayoutSummary& summary) const
 	{
 		auto result = layoutCache.find(summary);
-		return result == layoutCache.end() ? nullptr : &(result->second);
+
+		if (result == layoutCache.end())
+		{
+			return {};
+		}
+		else
+		{
+			return result->second;
+		}
 	}
 
 	uint32_t SetLayoutCache::GetLayoutCount() const

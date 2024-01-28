@@ -14,8 +14,6 @@ namespace TANG
 		BRDFConvolutionRenderPass(BRDFConvolutionRenderPass&& other) noexcept;
 		// Copying this object is not allowed
 
-		void SetData(VkFormat colorAttachmentFormat);
-
 	private:
 
 		bool Build(RenderPassBuilder& out_builder) override;

@@ -69,8 +69,8 @@ namespace TANG
 		VkViewport									viewport				= PopulateViewportInfo(viewportSize.width, viewportSize.height);
 		VkRect2D									scissor					= PopulateScissorInfo(viewportSize);
 		VkPipelineDynamicStateCreateInfo			dynamicState			= PopulateDynamicStateCreateInfo();
-		VkPipelineViewportStateCreateInfo			viewportState			= PopulateViewportStateCreateInfo();
-		VkPipelineRasterizationStateCreateInfo		rasterizer				= PopulateRasterizerStateCreateInfo(VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE);
+		VkPipelineViewportStateCreateInfo			viewportState			= PopulateViewportStateCreateInfo(&viewport, 1, &scissor, 1);
+		VkPipelineRasterizationStateCreateInfo		rasterizer				= PopulateRasterizerStateCreateInfo(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_CLOCKWISE);
 		VkPipelineMultisampleStateCreateInfo		multisampling			= PopulateMultisamplingStateCreateInfo();
 		VkPipelineColorBlendAttachmentState			colorBlendAttachment	= PopulateColorBlendAttachment();
 		VkPipelineColorBlendStateCreateInfo			colorBlending			= PopulateColorBlendStateCreateInfo(&colorBlendAttachment, 1);

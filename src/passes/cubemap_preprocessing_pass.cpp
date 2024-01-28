@@ -8,6 +8,9 @@
 #include "../ubo_structs.h"
 #include "cubemap_preprocessing_pass.h"
 
+// TMEPO DEBUG
+#include "../device_cache.h"
+
 static const glm::mat4 cubemapProjMatrix = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 10.0f);
 
 static const glm::mat4 cubemapViewMatrices[] =
@@ -189,6 +192,9 @@ namespace TANG
 
 		// Prefilter map
 		{
+			VkPhysicalDeviceProperties deviceProps = DeviceCache::Get().GetPhysicalDeviceProperties();
+			float maxAnisotropy = deviceProps.limits.maxSamplerAnisotropy;
+
 			baseImageInfo.width = CONFIG::PrefilterMapSize;
 			baseImageInfo.height = CONFIG::PrefilterMapSize;
 			baseImageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
@@ -196,6 +202,10 @@ namespace TANG
 			baseImageInfo.generateMipMaps = true;
 
 			viewCreateInfo.viewScope = ImageViewScope::PER_MIP_LEVEL;
+
+			samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+			samplerInfo.enableAnisotropicFiltering = true;
+			samplerInfo.maxAnisotropy = maxAnisotropy;
 
 			prefilterMap.Create(&baseImageInfo, &viewCreateInfo, &samplerInfo);
 		}
@@ -215,6 +225,8 @@ namespace TANG
 			viewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
 
 			samplerInfo.addressModeUVW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+			samplerInfo.enableAnisotropicFiltering = false;
+			samplerInfo.maxAnisotropy = 1.0f;
 
 			brdfConvolutionMap.Create(&baseImageInfo, &viewCreateInfo, &samplerInfo);
 		}
@@ -267,6 +279,26 @@ namespace TANG
 	const TextureResource* CubemapPreprocessingPass::GetIrradianceMap() const
 	{
 		return &irradianceMap;
+	}
+
+	const TextureResource* CubemapPreprocessingPass::GetPrefilterMap() const
+	{
+		return &prefilterMap;
+	}
+
+	const TextureResource* CubemapPreprocessingPass::GetBRDFConvolutionMap() const
+	{
+		return &brdfConvolutionMap;
+	}
+
+	void CubemapPreprocessingPass::UpdatePrefilterMapViewScope()
+	{
+		// Recreate the image views of the prefilter map to ENTIRE_IMAGE, since we want to sample from all mips
+		ImageViewCreateInfo viewInfo{};
+		viewInfo.aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+		viewInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
+		viewInfo.viewScope = ImageViewScope::ENTIRE_IMAGE;
+		prefilterMap.RecreateImageViews(&viewInfo);
 	}
 
 	void CubemapPreprocessingPass::CreateFramebuffers()
@@ -370,7 +402,7 @@ namespace TANG
 			framebufferInfo.height = CONFIG::BRDFConvolutionMapSize;
 			framebufferInfo.layers = 1;
 
-			irradianceSamplingFramebuffer.Create(framebufferInfo);
+			brdfConvolutionFramebuffer.Create(framebufferInfo);
 		}
 	}
 
@@ -399,7 +431,7 @@ namespace TANG
 	{
 		// Cubemap preprocessing / irradiance sampling
 		{
-			SetLayoutSummary volatileLayout;
+			SetLayoutSummary volatileLayout(0);
 			volatileLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);			// View/proj matrix
 			volatileLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_GEOMETRY_BIT);			// Cubemap layer
 			volatileLayout.AddBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);	// Equirectangular map
@@ -408,13 +440,13 @@ namespace TANG
 
 		// Prefilter map
 		{
-			SetLayoutSummary cubemapLayout;
+			SetLayoutSummary cubemapLayout(0);
 			cubemapLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);				// View/proj matrix
 			cubemapLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_GEOMETRY_BIT);			// Cubemap layer
 			cubemapLayout.AddBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);	// Equirectangular map
 			prefilterMapCubemapSetLayoutCache.CreateSetLayout(cubemapLayout, 0);
 
-			SetLayoutSummary roughnessLayout;
+			SetLayoutSummary roughnessLayout(0);
 			roughnessLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT);			// Roughness
 			prefilterMapRoughnessSetLayoutCache.CreateSetLayout(roughnessLayout, 0);
 		}
@@ -426,37 +458,55 @@ namespace TANG
 		// NOTE - We're re-using the cubemap preprocessing descriptor set layout because they do have
 		//        the exact same layout, the problem is that we need to update the descriptors separately
 		//        during subsequent render passes, which is why we must create sets for irradiance sampling
-		const LayoutCache& cubemapPreprocessingCache = cubemapPreprocessingSetLayoutCache.GetLayoutCache();
 		if (cubemapPreprocessingSetLayoutCache.GetLayoutCount() != 1)
 		{
-			TNG_ASSERT_MSG(false, "Failed to create skybox pass descriptor sets!");
+			LogError("Failed to create skybox pass descriptor sets, too many layouts! Expected (%u) vs. actual (%u)", 1, cubemapPreprocessingSetLayoutCache.GetLayoutCount());
+			return;
+		}
+
+		std::optional<DescriptorSetLayout> cubemapSetLayout = cubemapPreprocessingSetLayoutCache.GetSetLayout(0);
+		if (!cubemapSetLayout.has_value())
+		{
+			LogError("Failed to create cubemap preprocessing descriptor sets! Descriptor set layout is null");
 			return;
 		}
 
 		for (uint32_t i = 0; i < 6; i++)
 		{
-			cubemapPreprocessingDescriptorSets[i].Create(*(borrowedData.descriptorPool), cubemapPreprocessingCache.begin()->second);
-			irradianceSamplingDescriptorSets[i].Create(*(borrowedData.descriptorPool), cubemapPreprocessingCache.begin()->second);
+			cubemapPreprocessingDescriptorSets[i].Create(*(borrowedData.descriptorPool), cubemapSetLayout.value());
+			irradianceSamplingDescriptorSets[i].Create(*(borrowedData.descriptorPool), cubemapSetLayout.value());
 		}
 
 		// Prefilter map
-		const LayoutCache& prefilterMapCubemapCache = prefilterMapCubemapSetLayoutCache.GetLayoutCache();
 		if (prefilterMapCubemapSetLayoutCache.GetLayoutCount() != 1)
 		{
-			TNG_ASSERT_MSG(false, "Failed to create prefilter map cubemap descriptor sets!");
+			LogError("Failed to create prefilter map cubemap descriptor sets, too many layouts! Expected (%u) vs. actual (%u)", 1, prefilterMapCubemapSetLayoutCache.GetLayoutCount());
 			return;
 		}
-		const LayoutCache& prefilterMapRoughnessCache = prefilterMapRoughnessSetLayoutCache.GetLayoutCache();
 		if (prefilterMapRoughnessSetLayoutCache.GetLayoutCount() != 1)
 		{
-			TNG_ASSERT_MSG(false, "Failed to create prefilter map roughness descriptor sets!");
+			LogError("Failed to create prefilter map roughness descriptor sets, too many layouts! Expected (%u) vs. actual (%u)", 1, prefilterMapRoughnessSetLayoutCache.GetLayoutCount());
+			return;
+		}
+
+		std::optional<DescriptorSetLayout> prefilterCubemapSetLayout = prefilterMapCubemapSetLayoutCache.GetSetLayout(0);
+		if (!prefilterCubemapSetLayout.has_value())
+		{
+			LogError("Failed to create prefilter cubemap descriptor sets! Descriptor set layout is null");
+			return;
+		}
+
+		std::optional<DescriptorSetLayout> prefilterRoughnessSetLayout = prefilterMapRoughnessSetLayoutCache.GetSetLayout(0);
+		if (!prefilterRoughnessSetLayout.has_value())
+		{
+			LogError("Failed to create prefilter roughness descriptor sets! Descriptor set layout is null");
 			return;
 		}
 
 		for (uint32_t i = 0; i < 6; i++)
 		{
-			prefilterMapCubemapDescriptorSets[i].Create(*(borrowedData.descriptorPool), prefilterMapCubemapCache.begin()->second);
-			prefilterMapRoughnessDescriptorSets[i].Create(*(borrowedData.descriptorPool), prefilterMapRoughnessCache.begin()->second);
+			prefilterMapCubemapDescriptorSets[i].Create(*(borrowedData.descriptorPool), prefilterCubemapSetLayout.value());
+			prefilterMapRoughnessDescriptorSets[i].Create(*(borrowedData.descriptorPool), prefilterRoughnessSetLayout.value());
 		}
 	}
 
@@ -562,8 +612,6 @@ namespace TANG
 	{
 		cmdBuffer->CMD_BeginRenderPass(&cubemapPreprocessingRenderPass, &cubemapPreprocessingFramebuffer, { CONFIG::SkyboxCubemapSize, CONFIG::SkyboxCubemapSize }, false, true);
 		cmdBuffer->CMD_BindGraphicsPipeline(&cubemapPreprocessingPipeline);
-		cmdBuffer->CMD_SetScissor({ 0, 0 }, { CONFIG::SkyboxCubemapSize, CONFIG::SkyboxCubemapSize });
-		cmdBuffer->CMD_SetViewport(static_cast<float>(CONFIG::SkyboxCubemapSize), static_cast<float>(CONFIG::SkyboxCubemapSize));
 		cmdBuffer->CMD_BindMesh(asset);
 
 		// For every face of the cube, we must change our camera's view direction, change the framebuffer (since we're rendering to
@@ -639,8 +687,6 @@ namespace TANG
 	{
 		cmdBuffer->CMD_BeginRenderPass(&brdfConvolutionRenderPass, &brdfConvolutionFramebuffer, { CONFIG::BRDFConvolutionMapSize, CONFIG::BRDFConvolutionMapSize }, false, true);
 		cmdBuffer->CMD_BindGraphicsPipeline(&brdfConvolutionPipeline);
-		cmdBuffer->CMD_SetScissor({ 0, 0 }, { CONFIG::BRDFConvolutionMapSize, CONFIG::BRDFConvolutionMapSize });
-		cmdBuffer->CMD_SetViewport(static_cast<float>(CONFIG::BRDFConvolutionMapSize), static_cast<float>(CONFIG::BRDFConvolutionMapSize));
 		cmdBuffer->CMD_BindMesh(fullscreenQuad);
 		cmdBuffer->CMD_DrawIndexed(fullscreenQuad->indexCount);
 

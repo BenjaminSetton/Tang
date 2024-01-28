@@ -12,7 +12,7 @@ namespace TANG
 	{
 	public:
 
-		SetLayoutSummary();
+		explicit SetLayoutSummary(uint32_t setNumber);
 		~SetLayoutSummary();
 		SetLayoutSummary(const SetLayoutSummary& other);
 		SetLayoutSummary(SetLayoutSummary&& other);
@@ -23,6 +23,7 @@ namespace TANG
 
 		VkDescriptorSetLayoutBinding* GetBindings();
 		uint32_t GetBindingCount();
+		uint32_t GetSet() const;
 
 		// Returns true if the internal binding vector is contiguous, false otherwise
 		bool IsValid();
@@ -35,6 +36,7 @@ namespace TANG
 
 		std::vector<VkDescriptorSetLayoutBinding> bindings;
 		uint32_t bindingCount;
+		uint32_t set;
 
 	};
 }

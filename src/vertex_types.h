@@ -17,9 +17,12 @@
 // Stores a collection of vertex types used in different rendering pipelines.
 // Every single vertex type must implement the two following STATIC methods:
 // 
-//		static VkVertexInputBindingDescription GetBindingDescription()
-//		static std::vector<VkVertexInputAttributeDescription> GetAttributeDescriptions()
+//		static const VkVertexInputBindingDescription& GetBindingDescription()
+//		static const std::vector<VkVertexInputAttributeDescription>& GetAttributeDescriptions()
 //
+// The return type is a const ref because we interpret those as arrays and send the address of
+// these structs to Vulkan to create a pipeline. This is also why internally we create a static variable
+// and return it. It makes sense to make it const since it's never going to change at runtime
 
 namespace TANG
 {
@@ -28,33 +31,24 @@ namespace TANG
 	//        IS a VertexType. This is important because a templated utility method in BasePipeline depends
 	//        on this fact to only allow template instantiations of derived vertex types
 	class VertexType
-	{ 
-	protected:
-		VertexType() { }
-		virtual void _() = 0;
-	};
-#define SIZE_OF_DERIVED_VERTEX_TYPE(x) (sizeof(x) - sizeof(VertexType))
-
+	{ };
 
 	// A special vertex type used when pre-processing the skybox from an equirectangular 2D texture to a cubemap
 	struct CubemapVertex : public VertexType
 	{
-		virtual void _() override {};
-
-		static VkVertexInputBindingDescription GetBindingDescription()
+		static const VkVertexInputBindingDescription& GetBindingDescription()
 		{
-			VkVertexInputBindingDescription bindingDesc{};
+			static VkVertexInputBindingDescription bindingDesc{};
 			bindingDesc.binding = 0;
 			bindingDesc.stride = sizeof(CubemapVertex);
 			bindingDesc.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
 			return bindingDesc;
 		}
 
-		static std::vector<VkVertexInputAttributeDescription> GetAttributeDescriptions()
+		static const std::vector<VkVertexInputAttributeDescription>& GetAttributeDescriptions()
 		{
-			// Temporarily disabled. Since moving to a derived class the padding rules make it so the actual size
-			// doesn't match the addition of the individual data members of this struct
-			//TNG_ASSERT_COMPILE(SIZE_OF_DERIVED_VERTEX_TYPE(CubemapVertex) == 12);
+			TNG_ASSERT_COMPILE(sizeof(CubemapVertex) == 12);
 
 			static std::vector<VkVertexInputAttributeDescription> attributeDescriptions;
 			if (attributeDescriptions.size() != 0)
@@ -110,24 +104,21 @@ namespace TANG
 
 	struct UVVertex : public VertexType
 	{
-		virtual void _() override {};
-
-		static VkVertexInputBindingDescription GetBindingDescription()
+		static const VkVertexInputBindingDescription& GetBindingDescription()
 		{
-			VkVertexInputBindingDescription bindingDesc{};
+			static VkVertexInputBindingDescription bindingDesc{};
 			bindingDesc.binding = 0;
 			bindingDesc.stride = sizeof(UVVertex);
 			bindingDesc.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
 			return bindingDesc;
 		}
 
-		static std::vector<VkVertexInputAttributeDescription> GetAttributeDescriptions()
+		static const std::vector<VkVertexInputAttributeDescription>& GetAttributeDescriptions()
 		{
-			// Temporarily disabled. Since moving to a derived class the padding rules make it so the actual size
-			// doesn't match the addition of the individual data members of this struct
-			//TNG_ASSERT_COMPILE(SIZE_OF_DERIVED_VERTEX_TYPE(UVVertex) == 20);
+			TNG_ASSERT_COMPILE(sizeof(UVVertex) == 20);
 
-			std::vector<VkVertexInputAttributeDescription> attributeDescriptions;
+			static std::vector<VkVertexInputAttributeDescription> attributeDescriptions;
 			if (attributeDescriptions.size() != 0)
 			{
 				return attributeDescriptions;
@@ -191,24 +182,21 @@ namespace TANG
 
 	struct PBRVertex : public VertexType
 	{
-		virtual void _() override {};
-
-		static VkVertexInputBindingDescription GetBindingDescription()
+		static const VkVertexInputBindingDescription& GetBindingDescription()
 		{
-			VkVertexInputBindingDescription bindingDesc{};
+			static VkVertexInputBindingDescription bindingDesc{};
 			bindingDesc.binding = 0;
 			bindingDesc.stride = sizeof(TANG::PBRVertex);
 			bindingDesc.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
 			return bindingDesc;
 		}
 
-		static std::vector<VkVertexInputAttributeDescription> GetAttributeDescriptions()
+		static const std::vector<VkVertexInputAttributeDescription>& GetAttributeDescriptions()
 		{
-			// Temporarily disabled. Since moving to a derived class the padding rules make it so the actual size
-			// doesn't match the addition of the individual data members of this struct
-			//TNG_ASSERT_COMPILE(SIZE_OF_DERIVED_VERTEX_TYPE(PBRVertex) == 56);
+			TNG_ASSERT_COMPILE(sizeof(PBRVertex) == 56);
 
-			std::vector<VkVertexInputAttributeDescription> attributeDescriptions;
+			static std::vector<VkVertexInputAttributeDescription> attributeDescriptions;
 			if (attributeDescriptions.size() != 0)
 			{
 				return attributeDescriptions;

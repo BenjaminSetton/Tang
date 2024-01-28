@@ -110,7 +110,9 @@ namespace TANG
 
 		VkPipelineViewportStateCreateInfo viewportState{};
 		viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+		viewportState.pViewports = &viewport;
 		viewportState.viewportCount = 1;
+		viewportState.pScissors = &scissor;
 		viewportState.scissorCount = 1;
 
 		// Rasterizer
@@ -178,10 +180,9 @@ namespace TANG
 
 		// Pipeline layout
 		std::vector<VkDescriptorSetLayout> vkDescSetLayouts;
-		const LayoutCache& cache = setLayoutCache->GetLayoutCache();
-		for (auto& iter : cache)
+		for (uint32_t i = 0; i < setLayoutCache->GetLayoutCount(); i++)
 		{
-			vkDescSetLayouts.push_back(iter.second.GetLayout());
+			vkDescSetLayouts.push_back(setLayoutCache->GetSetLayout(i).value().GetLayout());
 		}
 
 		VkPipelineLayoutCreateInfo pipelineLayoutInfo{};

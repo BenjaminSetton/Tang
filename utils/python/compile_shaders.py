@@ -7,6 +7,7 @@ def main():
     vulkanSDK = os.environ["VULKAN_SDK"]
     sourceDir = "src/shaders"
     outputDir = "out/shaders"
+    includeDir = "src/shaders/common"
     shaderTypes = [ "vert", "geom", "frag" ]
     projectDir = str(Path(sys.argv[0]).parent.absolute().parent.parent) # This is ugly, but for some reason it won't let me do .parent 3 times...
     
@@ -29,6 +30,8 @@ def main():
         for path in Path(f"{projectDir}/{sourceDir}").rglob(f"*.{shaderType}"):
             shaderList.append(path)
     
+    includePath = f"{projectDir}/{includeDir}"
+    
     # TODO - Checksum shader sources and only compile those which are different from the ones
     #        we already compiled
     
@@ -39,7 +42,7 @@ def main():
         fullOutputPath = os.path.normpath(f"{projectDir}/{outputDir}/{parentDirName}")
         
         os.makedirs(fullOutputPath, exist_ok=True)
-        os.system(f'{shaderCompiler} "{shaderPath}" -o "{fullOutputPath}/{shaderName}.spv"')
+        os.system(f'{shaderCompiler} "{shaderPath}" -I "{includePath}" -o "{fullOutputPath}/{shaderName}.spv"')
         
         # Log the source and output paths to the console
         fullShaderDstPath = str(f'{fullOutputPath}/{shaderName}')
