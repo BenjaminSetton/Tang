@@ -364,11 +364,11 @@ namespace TANG
 		samplerInfo.enableAnisotropicFiltering = true;
 
 		SamplerCreateInfo fallbackSamplerInfo{};
-		samplerInfo.minificationFilter = VK_FILTER_NEAREST;
-		samplerInfo.magnificationFilter = VK_FILTER_NEAREST;
-		samplerInfo.addressModeUVW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		samplerInfo.maxAnisotropy = 1.0;
-		samplerInfo.enableAnisotropicFiltering = false;
+		fallbackSamplerInfo.minificationFilter = VK_FILTER_NEAREST;
+		fallbackSamplerInfo.magnificationFilter = VK_FILTER_NEAREST;
+		fallbackSamplerInfo.addressModeUVW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		fallbackSamplerInfo.maxAnisotropy = 1.0;
+		fallbackSamplerInfo.enableAnisotropicFiltering = false;
 
 		ImageViewCreateInfo viewCreateInfo{};
 		viewCreateInfo.aspect = VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
@@ -1671,6 +1671,7 @@ namespace TANG
 		samplerInfo.addressModeUVW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
 		samplerInfo.magnificationFilter = VK_FILTER_LINEAR;
 		samplerInfo.minificationFilter = VK_FILTER_LINEAR;
+		samplerInfo.enableAnisotropicFiltering = false;
 		samplerInfo.maxAnisotropy = 1.0f;
 
 		hdrDepthBuffer.Create(&imageInfo, &imageViewInfo, &samplerInfo);
@@ -1697,6 +1698,7 @@ namespace TANG
 		samplerInfo.addressModeUVW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
 		samplerInfo.magnificationFilter = VK_FILTER_LINEAR;
 		samplerInfo.minificationFilter = VK_FILTER_LINEAR;
+		samplerInfo.enableAnisotropicFiltering = false;
 		samplerInfo.maxAnisotropy = 1.0f;
 
 		colorAttachment.Create(&imageInfo, &imageViewInfo, &samplerInfo);

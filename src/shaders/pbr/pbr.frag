@@ -51,7 +51,7 @@
 
 #version 450
 
-layout(location = 0) in vec3 inPosition;
+layout(location = 0) in vec3 inWorldPosition;
 layout(location = 1) in vec3 inNormal;
 layout(location = 2) in vec2 inUV;
 layout(location = 3) in mat3 inTBN;
@@ -79,40 +79,25 @@ const float MAX_REFLECTION_LOD = 4.0;
 
 #include "pbr_utility.glsl"
 
-vec3 CookTorrance(float NdotV, float NdotL, float HdotV, float HdotN, vec3 albedo, float metalness, float roughness)
-{
-    vec3 funcNominator = D(HdotN, roughness) * G(NdotV, roughness) * F(HdotV, albedo, metalness, roughness);
-    float funcDenominator = 4.0 * NdotL * NdotV;
-    return funcNominator / ( funcDenominator + EPSILON ); // Prevent division by 0
-}
-
-vec3 CalculateSpecularBRDF(float NdotV, float NdotL, float HdotV, float HdotN, vec3 albedo, float metalness, float roughness)
-{
-    // NOTE - We're removing the kS term here because we already consider the fresnel factor in the CookTorrance function below
-    return CookTorrance(NdotV, NdotL, HdotV, HdotN, albedo, metalness, roughness);
-}
-
-vec3 CalculateDiffuseBRDF(vec3 kD)
-{
-    vec3 diffuseColor = texture(diffuseSampler, inUV).rgb;
-    return kD * diffuseColor / PI;
-}
-
 // NOTE - The light vector must be pointing TOWARDS the light source
 void main() 
 {
-    // Calculate the normal from the normal map
+    // NORMAL MAP
     vec3 normal = texture(normalSampler, inUV).rgb;
     normal = normal * 2.0 - 1.0;
     normal = normalize( inTBN * normal );
+    ////
 
+    // BASE VECTORS
     vec3 cameraPos = cameraData.position.xyz;
     vec3 light = -normalize(vec3(0.4, -0.75, 1.0));
-    vec3 view = normalize(cameraPos - inPosition);
+    vec3 view = normalize(cameraPos - inWorldPosition);
     vec3 halfVector = normalize(light + view);
     vec3 albedo = texture(diffuseSampler, inUV).rgb;
     vec3 reflection = reflect(-view, normal);
+    ////
 
+    // BASE DOT PRODUCTS + TEXTURE SAMPLES
     float NdotV = max(dot(normal, view), 0.0);
     float NdotL = max(dot(normal, light), 0.0);
     float HdotV = max(dot(halfVector, view), 0.0);
@@ -120,34 +105,56 @@ void main()
     float lightIntensity = 1.0; // NOTE - This is only for point / spotlights, which we do not support right now
     float metalness = texture(metallicSampler, inUV).b;
     float roughness = texture(roughnessSampler, inUV).g;
-    
-    vec3 fresnel = F(HdotV, albedo, metalness, roughness);
+    ////
 
-    vec3 kS = fresnel;
-    vec3 kD = vec3(1.0) - kS;
+    vec3 F0 = vec3(0.04);
+    F0 = mix(F0, albedo, metalness);
 
-    // Kill diffuse component if we're dealing with a metal
-    kD *= 1.0 - metalness;
+    vec3 pbrColor = vec3(0.0);
+    // BRDF CALCULATION
+    {
+        float D = D_GGX(HdotN, roughness);
+        float G = G_Smith(normal, view, light, roughness);
+        vec3 F = F_Schlick(HdotV, F0);
 
-    vec3 irradiance = texture(irradianceMap, normal).rgb;
-    vec3 diffuse = irradiance * albedo;
+        //light = light * 0.5 + 0.5;
+        //outColor = vec4(inWorldPosition, 1.0);
+        //return;
 
-    vec3 prefilteredColor = textureLod(prefilterMap, reflection, roughness * MAX_REFLECTION_LOD).rgb;
-    vec2 BRDFSample = texture(BRDFLUT, vec2(NdotV, roughness)).rg;
-    vec3 specular = prefilteredColor * (fresnel * BRDFSample.x + BRDFSample.y);
+        vec3 kS = F;
+        vec3 kD = vec3(1.0) - kS;
+        kD *= 1.0 - metalness; // Kill diffuse component if we're dealing with a metal
 
-    //float x = 1.0 / ( 1.0 + exp( -view.x ) );
-    //float y = 1.0 / ( 1.0 + exp( -view.y ) );
-    //float z = 1.0 / ( 1.0 + exp( -view.z ) );
-    //vec3 squashed = normal * 0.5 + 0.5;
-    //outColor = vec4(prefilteredColor, 1.0); 
-    //return;
+        vec3 numerator = D * G * F;
+        float denominator = ( 4.0 * NdotL * NdotV ) + EPSILON;
+        vec3 specularBRDF = numerator / denominator;
 
-    vec3 ambient = (kD * diffuse + specular) * 1.0; // Hard-coding the ambient occlusion term to 1.0 for now
+        vec3 diffuseBRDF = kD * albedo / PI;
 
-    vec3 pbrColor = ( CalculateDiffuseBRDF( kD ) + CalculateSpecularBRDF( NdotV, NdotL, HdotV, HdotN, albedo, metalness, roughness ) ) * lightIntensity * NdotL;
+        pbrColor = ( diffuseBRDF + specularBRDF ) * lightIntensity * NdotL;
+    }
+    ////
 
-    // Add some ambient lighting
+    vec3 ambient = vec3(0.0);
+    // AMBIENT CALCULATION (IBL)
+    {
+        vec3 F = F_Roughness(NdotV, F0, roughness);
+
+        vec3 kS = F;
+        vec3 kD = 1.0 - kS;
+        kD *= 1.0 - metalness;
+
+        vec3 irradiance = texture(irradianceMap, normal).rgb;
+        vec3 diffuse = irradiance * albedo;
+
+        vec3 prefilteredColor = textureLod(prefilterMap, reflection, roughness * MAX_REFLECTION_LOD).rgb;
+        vec2 BRDFSample = texture(BRDFLUT, vec2(NdotV, roughness)).rg;
+        vec3 specular = prefilteredColor * (F * BRDFSample.x + BRDFSample.y);
+
+        ambient = (kD * diffuse + specular) * 1.0; // Hard-coding the ambient occlusion term to 1.0 for now
+    }
+    ////
+
     pbrColor += ambient;
 
     outColor = vec4( pbrColor, 1.0 );

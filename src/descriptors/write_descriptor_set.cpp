@@ -80,6 +80,11 @@ namespace TANG
 			LogWarning("Attempting to update descriptor set on binding %u with texture resource that does not have the SHADER_READ_ONLY layout!", binding);
 		}
 
+		if (texResource->GetGeneratedMipLevels() > 1 && texResource->GetViewScope() == ImageViewScope::PER_MIP_LEVEL)
+		{
+			LogWarning("Attempting to add an image sampler which has more than 1 generated mip level, but it's view scope is declared per mip level! Image sampling will exclusively read from mip level 0");
+		}
+
 		descriptorImageInfo.emplace_back(std::move(VkDescriptorImageInfo()));
 		VkDescriptorImageInfo& imageInfo = descriptorImageInfo.back();
 		imageInfo.imageLayout = texResource->GetLayout();

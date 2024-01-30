@@ -20,56 +20,59 @@ vec2 Hammersley(uint i, uint N)
 }
 
 // Fresnel (Schlick)
+vec3 F_Schlick(float cosTheta, vec3 F0)
+{
+    // F0 + ( 1 - F0 ) * ( 1 - dot( view, half ) )^5
+    // where F0 represents the base reflectivity
+
+    return F0 + ( 1.0 - F0 ) * pow( 1.0 - cosTheta, 5.0 );
+}
+
+// Fresnel (Schlick + roughness)
 // NOTE - The roughness term accounts for the roughness around the edges of the surface
 //        making the reflection weaker. This is needed since we started using diffuse IBL
 //        (refer to diffuse IBL link at the top of the shader)
-vec3 F(float HdotV, vec3 albedo, float metalness, float roughness)
+vec3 F_Roughness(float cosTheta, vec3 F0, float roughness)
 {
-    // baseReflectivity + ( 1 - baseReflectivity ) * ( 1 - dot( view, half ) )^5
-
-    vec3 baseReflectivity = vec3(0.04);
-    baseReflectivity = mix(baseReflectivity, albedo, metalness);
-
-    return baseReflectivity + ( max( vec3( 1.0 - roughness ), baseReflectivity ) - baseReflectivity ) * pow( ( 1.0 - HdotV ), 5.0 );
+    return F0 + ( max( vec3( 1.0 - roughness ), F0 ) - F0 ) * pow( ( 1.0 - cosTheta ), 5.0 );
 }
 
 // Geometry (GGX - Schlick & Beckmann)
-float G(float NdotV, float roughness)
+float G_GGX(float NdotV, float roughness)
 {
-    // dot( normal, view ) / ( dot( normal, view ) * ( 1 - K ) + K )
-    
     // Using kIBL
-    float K = ( roughness * roughness ) / 2.0;
+    float a = roughness;
+    float K = ( a * a ) / 2.0;
 
     float funcNominator = NdotV;
     float funcDenominator = NdotV * ( 1.0 - K ) + K;
 
-    return funcNominator / ( funcDenominator + EPSILON ); // Prevent division by 0
+    return funcNominator / funcDenominator;
 }
 
-// NormalDistribution (GGX - Trowbridge & Reitz)
-float D(float HdotN, float roughness)
+// Geometry (Smith)
+float G_Smith(vec3 N, vec3 V, vec3 L, float roughness)
 {
-    // roughness^2 / (PI * ( dot( normal, halfVector )^2 * ( roughness^2 - 1 ) + 1 )^2
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotL = max(dot(N, L), 0.0);
 
-    float funcNominator = pow( roughness, 2.0 );
-    float funcDenominator = PI * pow( ( pow( HdotN, 2.0 ) * ( pow( roughness, 2.0 ) - 1.0 ) + 1.0 ), 2.0 );
+    float ggx2 = G_GGX(NdotV, roughness);
+    float ggx1 = G_GGX(NdotL, roughness);
+
+    return ggx1 * ggx2;
+}  
+
+// Normal Distribution (GGX - Trowbridge & Reitz)
+float D_GGX(float HdotN, float roughness)
+{
+    float a = roughness * roughness;
+    float a2 = a * a;
+
+    float funcNominator = a2;
+    float funcDenominator = ( pow( HdotN, 2.0 ) * ( a2 - 1.0 ) + 1.0 );
+    funcDenominator = PI * pow( funcDenominator, 2.0 );
 
     return funcNominator / ( funcDenominator + EPSILON ); // Prevent division by 0
-}
-
-// Approximates the surface area of microfacets aligned exactly to the halfway vector,
-// considering the roughness
-float DistributionGGX(float NdotH, float roughness)
-{
-    float roughness2     = roughness * roughness;
-    float NdotH2 = NdotH * NdotH;
-	
-    float nom    = roughness2;
-    float denom  = (NdotH2 * (roughness2 - 1.0) + 1.0);
-    denom        = PI * denom * denom;
-	
-    return nom / denom;
 }
 
 vec3 ImportanceSampleGGX(vec2 Xi, vec3 N, float roughness)
@@ -93,14 +96,4 @@ vec3 ImportanceSampleGGX(vec2 Xi, vec3 N, float roughness)
 	
     vec3 sampleVec = tangent * H.x + bitangent * H.y + N * H.z;
     return normalize(sampleVec);
-}  
-
-float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
-{
-    float NdotV = max(dot(N, V), 0.0);
-    float NdotL = max(dot(N, L), 0.0);
-    float ggx2 = G(NdotV, roughness);
-    float ggx1 = G(NdotL, roughness);
-
-    return ggx1 * ggx2;
 }  

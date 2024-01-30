@@ -17,7 +17,10 @@ NOTES:
 
 ## COMPILING THE SOURCES
 
-1. TODO
+1. Clone this repository "```git clone https://github.com/BenjaminSetton/TANG.git```" (no submodules currently)
+2. Under the "utils" folder, edit `build_project.bat`
+3. Change the generator to your favorite IDE
+4. Run `build_project.bat`
 
 ## RESOURCES
 
@@ -33,6 +36,8 @@ NOTES:
 - Sync objects - https://vulkan-tutorial.com/Drawing_a_triangle/Drawing/Rendering_and_presentation
 - Raytracing tutorial - https://nvpro-samples.github.io/vk_raytracing_tutorial_KHR/
 - Fixing fireflies when convoluting HDR maps - https://graphicrants.blogspot.com/2013/12/tone-mapping.html?m=1
+- Free PBR materials - https://freepbr.com
+- Free 3D assets - https://polyhaven.com
 
 ## DEPENDENCIES
 
@@ -54,10 +59,10 @@ NOTES:
 - [X] Re-organize the renderer code to allow a PBR pipeline
 - [X] Move project build scripts from CMake to Premake
 - [X] Create a default material so that assets with incomplete/missing PBR textures can be loaded
+- [X] Add HDR support
+- [X] Add cubemap support in preparation for IBL
+- [X] Implement diffuse IBL
+- [X] Implement specular IBL
 - [ ] Make shader information more data-driven (e.g. pull shader's input uniform + texture information from a set of data)
 - [ ] Re-organize the renderer's frame-dependent data (FDD) and swap-chain-dependent data (SWIDD)
-- [ ] Add HDR support
-- [ ] Add cubemap support in preparation for IBL
-- [ ] Implement diffuse IBL
-- [ ] Implement specular IBL
 - [ ] Clarify boundary between asset loader and renderer (especially in naming convention)

@@ -52,7 +52,7 @@ void main()
 
         if(NdotL > 0.0) // Is this check even necessary if we're clamping beforehand?
         {
-            float D   = DistributionGGX(NdotH, roughness.value);
+            float D   = D_GGX(NdotH, roughness.value);
             float pdf = (D * NdotH / (4.0 * HdotV)) + 0.0001; 
 
             float resolution = 512.0; // resolution of source cubemap (per face)

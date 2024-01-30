@@ -251,6 +251,11 @@ namespace TANG
 		return generatedMips;
 	}
 
+	ImageViewScope TextureResource::GetViewScope() const
+	{
+		return imageViewInfo.viewScope;
+	}
+
 	void TextureResource::CreateBaseImage(const BaseImageCreateInfo* _baseImageInfo)
 	{
 		CreateBaseImage_Helper(_baseImageInfo);

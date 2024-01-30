@@ -29,7 +29,7 @@ struct MyAsset
 
 static std::vector<std::string> assetNames =
 {
-    "../src/data/assets/marble_statue/scene.gltf"
+    "../src/data/assets/brass_vase/scene.gltf"
 };
 
 int RandomRangeInt(int min, int max)

@@ -19,7 +19,7 @@ layout(location = 2) in vec3 inTangent;
 layout(location = 3) in vec3 inBitangent;
 layout(location = 4) in vec2 inUV;
 
-layout(location = 0) out vec3 outPosition;
+layout(location = 0) out vec3 outWorldPosition;
 layout(location = 1) out vec3 outNormal;
 layout(location = 2) out vec2 outUV;
 layout(location = 3) out mat3 outTBN;
@@ -28,7 +28,7 @@ void main() {
     gl_Position = projUBO.proj * viewUBO.view * transformUBO.transform * vec4(inPosition, 1.0);
 
     // Calculate the output variables going to the pixel shader
-    outPosition = (viewUBO.view * transformUBO.transform * vec4(inPosition, 1.0)).xyz;
+    outWorldPosition = (transformUBO.transform * vec4(inPosition, 1.0)).xyz;
 
     outNormal = normalize((transformUBO.transform * vec4(inNormal, 0.0)).xyz);
     outUV = inUV;

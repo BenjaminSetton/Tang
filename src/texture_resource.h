@@ -112,6 +112,8 @@ namespace TANG
 		uint32_t GetAllocatedMipLevels() const;
 		uint32_t GetGeneratedMipLevels() const;
 
+		ImageViewScope GetViewScope() const;
+
 	private:
 
 		void CreateBaseImage(const BaseImageCreateInfo* baseImageInfo);
