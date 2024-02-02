@@ -14,14 +14,17 @@ namespace TANG
 		FULLSCREEN_QUAD,
 		IRRADIANCE_SAMPLING,
 		PREFILTER_MAP,
-		BRDF_CONVOLUTION
+		BRDF_CONVOLUTION,
+		BLOOM_UPSCALING,
+		BLOOM_DOWNSCALING
 	};
 
 	enum class ShaderStage
 	{
 		VERTEX_SHADER,
 		GEOMETRY_SHADER,
-		FRAGMENT_SHADER
+		FRAGMENT_SHADER,
+		COMPUTE_SHADER
 	};
 
 	// Shaders instances are short-lived objects. They're exclusively used to create pipelines, and deleted immediately

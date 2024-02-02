@@ -19,6 +19,8 @@ static const std::unordered_map<TANG::ShaderType, std::string> ShaderTypeToFolde
 	{ TANG::ShaderType::IRRADIANCE_SAMPLING		, "irradiance_sampling"		},
 	{ TANG::ShaderType::PREFILTER_MAP			, "prefilter_skybox"		},
 	{ TANG::ShaderType::BRDF_CONVOLUTION		, "brdf_convolution"		},
+	{ TANG::ShaderType::BLOOM_UPSCALING			, "bloom_upscaling"			},
+	{ TANG::ShaderType::BLOOM_DOWNSCALING		, "bloom_downscaling"		},
 };
 
 static const std::unordered_map<TANG::ShaderStage, std::string> ShaderStageToFileName =
@@ -26,6 +28,7 @@ static const std::unordered_map<TANG::ShaderStage, std::string> ShaderStageToFil
 	{ TANG::ShaderStage::VERTEX_SHADER			, "vert.spv" },
 	{ TANG::ShaderStage::GEOMETRY_SHADER		, "geom.spv" },
 	{ TANG::ShaderStage::FRAGMENT_SHADER		, "frag.spv" },
+	{ TANG::ShaderStage::COMPUTE_SHADER			, "comp.spv" },
 };
 
 namespace TANG

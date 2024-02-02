@@ -1,6 +1,7 @@
 
 #include "../device_cache.h"
 #include "../shader.h"
+#include "../utils/logger.h"
 #include "../utils/sanity_check.h"
 #include "base_pipeline.h"
 
@@ -33,9 +34,26 @@ namespace TANG
 		return pipelineLayout;
 	}
 
-	bool BasePipeline::CreatePipelineObject(const VkGraphicsPipelineCreateInfo& pipelineCreateInfo)
+	bool BasePipeline::CreateGraphicsPipelineObject(const VkGraphicsPipelineCreateInfo& pipelineCreateInfo)
 	{
+		if (pipelineObject != VK_NULL_HANDLE)
+		{
+			LogError("Failed to create graphics pipeline, one already exists!");
+			return false;
+		}
+
 		return (vkCreateGraphicsPipelines(GetLogicalDevice(), VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &pipelineObject) == VK_SUCCESS);
+	}
+
+	bool BasePipeline::CreateComputePipelineObject(const VkComputePipelineCreateInfo& pipelineCreateInfo)
+	{
+		if (pipelineObject != VK_NULL_HANDLE)
+		{
+			LogError("Failed to create compute pipeline, one already exists!");
+			return false;
+		}
+
+		return (vkCreateComputePipelines(GetLogicalDevice(), VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &pipelineObject) == VK_SUCCESS);
 	}
 
 	bool BasePipeline::CreatePipelineLayout(const VkPipelineLayoutCreateInfo& pipelineLayoutCreateInfo)
@@ -189,6 +207,11 @@ namespace TANG
 		case ShaderStage::FRAGMENT_SHADER:
 		{
 			shaderStage = VK_SHADER_STAGE_FRAGMENT_BIT;
+			break;
+		}
+		case ShaderStage::COMPUTE_SHADER:
+		{
+			shaderStage = VK_SHADER_STAGE_COMPUTE_BIT;
 			break;
 		}
 		default:

@@ -10,16 +10,16 @@ static const VkDeviceSize PREFERRED_UNIFORM_BUFFER_MIN_SIZE = 128;
 
 namespace TANG
 {
-	UniformBuffer::UniformBuffer() : mappedData(nullptr), bufferSize(0)
+	UniformBuffer::UniformBuffer() : Buffer(), mappedData(nullptr)
 	{ }
 
 	UniformBuffer::~UniformBuffer()
 	{ }
 
-	UniformBuffer::UniformBuffer(const UniformBuffer& other) : Buffer(other), mappedData(other.mappedData), bufferSize(other.bufferSize)
+	UniformBuffer::UniformBuffer(const UniformBuffer& other) : Buffer(other), mappedData(other.mappedData)
 	{ }
 
-	UniformBuffer::UniformBuffer(UniformBuffer&& other) noexcept : Buffer(std::move(other)), mappedData(std::move(other.mappedData)), bufferSize(std::move(other.bufferSize))
+	UniformBuffer::UniformBuffer(UniformBuffer&& other) noexcept : Buffer(std::move(other)), mappedData(std::move(other.mappedData))
 	{ }
 
 	UniformBuffer& UniformBuffer::operator=(const UniformBuffer& other)

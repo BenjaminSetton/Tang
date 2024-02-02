@@ -52,6 +52,9 @@ namespace TANG
 		void CMD_DrawIndexed(uint64_t indexCount);
 		void CMD_DrawIndexedInstanced(uint32_t indexCount, uint32_t instanceCount);
 
+		// Dispatch a command buffer to a compute shader
+		void CMD_Dispatch(uint32_t x, uint32_t y, uint32_t z);
+
 		void Reset(bool releaseMemory = false);
 
 		VkCommandBuffer GetBuffer() const;

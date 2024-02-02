@@ -631,8 +631,6 @@ namespace TANG
 	{
 		cmdBuffer->CMD_BeginRenderPass(&cubemapPreprocessingRenderPass, &irradianceSamplingFramebuffer, { CONFIG::IrradianceMapSize, CONFIG::IrradianceMapSize }, false, true);
 		cmdBuffer->CMD_BindGraphicsPipeline(&irradianceSamplingPipeline);
-		cmdBuffer->CMD_SetScissor({ 0, 0 }, { CONFIG::IrradianceMapSize, CONFIG::IrradianceMapSize });
-		cmdBuffer->CMD_SetViewport(static_cast<float>(CONFIG::IrradianceMapSize), static_cast<float>(CONFIG::IrradianceMapSize));
 		cmdBuffer->CMD_BindMesh(asset);
 
 		// For every face of the cube, we must change our camera's view direction, change the framebuffer (since we're rendering to

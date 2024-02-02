@@ -29,7 +29,6 @@ namespace TANG
 	private:
 
 		void* mappedData;
-		VkDeviceSize bufferSize;
 	};
 }
 

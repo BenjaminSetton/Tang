@@ -102,4 +102,12 @@ namespace TANG
 	{
 		return static_cast<uint32_t>(layoutCache.size());
 	}
+
+	void SetLayoutCache::FlattenCache(std::vector<VkDescriptorSetLayout>& out_setLayoutArray) const
+	{
+		for (uint32_t i = 0; i < GetLayoutCount(); i++)
+		{
+			out_setLayoutArray.push_back(GetSetLayout(i).value().GetLayout());
+		}
+	}
 }

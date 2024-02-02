@@ -41,33 +41,40 @@ namespace TANG
 
 	protected:
 
-		[[nodiscard]] bool CreatePipelineObject(const VkGraphicsPipelineCreateInfo& pipelineCreateInfo);
+		[[nodiscard]] bool CreateGraphicsPipelineObject(const VkGraphicsPipelineCreateInfo& pipelineCreateInfo);
+		[[nodiscard]] bool CreateComputePipelineObject(const VkComputePipelineCreateInfo& pipelineCreateInfo);
+
 		[[nodiscard]] bool CreatePipelineLayout(const VkPipelineLayoutCreateInfo& pipelineLayoutCreateInfo);
 
-		// Populates a generic VkPipelineInputAssemblyStateCreateInfo struct with a triangle strip
+		// Pipeline create info helper functions
+		// 
+		// !!
+		// DO NOT CHANGE THE DEFAULT PARAMETERS WITHOUT MAKING SURE EVERY SINGLE PIPELINE
+		// USES THE CORRECT VALUES INSTEAD. CHANGING THE DEFAULTS CAN HAVE WIDESPREAD CONSEQUENCES
+		// !!
+		//
 		VkPipelineInputAssemblyStateCreateInfo PopulateInputAssemblyCreateInfo(VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VkBool32 primitiveRestartEnable = VK_FALSE) const;
-
+		
 		VkPipelineDynamicStateCreateInfo PopulateDynamicStateCreateInfo(const VkDynamicState* dynamicStates = nullptr, uint32_t dynamicStateCount = 0) const;
-
+		
 		VkPipelineViewportStateCreateInfo PopulateViewportStateCreateInfo(const VkViewport* viewports, uint32_t viewportCount, const VkRect2D* scissors, uint32_t scissorCount) const;
-
+		
 		VkPipelineRasterizationStateCreateInfo PopulateRasterizerStateCreateInfo(VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT, VkFrontFace windingOrder = VK_FRONT_FACE_COUNTER_CLOCKWISE);
-
+		
 		VkPipelineMultisampleStateCreateInfo PopulateMultisamplingStateCreateInfo(VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_1_BIT);
-
+		
 		VkPipelineColorBlendAttachmentState PopulateColorBlendAttachment(); // No need for parameters yet...
-
+		
 		VkPipelineColorBlendStateCreateInfo PopulateColorBlendStateCreateInfo(const VkPipelineColorBlendAttachmentState* attachments, uint32_t blendAttachmentCount);
-
-		VkPipelineDepthStencilStateCreateInfo PopulateDepthStencilStateCreateInfo(VkBool32 depthTestEnable = VK_FALSE, VkBool32 depthWriteEnable = VK_FALSE, VkCompareOp compareOp = VK_COMPARE_OP_LESS_OR_EQUAL, VkBool32 depthBoundsTestEnable = VK_FALSE, VkBool32 stencilTestEnable = VK_FALSE);
-
+		
+		VkPipelineDepthStencilStateCreateInfo PopulateDepthStencilStateCreateInfo(VkBool32 depthTestEnable = VK_FALSE, VkBool32 depthWriteEnable = VK_FALSE, VkCompareOp compareOp = VK_COMPARE_OP_LESS, VkBool32 depthBoundsTestEnable = VK_FALSE, VkBool32 stencilTestEnable = VK_FALSE);
+		
 		VkPipelineLayoutCreateInfo PopulatePipelineLayoutCreateInfo(const VkDescriptorSetLayout* setLayouts, uint32_t setLayoutCount, const VkPushConstantRange* pushConstantRanges, uint32_t pushConstantCount);
-
-		// Populates a VkPipelineShaderStageCreateInfo with shader information depending on the shader parameter
+		
 		VkPipelineShaderStageCreateInfo PopulateShaderCreateInfo(const Shader& shader) const;
-
+		
 		VkViewport PopulateViewportInfo(uint32_t width, uint32_t height) const;
-
+		
 		VkRect2D PopulateScissorInfo(VkExtent2D viewportSize) const;
 
 		template<typename T>
@@ -88,8 +95,14 @@ namespace TANG
 				return vertexInputInfo;
 			}
 			
-			// If this function did not compile, please use a derived VertexType!
+			// If this function did not compile (missing return value), please use a derived VertexType!
 		}
+		// 
+		// !!
+		// DO NOT CHANGE THE DEFAULT PARAMETERS WITHOUT MAKING SURE EVERY SINGLE PIPELINE
+		// USES THE CORRECT VALUES INSTEAD. CHANGING THE DEFAULTS CAN HAVE WIDESPREAD CONSEQUENCES
+		// !!
+		//
 
 		virtual void FlushData() = 0;
 

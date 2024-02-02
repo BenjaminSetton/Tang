@@ -40,6 +40,8 @@ namespace TANG
 		std::optional<DescriptorSetLayout> GetSetLayout(const SetLayoutSummary& summary) const;
 		uint32_t GetLayoutCount() const;
 
+		void FlattenCache(std::vector<VkDescriptorSetLayout>& out_setLayoutArray) const;
+
 	private:
 
 		LayoutCache layoutCache;

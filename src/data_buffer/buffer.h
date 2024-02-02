@@ -45,7 +45,7 @@ namespace TANG
 
 	protected:
 
-		// Usually this function is called to copy data from a staging buffer, when copying data from the SRAM (CPU) to VRAM (GPU)
+		// Usually this function is called to copy data from a staging buffer, when copying data from the host (CPU) to device (GPU)
 		void CopyFromBuffer(VkCommandBuffer commandBuffer, VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 
 		// Notice the optional _buffer and _bufferMemory parameters. Derived classes may choose to create temporary buffers other

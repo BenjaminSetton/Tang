@@ -13,12 +13,10 @@
 struct MyAsset
 {
 	MyAsset(std::string _name) : name(_name), uuid(TANG::INVALID_UUID)
-	{
-	}
+	{ }
 
     MyAsset(std::string _name, TANG::UUID _uuid) : name(_name), uuid(_uuid)
-    {
-    }
+    { }
 
     std::string name;
     TANG::UUID uuid;
@@ -29,7 +27,7 @@ struct MyAsset
 
 static std::vector<std::string> assetNames =
 {
-    "../src/data/assets/brass_vase/scene.gltf"
+    "../src/data/assets/marble_statue/scene.gltf"
 };
 
 int RandomRangeInt(int min, int max)

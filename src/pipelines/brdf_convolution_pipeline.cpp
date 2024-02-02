@@ -21,6 +21,7 @@ namespace TANG
 
 	BRDFConvolutionPipeline::BRDFConvolutionPipeline(BRDFConvolutionPipeline&& other) noexcept : BasePipeline(std::move(other))
 	{
+		other.FlushData();
 	}
 
 	// Get references to the data required in Create(), it's not needed
@@ -57,7 +58,7 @@ namespace TANG
 			return;
 		}
 
-		std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages =
+		const std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages =
 		{
 			PopulateShaderCreateInfo(vertexShader),
 			PopulateShaderCreateInfo(fragmentShader)
@@ -74,7 +75,7 @@ namespace TANG
 		VkPipelineMultisampleStateCreateInfo		multisampling			= PopulateMultisamplingStateCreateInfo();
 		VkPipelineColorBlendAttachmentState			colorBlendAttachment	= PopulateColorBlendAttachment();
 		VkPipelineColorBlendStateCreateInfo			colorBlending			= PopulateColorBlendStateCreateInfo(&colorBlendAttachment, 1);
-		VkPipelineDepthStencilStateCreateInfo		depthStencil			= PopulateDepthStencilStateCreateInfo();
+		VkPipelineDepthStencilStateCreateInfo		depthStencil			= PopulateDepthStencilStateCreateInfo(VK_FALSE, VK_FALSE, VK_COMPARE_OP_LESS_OR_EQUAL);
 
 		VkGraphicsPipelineCreateInfo pipelineInfo{};
 		pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -94,9 +95,9 @@ namespace TANG
 		pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;	// Optional
 		pipelineInfo.basePipelineIndex = -1;				// Optional
 
-		if (!CreatePipelineObject(pipelineInfo))
+		if (!CreateGraphicsPipelineObject(pipelineInfo))
 		{
-			LogError("Failed to create BRDF convolution pipeline!");
+			LogError("Failed to create BRDF convolution pipeline object!");
 			return;
 		}
 	}

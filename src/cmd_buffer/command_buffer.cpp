@@ -228,6 +228,17 @@ namespace TANG
 		vkCmdDrawIndexed(commandBuffer, indexCount, instanceCount, 0, 0, 0);
 	}
 
+	void CommandBuffer::CMD_Dispatch(uint32_t x, uint32_t y, uint32_t z)
+	{
+		if (!IsCommandBufferValid() || !IsRecording())
+		{
+			LogWarning("Failed to bind dispatch command! Command buffer is not recording");
+			return;
+		}
+
+		vkCmdDispatch(commandBuffer, x, y, z);
+	}
+
 	void CommandBuffer::Reset(bool releaseMemory)
 	{
 		vkResetCommandBuffer(commandBuffer, releaseMemory ? VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT : 0);

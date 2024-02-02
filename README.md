@@ -31,13 +31,14 @@ NOTES:
 - Image-based lighting - https://www.youtube.com/watch?v=xWCZiksqCGA
 - PBR explanation + walk-through (Victor Gordan) - https://www.youtube.com/watch?v=RRE-F57fbXw&t=10s
 - PBR explanation + walk-through (OGL Dev) - https://www.youtube.com/watch?v=XK_p2MxGBQs&t=126s
-- Normal mapping (LearnOpenGL) - https://learnopengl.com/Advanced-Lighting/Normal-Mapping
 - Shader resource bindings - https://developer.nvidia.com/vulkan-shader-resource-binding
 - Sync objects - https://vulkan-tutorial.com/Drawing_a_triangle/Drawing/Rendering_and_presentation
 - Raytracing tutorial - https://nvpro-samples.github.io/vk_raytracing_tutorial_KHR/
 - Fixing fireflies when convoluting HDR maps - https://graphicrants.blogspot.com/2013/12/tone-mapping.html?m=1
 - Free PBR materials - https://freepbr.com
 - Free 3D assets - https://polyhaven.com
+- LearnOpenGL (tutorials) - https://learnopengl.com
+- LearnOpenGL (code repo) - https://github.com/JoeyDeVries/LearnOpenGL
 
 ## DEPENDENCIES
 

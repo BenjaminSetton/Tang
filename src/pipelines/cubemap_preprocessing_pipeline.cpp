@@ -1,4 +1,5 @@
 
+#include <array>
 #include <vector>
 
 #include "../device_cache.h"
@@ -23,6 +24,7 @@ namespace TANG
 
 	CubemapPreprocessingPipeline::CubemapPreprocessingPipeline(CubemapPreprocessingPipeline&& other) noexcept : BasePipeline(std::move(other))
 	{
+		other.FlushData();
 	}
 
 	// Get references to the data required in Create(), it's not needed
@@ -43,159 +45,46 @@ namespace TANG
 			return;
 		}
 
+		std::vector<VkDescriptorSetLayout> setLayoutArray;
+		setLayoutCache->FlattenCache(setLayoutArray);
+
+		VkPipelineLayoutCreateInfo pipelineLayoutInfo = PopulatePipelineLayoutCreateInfo(setLayoutArray.data(), static_cast<uint32_t>(setLayoutArray.size()), nullptr, 0);
+		if (!CreatePipelineLayout(pipelineLayoutInfo))
+		{
+			LogError("Failed to create cubemap preprocessing pipeline layout!");
+			return;
+		}
+
 		// Read the compiled shaders
 		Shader vertexShader(ShaderType::CUBEMAP_PREPROCESSING, ShaderStage::VERTEX_SHADER);
 		Shader geometryShader(ShaderType::CUBEMAP_PREPROCESSING, ShaderStage::GEOMETRY_SHADER);
 		Shader fragmentShader(ShaderType::CUBEMAP_PREPROCESSING, ShaderStage::FRAGMENT_SHADER);
 
-		VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
-		vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-		vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
-		vertShaderStageInfo.module = vertexShader.GetShaderObject();
-		vertShaderStageInfo.pName = "main";
+		if (!vertexShader.IsValid() || !geometryShader.IsValid() || !fragmentShader.IsValid())
+		{
+			LogError("Failed to create cubemap preprocessing pipeline. Shader creation failed!");
+			return;
+		}
 
-		VkPipelineShaderStageCreateInfo geoShaderStageInfo{};
-		geoShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-		geoShaderStageInfo.stage = VK_SHADER_STAGE_GEOMETRY_BIT;
-		geoShaderStageInfo.module = geometryShader.GetShaderObject();
-		geoShaderStageInfo.pName = "main";
-
-		VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
-		fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-		fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-		fragShaderStageInfo.module = fragmentShader.GetShaderObject();
-		fragShaderStageInfo.pName = "main";
-
-		std::vector<VkPipelineShaderStageCreateInfo> shaderStages =
-		{ 
-			vertShaderStageInfo,
-			geoShaderStageInfo,
-			fragShaderStageInfo 
+		const std::array<VkPipelineShaderStageCreateInfo, 3> shaderStages =
+		{
+			PopulateShaderCreateInfo(vertexShader),
+			PopulateShaderCreateInfo(geometryShader),
+			PopulateShaderCreateInfo(fragmentShader)
 		};
 
-		// Vertex input
-		VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
-
-		auto bindingDescription = CubemapVertex::GetBindingDescription();
-		auto attributeDescriptions = CubemapVertex::GetAttributeDescriptions();
-		vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-		vertexInputInfo.vertexBindingDescriptionCount = 1;
-		vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-		vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
-		vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
-
-		// Input assembler
-		VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
-		inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-		inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-		inputAssembly.primitiveRestartEnable = VK_FALSE;
-
-		// Viewports and scissors
-		VkViewport viewport{};
-		viewport.x = 0.0f;
-		viewport.y = 0.0f;
-		viewport.width = static_cast<float>(viewportSize.width);
-		viewport.height = static_cast<float>(viewportSize.height);
-		viewport.minDepth = 0.0f;
-		viewport.maxDepth = 1.0f;
-
-		VkRect2D scissor{};
-		scissor.offset = { 0, 0 };
-		scissor.extent = viewportSize;
-
-		VkPipelineDynamicStateCreateInfo dynamicState{};
-		dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-		dynamicState.dynamicStateCount = 0;
-		dynamicState.pDynamicStates = nullptr;
-
-		VkPipelineViewportStateCreateInfo viewportState{};
-		viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-		viewportState.pViewports = &viewport;
-		viewportState.viewportCount = 1;
-		viewportState.pScissors = &scissor;
-		viewportState.scissorCount = 1;
-
-		// Rasterizer
-		VkPipelineRasterizationStateCreateInfo rasterizer{};
-		rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-		rasterizer.depthClampEnable = VK_FALSE;
-		rasterizer.rasterizerDiscardEnable = VK_FALSE;
-		rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-		rasterizer.lineWidth = 1.0f;
-		rasterizer.cullMode = VK_CULL_MODE_NONE;
-		rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-		rasterizer.depthBiasEnable = VK_FALSE;
-		rasterizer.depthBiasConstantFactor = 0.0f; // Optional
-		rasterizer.depthBiasClamp = 0.0f; // Optional
-		rasterizer.depthBiasSlopeFactor = 0.0f; // Optional
-
-		// Multisampling
-		VkPipelineMultisampleStateCreateInfo multisampling{};
-		multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-		multisampling.sampleShadingEnable = VK_FALSE;
-		multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-		multisampling.minSampleShading = 1.0f; // Optional
-		multisampling.pSampleMask = nullptr; // Optional
-		multisampling.alphaToCoverageEnable = VK_FALSE; // Optional
-		multisampling.alphaToOneEnable = VK_FALSE; // Optional
-
-		// Color blending
-		VkPipelineColorBlendAttachmentState colorBlendAttachment{};
-		colorBlendAttachment.colorWriteMask =
-			VK_COLOR_COMPONENT_R_BIT |
-			VK_COLOR_COMPONENT_G_BIT |
-			VK_COLOR_COMPONENT_B_BIT |
-			VK_COLOR_COMPONENT_A_BIT;
-		colorBlendAttachment.blendEnable = VK_FALSE;
-		colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
-		colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
-		colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD; // Optional
-		colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
-		colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
-		colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD; // Optional
-
-		VkPipelineColorBlendStateCreateInfo colorBlending{};
-		colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-		colorBlending.logicOpEnable = VK_FALSE;
-		colorBlending.logicOp = VK_LOGIC_OP_COPY; // Optional
-		colorBlending.attachmentCount = 1;
-		colorBlending.pAttachments = &colorBlendAttachment;
-		colorBlending.blendConstants[0] = 0.0f; // Optional
-		colorBlending.blendConstants[1] = 0.0f; // Optional
-		colorBlending.blendConstants[2] = 0.0f; // Optional
-		colorBlending.blendConstants[3] = 0.0f; // Optional
-
-		// Depth stencil
-		VkPipelineDepthStencilStateCreateInfo depthStencil{};
-		depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-		depthStencil.depthTestEnable = VK_FALSE;
-		depthStencil.depthWriteEnable = VK_FALSE;
-		depthStencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
-		depthStencil.depthBoundsTestEnable = VK_FALSE;
-		depthStencil.minDepthBounds = 0.0f; // Optional
-		depthStencil.maxDepthBounds = 1.0f; // Optional
-		depthStencil.stencilTestEnable = VK_FALSE;
-		depthStencil.front = {}; // Optional
-		depthStencil.back = {}; // Optional
-
-		// Pipeline layout
-		std::vector<VkDescriptorSetLayout> vkDescSetLayouts;
-		for (uint32_t i = 0; i < setLayoutCache->GetLayoutCount(); i++)
-		{
-			vkDescSetLayouts.push_back(setLayoutCache->GetSetLayout(i).value().GetLayout());
-		}
-
-		VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
-		pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-		pipelineLayoutInfo.setLayoutCount = setLayoutCache->GetLayoutCount();
-		pipelineLayoutInfo.pSetLayouts = vkDescSetLayouts.data();
-		pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
-		pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
-
-		if (!CreatePipelineLayout(pipelineLayoutInfo))
-		{
-			TNG_ASSERT_MSG(false, "Failed to create pipeline layout!");
-		}
+		// Fill out the rest of the pipeline info
+		VkPipelineVertexInputStateCreateInfo		vertexInputInfo			= PopulateVertexInputCreateInfo<CubemapVertex>();
+		VkPipelineInputAssemblyStateCreateInfo		inputAssembly			= PopulateInputAssemblyCreateInfo();
+		VkViewport									viewport				= PopulateViewportInfo(viewportSize.width, viewportSize.height);
+		VkRect2D									scissor					= PopulateScissorInfo(viewportSize);
+		VkPipelineDynamicStateCreateInfo			dynamicState			= PopulateDynamicStateCreateInfo();
+		VkPipelineViewportStateCreateInfo			viewportState			= PopulateViewportStateCreateInfo(&viewport, 1, &scissor, 1);
+		VkPipelineRasterizationStateCreateInfo		rasterizer				= PopulateRasterizerStateCreateInfo(VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE);
+		VkPipelineMultisampleStateCreateInfo		multisampling			= PopulateMultisamplingStateCreateInfo();
+		VkPipelineColorBlendAttachmentState			colorBlendAttachment	= PopulateColorBlendAttachment();
+		VkPipelineColorBlendStateCreateInfo			colorBlending			= PopulateColorBlendStateCreateInfo(&colorBlendAttachment, 1);
+		VkPipelineDepthStencilStateCreateInfo		depthStencil			= PopulateDepthStencilStateCreateInfo(VK_FALSE, VK_FALSE, VK_COMPARE_OP_LESS_OR_EQUAL);
 
 		VkGraphicsPipelineCreateInfo pipelineInfo{};
 		pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -215,9 +104,10 @@ namespace TANG
 		pipelineInfo.basePipelineHandle = VK_NULL_HANDLE; // Optional
 		pipelineInfo.basePipelineIndex = -1; // Optional
 
-		if (!CreatePipelineObject(pipelineInfo))
+		if (!CreateGraphicsPipelineObject(pipelineInfo))
 		{
-			TNG_ASSERT_MSG(false, "Failed to create pipeline!");
+			LogError("Failed to create cubemap preprocessing pipeline!");
+			return;
 		}
 	}
 
