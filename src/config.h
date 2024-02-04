@@ -7,8 +7,8 @@ namespace TANG
 {
 	namespace CONFIG
 	{
-		static constexpr uint32_t WindowWidth = 1920;
-		static constexpr uint32_t WindowHeight = 1080;
+		static const uint32_t WindowWidth = 1920;
+		static const uint32_t WindowHeight = 1080;
 
 		static const std::string SkyboxCubeMeshFilePath = "../src/data/assets/cube.fbx";
 		static const std::string SkyboxTextureFilePath = "../src/data/textures/cubemaps/skybox_sunny.hdr";
@@ -18,8 +18,11 @@ namespace TANG
 		static const uint32_t PrefilterMapMaxMips = 5; // Ensure 2 to the power of this value does not exceed PrefilterMapSize above, and ensure it matches MAX_REFLECTION_LOD in the PBR shader!
 		static const uint32_t BRDFConvolutionMapSize = 512;
 
-		static constexpr uint32_t MaxFramesInFlight = 2;
-		static constexpr uint32_t MaxAssetCount = 100;
+		static const float BloomBrightnessThreshold = 1.0f;
+		static const uint32_t BloomMaxMips = 5;
+
+		static const uint32_t MaxFramesInFlight = 2;
+		static const uint32_t MaxAssetCount = 100;
 
 		static const std::string MaterialTexturesFilePath = "../src/data/textures/";
 

@@ -1,0 +1,37 @@
+
+#version 450
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(binding = 0, rgba32f) uniform readonly image2D inTexture;
+layout(binding = 1, rgba32f) uniform writeonly image2D outTexture;
+
+// Returns a bilinearly-filtered sample at the specified texel position (UV), weighted
+// according to the kernel and offset in some direction
+vec3 BilinearSample(uvec2 uv, vec4 kernel, vec2 offset)
+{
+	vec2 uvf = vec2(uv);
+
+	vec4 result =  imageLoad(inTexture, ivec2(uvf + vec2(-1.0, -1.0) + offset)) * kernel.x; // top left
+	     result += imageLoad(inTexture, ivec2(uvf + vec2( 1.0, -1.0) + offset)) * kernel.y; // top right
+	     result += imageLoad(inTexture, ivec2(uvf + vec2(-1.0,  1.0) + offset)) * kernel.z; // bottom left
+	     result += imageLoad(inTexture, ivec2(uvf + vec2( 1.0,  1.0) + offset)) * kernel.w; // bottom right
+	
+	return result.rgb;
+}
+
+//
+// Bloom implementation based on CoD Advanced Warfare:
+// https://www.iryoku.com/next-generation-post-processing-in-call-of-duty-advanced-warfare/
+//
+void main()
+{
+	uvec2 upper = gl_GlobalInvocationID.xy;
+	uvec2 lower = upper >> 1;
+
+	// Specifies the weight for each sample
+	vec4 kernel = vec4(0.25);
+
+	vec3 bilinear = BilinearSample(upper, kernel, vec2(0.0, 0.0));
+	imageStore(outTexture, ivec2(lower), vec4(bilinear, 1.0));
+}

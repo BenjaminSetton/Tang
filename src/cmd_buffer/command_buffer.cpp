@@ -93,7 +93,7 @@ namespace TANG
 			//return; // Do we want to return here?
 		}
 
-		VkCommandBufferBeginInfo beginInfo = {};
+		VkCommandBufferBeginInfo beginInfo{};
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 		beginInfo.flags = flags;
 		beginInfo.pInheritanceInfo = inheritanceInfo;
@@ -144,10 +144,21 @@ namespace TANG
 			return;
 		}
 
-		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->GetPipelineLayout(), 0, descriptorSetCount, descriptorSets, 0, nullptr);
+		vkCmdBindDescriptorSets(commandBuffer, pipeline->GetBindPoint(), pipeline->GetPipelineLayout(), 0, descriptorSetCount, descriptorSets, 0, nullptr);
 	}
 
-	void CommandBuffer::CMD_BindGraphicsPipeline(const BasePipeline* graphicsPipeline)
+	void CommandBuffer::CMD_PushConstants(const BasePipeline* pipeline, void* constantData, uint32_t size, VkShaderStageFlags stageFlags)
+	{
+		if (!IsCommandBufferValid() || !IsRecording())
+		{
+			LogWarning("Failed to bind descriptor sets! Command buffer is not recording");
+			return;
+		}
+
+		vkCmdPushConstants(commandBuffer, pipeline->GetPipelineLayout(), stageFlags, 0, size, constantData);
+	}
+
+	void CommandBuffer::CMD_BindPipeline(const BasePipeline* pipeline)
 	{
 		if (!IsCommandBufferValid() || !IsRecording())
 		{
@@ -155,7 +166,7 @@ namespace TANG
 			return;
 		}
 
-		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline->GetPipeline());
+		vkCmdBindPipeline(commandBuffer, pipeline->GetBindPoint(), pipeline->GetPipeline());
 	}
 
 	void CommandBuffer::CMD_SetViewport(float width, float height)

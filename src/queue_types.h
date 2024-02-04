@@ -8,6 +8,7 @@ namespace TANG
 		GRAPHICS,
 		PRESENT,
 		TRANSFER,
+		COMPUTE,
 		COUNT			// NOTE - This value must come last
 	};
 }

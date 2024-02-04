@@ -32,7 +32,6 @@ namespace TANG
 
 		virtual void Create();
 		virtual void Destroy() = 0;
-		virtual void Draw(uint32_t currentFrame, const DrawData& data) = 0;
 
 		VkFence GetFence();
 

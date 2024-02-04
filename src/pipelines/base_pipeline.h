@@ -9,12 +9,18 @@
 
 namespace TANG
 {
-	enum class PipelineType
+	enum class CorePipeline
 	{
 		PBR,
 		CUBEMAP_PREPROCESSING,
 		SKYBOX,
 		FULLSCREEN_QUAD
+	};
+
+	enum class PipelineType
+	{
+		GRAPHICS,
+		COMPUTE
 	};
 
 	// Forward declarations
@@ -38,6 +44,9 @@ namespace TANG
 
 		VkPipeline GetPipeline() const;
 		VkPipelineLayout GetPipelineLayout() const;
+		VkPipelineBindPoint GetBindPoint() const;
+
+		virtual PipelineType GetType() const = 0;
 
 	protected:
 

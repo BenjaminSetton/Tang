@@ -3,6 +3,7 @@
 
 #include <unordered_map>
 
+#include "queue_family_indices.h"
 #include "queue_types.h"
 #include "vulkan/vulkan.h"
 
@@ -30,6 +31,8 @@ namespace TANG
 		VkCommandPool GetCommandPool(QueueType type) const;
 
 	private:
+
+		void CreatePool_Helper(const QueueFamilyIndices& queueFamilyIndices, QueueType type, VkCommandPoolCreateFlags flags);
 
 		std::unordered_map<QueueType, VkCommandPool> pools;
 

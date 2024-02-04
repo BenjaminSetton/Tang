@@ -22,9 +22,9 @@ namespace TANG
 		QueueFamilyIndices& operator=(const QueueFamilyIndices& other);
 
 		void SetIndex(QueueType type, QueueFamilyIndexType index);
-		QueueFamilyIndexType GetIndex(QueueType type);
+		QueueFamilyIndexType GetIndex(QueueType type) const;
 
-		bool IsValid(QueueFamilyIndexType index);
+		bool IsValid(QueueFamilyIndexType index) const;
 		bool IsComplete();
 
 	private:

@@ -232,7 +232,7 @@ namespace TANG
 		}
 	}
 
-	void CubemapPreprocessingPass::Preprocess(PrimaryCommandBuffer* cmdBuffer, AssetResources* cubemap, AssetResources* fullscreenQuad)
+	void CubemapPreprocessingPass::Draw(PrimaryCommandBuffer* cmdBuffer, AssetResources* cubemap, AssetResources* fullscreenQuad)
 	{
 		CalculateSkyboxCubemap(cmdBuffer, cubemap);
 
@@ -247,14 +247,14 @@ namespace TANG
 			// Irradiance sampling
 			{
 				WriteDescriptorSets irradianceSamplingWriteDescSets(0, 1);
-				irradianceSamplingWriteDescSets.AddImageSampler(irradianceSamplingDescriptorSets[i].GetDescriptorSet(), 2, &skyboxCubemapMipped);
+				irradianceSamplingWriteDescSets.AddImage(irradianceSamplingDescriptorSets[i].GetDescriptorSet(), 2, &skyboxCubemapMipped, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0);
 				irradianceSamplingDescriptorSets[i].Update(irradianceSamplingWriteDescSets);
 			}
 
 			// Prefilter map
 			{
 				WriteDescriptorSets prefilterMapWriteDescSets(0, 1);
-				prefilterMapWriteDescSets.AddImageSampler(prefilterMapCubemapDescriptorSets[i].GetDescriptorSet(), 2, &skyboxCubemapMipped);
+				prefilterMapWriteDescSets.AddImage(prefilterMapCubemapDescriptorSets[i].GetDescriptorSet(), 2, &skyboxCubemapMipped, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0);
 				prefilterMapCubemapDescriptorSets[i].Update(prefilterMapWriteDescSets);
 			}
 		}
@@ -262,13 +262,6 @@ namespace TANG
 		CalculateIrradianceMap(cmdBuffer, cubemap);
 		CalculatePrefilterMap(cmdBuffer, cubemap);
 		CalculateBRDFConvolution(cmdBuffer, fullscreenQuad);
-	}
-
-	void CubemapPreprocessingPass::Draw(uint32_t currentFrame, const DrawData& data)
-	{
-		// Nothing to do here, all the work is done during Preprocess()
-		UNUSED(currentFrame);
-		UNUSED(data);
 	}
 
 	const TextureResource* CubemapPreprocessingPass::GetSkyboxCubemap() const
@@ -579,7 +572,7 @@ namespace TANG
 				WriteDescriptorSets writeDescSets(2, 1);
 				writeDescSets.AddUniformBuffer(cubemapPreprocessingDescriptorSets[i].GetDescriptorSet(), 0, &cubemapPreprocessingViewProjUBO[i]);
 				writeDescSets.AddUniformBuffer(cubemapPreprocessingDescriptorSets[i].GetDescriptorSet(), 1, &cubemapPreprocessingCubemapLayerUBO[i]);
-				writeDescSets.AddImageSampler(cubemapPreprocessingDescriptorSets[i].GetDescriptorSet(),  2, &skyboxTexture);
+				writeDescSets.AddImage(cubemapPreprocessingDescriptorSets[i].GetDescriptorSet(),  2, &skyboxTexture, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0);
 				cubemapPreprocessingDescriptorSets[i].Update(writeDescSets);
 			}
 
@@ -611,7 +604,7 @@ namespace TANG
 	void CubemapPreprocessingPass::CalculateSkyboxCubemap(PrimaryCommandBuffer* cmdBuffer, const AssetResources* asset)
 	{
 		cmdBuffer->CMD_BeginRenderPass(&cubemapPreprocessingRenderPass, &cubemapPreprocessingFramebuffer, { CONFIG::SkyboxCubemapSize, CONFIG::SkyboxCubemapSize }, false, true);
-		cmdBuffer->CMD_BindGraphicsPipeline(&cubemapPreprocessingPipeline);
+		cmdBuffer->CMD_BindPipeline(&cubemapPreprocessingPipeline);
 		cmdBuffer->CMD_BindMesh(asset);
 
 		// For every face of the cube, we must change our camera's view direction, change the framebuffer (since we're rendering to
@@ -630,7 +623,7 @@ namespace TANG
 	void CubemapPreprocessingPass::CalculateIrradianceMap(PrimaryCommandBuffer* cmdBuffer, const AssetResources* asset)
 	{
 		cmdBuffer->CMD_BeginRenderPass(&cubemapPreprocessingRenderPass, &irradianceSamplingFramebuffer, { CONFIG::IrradianceMapSize, CONFIG::IrradianceMapSize }, false, true);
-		cmdBuffer->CMD_BindGraphicsPipeline(&irradianceSamplingPipeline);
+		cmdBuffer->CMD_BindPipeline(&irradianceSamplingPipeline);
 		cmdBuffer->CMD_BindMesh(asset);
 
 		// For every face of the cube, we must change our camera's view direction, change the framebuffer (since we're rendering to
@@ -654,7 +647,7 @@ namespace TANG
 		for (uint32_t i = 0; i < CONFIG::PrefilterMapMaxMips; i++)
 		{
 			cmdBuffer->CMD_BeginRenderPass(&cubemapPreprocessingRenderPass, &prefilterMapFramebuffers[i], { renderAreaSize, renderAreaSize }, false, true);
-			cmdBuffer->CMD_BindGraphicsPipeline(&prefilterMapPipeline);
+			cmdBuffer->CMD_BindPipeline(&prefilterMapPipeline);
 			cmdBuffer->CMD_SetScissor({ 0, 0 }, { renderAreaSize, renderAreaSize });
 			cmdBuffer->CMD_SetViewport(static_cast<float>(renderAreaSize), static_cast<float>(renderAreaSize));
 			cmdBuffer->CMD_BindMesh(asset);
@@ -684,7 +677,7 @@ namespace TANG
 	void CubemapPreprocessingPass::CalculateBRDFConvolution(PrimaryCommandBuffer* cmdBuffer, const AssetResources* fullscreenQuad)
 	{
 		cmdBuffer->CMD_BeginRenderPass(&brdfConvolutionRenderPass, &brdfConvolutionFramebuffer, { CONFIG::BRDFConvolutionMapSize, CONFIG::BRDFConvolutionMapSize }, false, true);
-		cmdBuffer->CMD_BindGraphicsPipeline(&brdfConvolutionPipeline);
+		cmdBuffer->CMD_BindPipeline(&brdfConvolutionPipeline);
 		cmdBuffer->CMD_BindMesh(fullscreenQuad);
 		cmdBuffer->CMD_DrawIndexed(fullscreenQuad->indexCount);
 

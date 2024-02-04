@@ -111,6 +111,11 @@ namespace TANG
 		}
 	}
 
+	PipelineType CubemapPreprocessingPipeline::GetType() const
+	{
+		return PipelineType::GRAPHICS;
+	}
+
 	void CubemapPreprocessingPipeline::FlushData()
 	{
 		renderPass = nullptr;

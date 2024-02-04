@@ -54,7 +54,7 @@ namespace TANG
 	};
 
 	// Forward declarations
-	class PrimaryCommandBuffer;
+	class CommandBuffer;
 	class DisposableCommand;
 
 	class TextureResource
@@ -82,7 +82,7 @@ namespace TANG
 		void CopyFromData(void* data, VkDeviceSize bytes);
 
 		// Copies the image data from the provided source texture, including all the specified mips
-		void CopyFromTexture(PrimaryCommandBuffer* cmdBuffer, TextureResource* sourceTexture, uint32_t mipCount);
+		void CopyFromTexture(CommandBuffer* cmdBuffer, TextureResource* sourceTexture, uint32_t mipCount);
 
 		// Deletes the existing image views (if any) and creates them depending on the data contained within the viewInfo parameter
 		void RecreateImageViews(const ImageViewCreateInfo* viewInfo);
@@ -91,11 +91,19 @@ namespace TANG
 		void DestroyBaseImage();
 		void DestroyImageViews();
 
-		void TransitionLayout(PrimaryCommandBuffer* commandBuffer, VkImageLayout sourceLayout, VkImageLayout destinationLayout);
+		void TransitionLayout(CommandBuffer* commandBuffer, VkImageLayout sourceLayout, VkImageLayout destinationLayout);
 		void TransitionLayout_Immediate(VkImageLayout sourceLayout, VkImageLayout destinationLayout);
 		void TransitionLayout_Force(VkImageLayout destinationLayout); // This function must only be used to reflect implicit layout transitions which happen after the render pass ends. It does not introduce a pipeline barrier like the other TransitionLayout() functions
 
-		void GenerateMipmaps(PrimaryCommandBuffer* cmdBuffer, uint32_t mipCount);
+		void InsertPipelineBarrier(const CommandBuffer* cmdBuffer,
+			VkAccessFlags srcAccessFlags,
+			VkAccessFlags dstAccessFlags,
+			VkPipelineStageFlags srcStage,
+			VkPipelineStageFlags dstStage,
+			uint32_t baseMip,
+			uint32_t mipCount);
+
+		void GenerateMipmaps(CommandBuffer* cmdBuffer, uint32_t mipCount);
 
 		VkImageView GetImageView(uint32_t viewIndex) const;
 		VkSampler GetSampler() const;
@@ -111,6 +119,7 @@ namespace TANG
 
 		uint32_t GetAllocatedMipLevels() const;
 		uint32_t GetGeneratedMipLevels() const;
+		uint32_t CalculateMipLevelsFromSize() const;
 
 		ImageViewScope GetViewScope() const;
 
@@ -132,13 +141,30 @@ namespace TANG
 
 		void CopyFromBuffer(VkBuffer buffer, uint32_t destinationMipLevel);
 
-		void TransitionLayout_Internal(VkCommandBuffer commandBuffer, TextureResource* baseTexture, VkImageLayout sourceLayout, VkImageLayout destinationLayout);
+		void TransitionLayout_Internal(VkCommandBuffer commandBuffer, 
+			TextureResource* baseTexture, 
+			VkImageLayout sourceLayout, 
+			VkImageLayout destinationLayout);
 
-		[[nodiscard]] std::optional<VkImageMemoryBarrier> TransitionLayout_Helper(const TextureResource* baseTexture, VkImageLayout sourceLayout,
-			VkImageLayout destinationLayout, 
-			VkPipelineStageFlags& out_sourceStage, 
+		std::optional<VkImageMemoryBarrier> TransitionLayout_Helper(const TextureResource* baseTexture,
+			VkImageLayout sourceLayout,
+			VkImageLayout destinationLayout,
+			VkPipelineStageFlags& out_sourceStage,
 			VkPipelineStageFlags& out_destinationStage,
 			QueueType& out_queueType);
+
+		void InsertPipelineBarrier_Helper(VkCommandBuffer cmdBuffer,
+			VkAccessFlags srcAccessFlags,
+			VkAccessFlags dstAccessFlags,
+			VkPipelineStageFlags srcStage,
+			VkPipelineStageFlags dstStage,
+			uint32_t baseMip,
+			uint32_t mipCount);
+
+		void InsertPipelineBarrier_Internal(VkCommandBuffer cmdBuffer, 
+			VkPipelineStageFlags srcStage, 
+			VkPipelineStageFlags dstStage, 
+			VkImageMemoryBarrier barrier);
 
 		// NOTE - This function does NOT clean up the allocated memory!!
 		void ResetMembers();
@@ -147,7 +173,7 @@ namespace TANG
 
 		uint32_t GetBytesPerPixelFromFormat(VkFormat format);
 
-		uint32_t CalculateMipLevelsFromSize(uint32_t width, uint32_t height);
+		uint32_t CalculateMipLevelsFromSize(uint32_t width, uint32_t height) const;
 
 	private:
 

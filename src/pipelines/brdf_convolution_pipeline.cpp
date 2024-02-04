@@ -102,6 +102,11 @@ namespace TANG
 		}
 	}
 
+	PipelineType BRDFConvolutionPipeline::GetType() const
+	{
+		return PipelineType::GRAPHICS;
+	}
+
 	void BRDFConvolutionPipeline::FlushData()
 	{
 		renderPass = nullptr;

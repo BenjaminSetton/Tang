@@ -21,6 +21,8 @@ namespace TANG
 
 		void Create() override;
 
+		PipelineType GetType() const override;
+
 	private:
 
 		void FlushData() override;

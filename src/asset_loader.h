@@ -13,7 +13,7 @@
 namespace TANG
 {
 	// Global maps
-	static const std::vector<aiTextureType> supportedTextureTypes =
+	static const std::vector<aiTextureType> SupportedTextureTypes =
 	{
 		aiTextureType_DIFFUSE,
 		aiTextureType_SPECULAR,
@@ -24,15 +24,27 @@ namespace TANG
 		aiTextureType_LIGHTMAP
 	};
 
-	static const std::unordered_map<aiTextureType, Material::TEXTURE_TYPE> aiTextureToInternal =
+	static const std::unordered_map<aiTextureType, Material::TEXTURE_TYPE> AITextureToInternal =
 	{
-		{ aiTextureType_DIFFUSE, Material::TEXTURE_TYPE::DIFFUSE },
-		{ aiTextureType_SPECULAR, Material::TEXTURE_TYPE::SPECULAR },
-		{ aiTextureType_NORMALS, Material::TEXTURE_TYPE::NORMAL },
-		{ aiTextureType_AMBIENT_OCCLUSION, Material::TEXTURE_TYPE::AMBIENT_OCCLUSION },
-		{ aiTextureType_METALNESS, Material::TEXTURE_TYPE::METALLIC },
-		{ aiTextureType_DIFFUSE_ROUGHNESS, Material::TEXTURE_TYPE::ROUGHNESS },
-		{ aiTextureType_LIGHTMAP, Material::TEXTURE_TYPE::LIGHTMAP }
+		{ aiTextureType_DIFFUSE				, Material::TEXTURE_TYPE::DIFFUSE				},
+		{ aiTextureType_SPECULAR			, Material::TEXTURE_TYPE::SPECULAR				},
+		{ aiTextureType_NORMALS				, Material::TEXTURE_TYPE::NORMAL				},
+		{ aiTextureType_AMBIENT_OCCLUSION	, Material::TEXTURE_TYPE::AMBIENT_OCCLUSION		},
+		{ aiTextureType_METALNESS			, Material::TEXTURE_TYPE::METALLIC				},
+		{ aiTextureType_DIFFUSE_ROUGHNESS	, Material::TEXTURE_TYPE::ROUGHNESS				},
+		{ aiTextureType_LIGHTMAP			, Material::TEXTURE_TYPE::LIGHTMAP				}
+	};
+
+	static const std::unordered_map<Material::TEXTURE_TYPE, std::string> TextureTypeToString =
+	{
+		{ Material::TEXTURE_TYPE::DIFFUSE				, "diffuse"				},
+		{ Material::TEXTURE_TYPE::SPECULAR				, "specular"			},
+		{ Material::TEXTURE_TYPE::NORMAL				, "normal"				},
+		{ Material::TEXTURE_TYPE::AMBIENT_OCCLUSION		, "ambient occlusion"	},
+		{ Material::TEXTURE_TYPE::METALLIC				, "metallic"			},
+		{ Material::TEXTURE_TYPE::ROUGHNESS				, "roughness"			},
+		{ Material::TEXTURE_TYPE::LIGHTMAP				, "lightmap"			},
+		{ Material::TEXTURE_TYPE::_COUNT				, "invalid"				},
 	};
 
 	// Holds references to all the loaded assets. Assets are loaded into the internal container through

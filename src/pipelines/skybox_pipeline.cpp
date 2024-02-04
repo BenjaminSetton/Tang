@@ -116,6 +116,11 @@ namespace TANG
 		}
 	}
 
+	PipelineType SkyboxPipeline::GetType() const
+	{
+		return PipelineType::GRAPHICS;
+	}
+
 	void SkyboxPipeline::FlushData()
 	{
 		renderPass = nullptr;

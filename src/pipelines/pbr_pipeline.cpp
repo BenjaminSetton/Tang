@@ -113,6 +113,11 @@ namespace TANG
 		}
 	}
 
+	PipelineType PBRPipeline::GetType() const
+	{
+		return PipelineType::GRAPHICS;
+	}
+
 	void PBRPipeline::FlushData()
 	{
 		renderPass = nullptr;

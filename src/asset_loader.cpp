@@ -26,101 +26,101 @@
 // fixes common errors on data and optimizes the asset data slightly
 //#define FAST_IMPORT
 
-template<typename T>
-void LoadMeshVertices(const aiMesh* importedMesh, TANG::Mesh<T>* mesh)
-{
-	TNG_ASSERT_MSG(false, "Vertex type specialization not found. Please add a template specialization for the new vertex type");
-}
-
-// PBR VERTEX
-template<>
-void LoadMeshVertices<TANG::PBRVertex>(const aiMesh* importedMesh, TANG::Mesh<TANG::PBRVertex>* mesh)
-{
-	uint32_t vertexCount = importedMesh->mNumVertices;
-
-	for (uint32_t j = 0; j < vertexCount; j++)
-	{
-		const aiVector3D& importedPos = importedMesh->mVertices[j];
-		const aiVector3D& importedNormal = importedMesh->mNormals[j];
-		const aiVector3D& importedTangent = importedMesh->mTangents[j];
-		const aiVector3D& importedBitangent = importedMesh->mBitangents[j];
-		const aiVector3D& importedUVs = importedMesh->HasTextureCoords(0) ? importedMesh->mTextureCoords[0][j] : aiVector3D(0, 0, 0);
-
-		TANG::PBRVertex vertex{};
-		vertex.pos = { importedPos.x, importedPos.y, importedPos.z };
-		vertex.normal = { importedNormal.x, importedNormal.y, importedNormal.z };
-		vertex.tangent = { importedTangent.x, importedTangent.y, importedTangent.z };
-		vertex.bitangent = { importedBitangent.x, importedBitangent.y, importedBitangent.z };
-		vertex.uv = { importedUVs.x, importedUVs.y };
-
-		mesh->vertices[j] = vertex;
-	}
-}
-
-// CUBEMAP VERTEX
-template<> 
-void LoadMeshVertices<TANG::CubemapVertex>(const aiMesh* importedMesh, TANG::Mesh<TANG::CubemapVertex>* mesh)
-{
-	uint32_t vertexCount = importedMesh->mNumVertices;
-
-	for (uint32_t j = 0; j < vertexCount; j++)
-	{
-		const aiVector3D& importedPos = importedMesh->mVertices[j];
-
-		TANG::CubemapVertex vertex{};
-		vertex.pos = { importedPos.x, importedPos.y, importedPos.z };
-
-		mesh->vertices[j] = vertex;
-	}
-}
-
-template<>
-void LoadMeshVertices<TANG::UVVertex>(const aiMesh* importedMesh, TANG::Mesh<TANG::UVVertex>* mesh)
-{
-	uint32_t vertexCount = importedMesh->mNumVertices;
-
-	for (uint32_t j = 0; j < vertexCount; j++)
-	{
-		const aiVector3D& importedPos = importedMesh->mVertices[j];
-		const aiVector3D& importedUVs = importedMesh->HasTextureCoords(0) ? importedMesh->mTextureCoords[0][j] : aiVector3D(0, 0, 0);
-
-		TANG::UVVertex vertex{};
-		vertex.pos = { importedPos.x, importedPos.y, importedPos.z };
-		vertex.uv = { importedUVs.x, 1.0f - importedUVs.y }; // Flip in here because I can't figure out how to flip UVs in Blender
-
-		mesh->vertices[j] = vertex;
-	}
-}
-
-template<typename T>
-void LoadMesh(const aiMesh* importedMesh, TANG::AssetDisk* asset)
-{
-	uint32_t faceCount = importedMesh->mNumFaces;
-
-	TANG::Mesh<T>* mesh = new TANG::Mesh<T>();
-	mesh->vertices.resize(importedMesh->mNumVertices);
-	mesh->indices.resize(faceCount * 3);
-
-	// VERTICES
-	LoadMeshVertices<T>(importedMesh, mesh);
-
-	// INDICES
-	for (uint32_t j = 0; j < faceCount; j++)
-	{
-		uint32_t indexCount = j * 3;
-		const aiFace& importedFace = importedMesh->mFaces[j];
-
-		mesh->indices[indexCount    ] = importedFace.mIndices[0];
-		mesh->indices[indexCount + 1] = importedFace.mIndices[1];
-		mesh->indices[indexCount + 2] = importedFace.mIndices[2];
-	}
-
-	// Store the mesh pointer in the asset
-	asset->mesh = mesh;
-}
-
 namespace TANG
 {
+	template<typename T>
+	void LoadMeshVertices(const aiMesh* importedMesh, TANG::Mesh<T>* mesh)
+	{
+		TNG_ASSERT_MSG(false, "Vertex type specialization not found. Please add a template specialization for the new vertex type");
+	}
+
+	// PBR VERTEX
+	template<>
+	void LoadMeshVertices<TANG::PBRVertex>(const aiMesh* importedMesh, TANG::Mesh<TANG::PBRVertex>* mesh)
+	{
+		uint32_t vertexCount = importedMesh->mNumVertices;
+
+		for (uint32_t j = 0; j < vertexCount; j++)
+		{
+			const aiVector3D& importedPos = importedMesh->mVertices[j];
+			const aiVector3D& importedNormal = importedMesh->mNormals[j];
+			const aiVector3D& importedTangent = importedMesh->mTangents[j];
+			const aiVector3D& importedBitangent = importedMesh->mBitangents[j];
+			const aiVector3D& importedUVs = importedMesh->HasTextureCoords(0) ? importedMesh->mTextureCoords[0][j] : aiVector3D(0, 0, 0);
+
+			TANG::PBRVertex vertex{};
+			vertex.pos = { importedPos.x, importedPos.y, importedPos.z };
+			vertex.normal = { importedNormal.x, importedNormal.y, importedNormal.z };
+			vertex.tangent = { importedTangent.x, importedTangent.y, importedTangent.z };
+			vertex.bitangent = { importedBitangent.x, importedBitangent.y, importedBitangent.z };
+			vertex.uv = { importedUVs.x, importedUVs.y };
+
+			mesh->vertices[j] = vertex;
+		}
+	}
+
+	// CUBEMAP VERTEX
+	template<> 
+	void LoadMeshVertices<TANG::CubemapVertex>(const aiMesh* importedMesh, TANG::Mesh<TANG::CubemapVertex>* mesh)
+	{
+		uint32_t vertexCount = importedMesh->mNumVertices;
+
+		for (uint32_t j = 0; j < vertexCount; j++)
+		{
+			const aiVector3D& importedPos = importedMesh->mVertices[j];
+
+			TANG::CubemapVertex vertex{};
+			vertex.pos = { importedPos.x, importedPos.y, importedPos.z };
+
+			mesh->vertices[j] = vertex;
+		}
+	}
+
+	template<>
+	void LoadMeshVertices<TANG::UVVertex>(const aiMesh* importedMesh, TANG::Mesh<TANG::UVVertex>* mesh)
+	{
+		uint32_t vertexCount = importedMesh->mNumVertices;
+
+		for (uint32_t j = 0; j < vertexCount; j++)
+		{
+			const aiVector3D& importedPos = importedMesh->mVertices[j];
+			const aiVector3D& importedUVs = importedMesh->HasTextureCoords(0) ? importedMesh->mTextureCoords[0][j] : aiVector3D(0, 0, 0);
+
+			TANG::UVVertex vertex{};
+			vertex.pos = { importedPos.x, importedPos.y, importedPos.z };
+			vertex.uv = { importedUVs.x, 1.0f - importedUVs.y }; // Flip in here because I can't figure out how to flip UVs in Blender
+
+			mesh->vertices[j] = vertex;
+		}
+	}
+
+	template<typename T>
+	void LoadMesh(const aiMesh* importedMesh, TANG::AssetDisk* asset)
+	{
+		uint32_t faceCount = importedMesh->mNumFaces;
+
+		TANG::Mesh<T>* mesh = new TANG::Mesh<T>();
+		mesh->vertices.resize(importedMesh->mNumVertices);
+		mesh->indices.resize(faceCount * 3);
+
+		// VERTICES
+		LoadMeshVertices<T>(importedMesh, mesh);
+
+		// INDICES
+		for (uint32_t j = 0; j < faceCount; j++)
+		{
+			uint32_t indexCount = j * 3;
+			const aiFace& importedFace = importedMesh->mFaces[j];
+
+			mesh->indices[indexCount    ] = importedFace.mIndices[0];
+			mesh->indices[indexCount + 1] = importedFace.mIndices[1];
+			mesh->indices[indexCount + 2] = importedFace.mIndices[2];
+		}
+
+		// Store the mesh pointer in the asset
+		asset->mesh = mesh;
+	}
+
 	AssetContainer::AssetContainer() { }
 
 	AssetContainer::~AssetContainer()
@@ -288,7 +288,7 @@ namespace TANG
 					currentMaterial.SetName(std::string(matName.C_Str()));
 
 					// Get all the supported textures
-					for (const auto& aiType : supportedTextureTypes)
+					for (const auto& aiType : SupportedTextureTypes)
 					{
 						uint32_t textureCount = currentAIMaterial->GetTextureCount(aiType);
 						if (textureCount > 0)
@@ -328,8 +328,8 @@ namespace TANG
 								tex->bytesPerPixel = 32;
 								tex->fileName = textureSourceFilePathStr;
 
-								auto texTypeIter = aiTextureToInternal.find(aiType);
-								if (texTypeIter == aiTextureToInternal.end())
+								auto texTypeIter = AITextureToInternal.find(aiType);
+								if (texTypeIter == AITextureToInternal.end())
 								{
 									LogError("Failed to convert from aiTexture to the internal texture format! AiTexture type '%s'", static_cast<uint32_t>(aiType));
 									continue;
@@ -337,7 +337,11 @@ namespace TANG
 
 								currentMaterial.AddTextureOfType(texTypeIter->second, tex);
 
-								LogInfo("\tMaterial %u: Loaded texture '%s' of type %u from disk", i, textureName.string().c_str(), static_cast<uint32_t>(aiType));
+								LogInfo("\tMaterial %u: Loaded %s texture '%s' from disk", 
+									i, 
+									TextureTypeToString.at(AITextureToInternal.at(aiType)).c_str(), 
+									textureName.string().c_str()
+								);
 							}
 						}
 					}

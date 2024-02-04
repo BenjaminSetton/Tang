@@ -113,6 +113,11 @@ namespace TANG
 		}
 	}
 
+	PipelineType LDRPipeline::GetType() const
+	{
+		return PipelineType::GRAPHICS;
+	}
+
 	void LDRPipeline::FlushData()
 	{
 		renderPass = nullptr;

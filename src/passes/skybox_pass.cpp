@@ -11,12 +11,10 @@
 namespace TANG
 {
 	SkyboxPass::SkyboxPass()
-	{
-	}
+	{ }
 
 	SkyboxPass::~SkyboxPass()
-	{
-	}
+	{ }
 
 	SkyboxPass::SkyboxPass(SkyboxPass&& other) noexcept
 	{
@@ -36,7 +34,7 @@ namespace TANG
 		for (uint32_t i = 0; i < CONFIG::MaxFramesInFlight; i++)
 		{
 			WriteDescriptorSets writeSetPersistent(0, 1);
-			writeSetPersistent.AddImageSampler(skyboxDescriptorSets[i][0].GetDescriptorSet(), 0, skyboxCubemap);
+			writeSetPersistent.AddImage(skyboxDescriptorSets[i][0].GetDescriptorSet(), 0, skyboxCubemap, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0);
 			skyboxDescriptorSets[i][0].Update(writeSetPersistent);
 		}
 	}
@@ -95,7 +93,7 @@ namespace TANG
 
 		data.cmdBuffer->CMD_SetScissor({ 0, 0 }, { data.framebufferWidth, data.framebufferHeight });
 		data.cmdBuffer->CMD_SetViewport(static_cast<float>(data.framebufferWidth), static_cast<float>(data.framebufferHeight));
-		data.cmdBuffer->CMD_BindGraphicsPipeline(&skyboxPipeline);
+		data.cmdBuffer->CMD_BindPipeline(&skyboxPipeline);
 		data.cmdBuffer->CMD_BindMesh(data.asset);
 		data.cmdBuffer->CMD_BindDescriptorSets(&skyboxPipeline, static_cast<uint32_t>(skyboxDescriptorSets.size()), reinterpret_cast<VkDescriptorSet*>(skyboxDescriptorSets[currentFrame].data()));
 		data.cmdBuffer->CMD_DrawIndexed(data.asset->indexCount);

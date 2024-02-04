@@ -8,14 +8,15 @@
 
 namespace TANG
 {
-	// If anything changes with the QueueType enum, make sure to change this struct as well!
-	TNG_ASSERT_COMPILE(static_cast<uint32_t>(QueueType::COUNT) == 3);
+	// If anything changes with the QueueType enum, make sure to change every reference to queueFamilies below!
+	TNG_ASSERT_COMPILE(static_cast<uint32_t>(QueueType::COUNT) == 4);
 
 	QueueFamilyIndices::QueueFamilyIndices()
 	{
 		queueFamilies[QueueType::GRAPHICS] = INVALID_INDEX;
 		queueFamilies[QueueType::PRESENT]  = INVALID_INDEX;
 		queueFamilies[QueueType::TRANSFER] = INVALID_INDEX;
+		queueFamilies[QueueType::COMPUTE]  = INVALID_INDEX;
 		queueFamilies[QueueType::COUNT]    = INVALID_INDEX;
 	}
 
@@ -39,6 +40,7 @@ namespace TANG
 		queueFamilies[QueueType::GRAPHICS] = other.queueFamilies.at(QueueType::GRAPHICS);
 		queueFamilies[QueueType::PRESENT]  = other.queueFamilies.at(QueueType::PRESENT);
 		queueFamilies[QueueType::TRANSFER] = other.queueFamilies.at(QueueType::TRANSFER);
+		queueFamilies[QueueType::COMPUTE]  = other.queueFamilies.at(QueueType::COMPUTE);
 		queueFamilies[QueueType::COUNT]    = other.queueFamilies.at(QueueType::COUNT);
 
 		return *this;
@@ -51,14 +53,14 @@ namespace TANG
 		queueFamilies[type] = index;
 	}
 
-	QueueFamilyIndices::QueueFamilyIndexType QueueFamilyIndices::GetIndex(QueueType type)
+	QueueFamilyIndices::QueueFamilyIndexType QueueFamilyIndices::GetIndex(QueueType type) const
 	{
 		if (type == QueueType::COUNT) return INVALID_INDEX;
 
-		return queueFamilies[type];
+		return queueFamilies.at(type);
 	} 
 
-	bool QueueFamilyIndices::IsValid(QueueFamilyIndexType index)
+	bool QueueFamilyIndices::IsValid(QueueFamilyIndexType index) const
 	{
 		return index != INVALID_INDEX;
 	}
@@ -67,6 +69,7 @@ namespace TANG
 	{
 		return	IsValid(queueFamilies[QueueType::GRAPHICS]) &&
 				IsValid(queueFamilies[QueueType::PRESENT]) &&
+				IsValid(queueFamilies[QueueType::COMPUTE]) &&
 				IsValid(queueFamilies[QueueType::TRANSFER]);
 	}
 
@@ -84,10 +87,13 @@ namespace TANG
 		uint32_t i = 0;
 		for (const auto& queueFamily : queueFamilies)
 		{
-			// Check that the device supports a graphics queue
-			if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+			// Check that the device supports a graphics queue and compute queue
+			// NOTE - We could potentially select separate queues for graphics and
+			//        compute, but let's keep it simple for now
+			if ((queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) && (queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT))
 			{
 				indices.SetIndex(QueueType::GRAPHICS, i);
+				indices.SetIndex(QueueType::COMPUTE, i);
 			}
 
 			// Check that the device supports present queues

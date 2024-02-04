@@ -30,7 +30,7 @@ namespace TANG
 		void Create() override;
 		void Destroy() override;
 
-		void Draw(uint32_t currentFrame, const DrawData& data) override;
+		void Draw(uint32_t currentFrame, const DrawData& data);
 
 	private:
 

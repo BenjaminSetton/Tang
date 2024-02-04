@@ -25,15 +25,11 @@ namespace TANG
 		{
 			LogWarning("Descriptor set object was destructed, but memory was not freed!");
 		}*/
-
-		LogInfo("Destructed descriptor set!");
 	}
 
 	DescriptorSet::DescriptorSet(const DescriptorSet& other)
 	{
 		descriptorSet = other.descriptorSet;
-
-		LogInfo("Copied descriptor set!");
 	}
 
 	DescriptorSet::DescriptorSet(DescriptorSet&& other) noexcept
@@ -41,8 +37,6 @@ namespace TANG
 		descriptorSet = other.descriptorSet;
 
 		other.descriptorSet = VK_NULL_HANDLE;
-
-		LogInfo("Moved descriptor set!");
 	}
 
 	DescriptorSet& DescriptorSet::operator=(const DescriptorSet& other)
@@ -54,8 +48,6 @@ namespace TANG
 		}
 
 		descriptorSet = other.descriptorSet;
-
-		LogInfo("Copy-assigned descriptor set!");
 
 		return *this;
 	}

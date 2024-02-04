@@ -43,31 +43,13 @@ namespace TANG
 		return (memcmp(&data, ZERO_BLOCK.data(), sizeof(TANG::DrawData))) != 0;
 	}
 
-	void BasePass::CreateFramebuffers()
-	{
-	}
-	void BasePass::CreatePipelines()
-	{
-	}
-	void BasePass::CreateRenderPasses()
-	{
-	}
-	void BasePass::CreateSetLayoutCaches()
-	{
-	}
-
-	void BasePass::CreateDescriptorSets() 
-	{
-	}
-	
-	void BasePass::CreateUniformBuffers()
-	{
-	}
-
-	void BasePass::CreateSyncObjects()
-	{
-		fence = VK_NULL_HANDLE;
-	}
+	void BasePass::CreateFramebuffers()		{                         }
+	void BasePass::CreatePipelines()		{                         }
+	void BasePass::CreateRenderPasses()		{                         }
+	void BasePass::CreateSetLayoutCaches()	{                         }
+	void BasePass::CreateDescriptorSets()	{                         }
+	void BasePass::CreateUniformBuffers()	{                         }
+	void BasePass::CreateSyncObjects()		{ fence = VK_NULL_HANDLE; }
 
 	void BasePass::ResetBaseMembers()
 	{

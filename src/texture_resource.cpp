@@ -3,7 +3,7 @@
 #include <optional>
 
 #include "cmd_buffer/disposable_command.h"
-#include "cmd_buffer/primary_command_buffer.h"
+#include "cmd_buffer/command_buffer.h"
 #include "command_pool_registry.h"
 #include "data_buffer/staging_buffer.h"
 #include "device_cache.h"
@@ -138,7 +138,7 @@ namespace TANG
 		imageViews.clear();
 	}
 
-	void TextureResource::TransitionLayout(PrimaryCommandBuffer* commandBuffer, VkImageLayout sourceLayout, VkImageLayout destinationLayout)
+	void TextureResource::TransitionLayout(CommandBuffer* commandBuffer, VkImageLayout sourceLayout, VkImageLayout destinationLayout)
 	{
 		if (commandBuffer)
 		{
@@ -157,7 +157,29 @@ namespace TANG
 		layout = destinationLayout;
 	}
 
-	void TextureResource::GenerateMipmaps(PrimaryCommandBuffer* cmdBuffer, uint32_t mipCount)
+	void TextureResource::InsertPipelineBarrier(const CommandBuffer* cmdBuffer,
+		VkAccessFlags srcAccessFlags,
+		VkAccessFlags dstAccessFlags,
+		VkPipelineStageFlags srcStage,
+		VkPipelineStageFlags dstStage,
+		uint32_t baseMip,
+		uint32_t mipCount)
+	{
+		if (cmdBuffer == nullptr)
+		{
+			LogError("Attempting to insert pipeline barrier, but no command buffer was provided!");
+			return;
+		}
+
+		if (mipCount == 0)
+		{
+			mipCount = baseImageInfo.mipLevels - baseMip;
+		}
+
+		InsertPipelineBarrier_Helper(cmdBuffer->GetBuffer(), srcAccessFlags, dstAccessFlags, srcStage, dstStage, baseMip, mipCount);
+	}
+
+	void TextureResource::GenerateMipmaps(CommandBuffer* cmdBuffer, uint32_t mipCount)
 	{
 		GenerateMipmaps_Helper(cmdBuffer->GetBuffer(), mipCount);
 	}
@@ -249,6 +271,11 @@ namespace TANG
 	uint32_t TextureResource::GetGeneratedMipLevels() const
 	{
 		return generatedMips;
+	}
+
+	uint32_t TextureResource::CalculateMipLevelsFromSize() const
+	{
+		return CalculateMipLevelsFromSize(baseImageInfo.width, baseImageInfo.height);
 	}
 
 	ImageViewScope TextureResource::GetViewScope() const
@@ -603,7 +630,7 @@ namespace TANG
 		stagingBuffer.Destroy();
 	}
 
-	void TextureResource::CopyFromTexture(PrimaryCommandBuffer* cmdBuffer, TextureResource* sourceTexture, uint32_t mipCount)
+	void TextureResource::CopyFromTexture(CommandBuffer* cmdBuffer, TextureResource* sourceTexture, uint32_t mipCount)
 	{
 		// Either source or destination (this) textures are invalid
 		if (sourceTexture == nullptr || baseImage == VK_NULL_HANDLE)
@@ -782,40 +809,28 @@ namespace TANG
 		VkPipelineStageFlags destinationStage = 0;
 		QueueType queueType = QueueType::GRAPHICS;
 
-		std::optional<VkImageMemoryBarrier> barrier = TransitionLayout_Helper(baseTexture, sourceLayout, destinationLayout, sourceStage, destinationStage, queueType);
-
+		auto barrier = TransitionLayout_Helper(baseTexture, sourceLayout, destinationLayout, sourceStage, destinationStage, queueType);
 		if (!barrier.has_value())
 		{
 			return;
 		}
 
-		vkCmdPipelineBarrier(
-			commandBuffer,
-			sourceStage, destinationStage,
-			0,
-			0, nullptr,
-			0, nullptr,
-			1, &barrier.value()
-		);
+		InsertPipelineBarrier_Internal(commandBuffer, sourceStage, destinationStage, barrier.value());
 
 		// Success!
 		baseTexture->layout = destinationLayout;
 	}
 
-	std::optional<VkImageMemoryBarrier> TextureResource::TransitionLayout_Helper(const TextureResource* baseTexture, VkImageLayout sourceLayout,
-		VkImageLayout destinationLayout, 
-		VkPipelineStageFlags& out_sourceStage, 
+	std::optional<VkImageMemoryBarrier> TextureResource::TransitionLayout_Helper(const TextureResource* baseTexture, 
+		VkImageLayout sourceLayout,
+		VkImageLayout destinationLayout,
+		VkPipelineStageFlags& out_sourceStage,
 		VkPipelineStageFlags& out_destinationStage,
 		QueueType& out_queueType)
 	{
 		if (baseTexture && baseTexture->IsInvalid())
 		{
 			LogError("Attempting to transition layout of invalid texture!");
-			return {};
-		}
-
-		if (sourceLayout == destinationLayout)
-		{
 			return {};
 		}
 
@@ -976,6 +991,58 @@ namespace TANG
 
 			commandQueueType = QueueType::GRAPHICS;
 		}
+		else if (sourceLayout == VK_IMAGE_LAYOUT_UNDEFINED && destinationLayout == VK_IMAGE_LAYOUT_GENERAL)
+		{
+			// Textures transitioning from these layouts usually transitioned immediately using a disposable command
+			// Do access masks and stages really matter that much in this case??
+			barrier.srcAccessMask = 0;
+			barrier.dstAccessMask = 0;
+
+			sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+			destinationStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+
+			commandQueueType = QueueType::GRAPHICS;
+		}
+		else if (sourceLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && destinationLayout == VK_IMAGE_LAYOUT_GENERAL)
+		{
+			barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			barrier.dstAccessMask = 0;
+
+			sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+			destinationStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+
+			commandQueueType = QueueType::GRAPHICS;
+		}
+		else if (sourceLayout == VK_IMAGE_LAYOUT_GENERAL && destinationLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+		{
+			barrier.srcAccessMask = 0;
+			barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+			sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+			destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+
+			commandQueueType = QueueType::GRAPHICS;
+		}
+		else if (sourceLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL && destinationLayout == VK_IMAGE_LAYOUT_GENERAL)
+		{
+			barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+			barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+			sourceStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+			destinationStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+
+			commandQueueType = QueueType::GRAPHICS;
+		}
+		else if (sourceLayout == VK_IMAGE_LAYOUT_GENERAL && destinationLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+		{
+			barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+			barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+			sourceStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+			destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+
+			commandQueueType = QueueType::GRAPHICS;
+		}
 		else
 		{
 			TNG_ASSERT_MSG(false, "Unsupported layout transition!");
@@ -986,6 +1053,45 @@ namespace TANG
 		out_queueType = commandQueueType;
 
 		return barrier;
+	}
+
+	void TextureResource::InsertPipelineBarrier_Helper(VkCommandBuffer cmdBuffer,
+		VkAccessFlags srcAccessFlags,
+		VkAccessFlags dstAccessFlags,
+		VkPipelineStageFlags srcStage,
+		VkPipelineStageFlags dstStage,
+		uint32_t baseMip,
+		uint32_t mipCount)
+	{
+		// This barrier preserves the current image layout
+		VkImageMemoryBarrier barrier{};
+		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		barrier.oldLayout = layout;
+		barrier.newLayout = layout;
+		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barrier.image = baseImage;
+		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		barrier.subresourceRange.baseMipLevel = baseMip;
+		barrier.subresourceRange.levelCount = mipCount;
+		barrier.subresourceRange.baseArrayLayer = 0;
+		barrier.subresourceRange.layerCount = baseImageInfo.arrayLayers;
+		barrier.srcAccessMask = srcAccessFlags;
+		barrier.dstAccessMask = dstAccessFlags;
+
+		InsertPipelineBarrier_Internal(cmdBuffer, srcStage, dstStage, barrier);
+	}
+
+	void TextureResource::InsertPipelineBarrier_Internal(VkCommandBuffer cmdBuffer, VkPipelineStageFlags srcStage, VkPipelineStageFlags dstStage, VkImageMemoryBarrier barrier)
+	{
+		vkCmdPipelineBarrier(
+			cmdBuffer,
+			srcStage, dstStage,
+			0,
+			0, nullptr, // No memory barriers
+			0, nullptr, // No buffer barriers
+			1, &barrier
+		);
 	}
 
 	void TextureResource::ResetMembers()
@@ -1051,16 +1157,11 @@ namespace TANG
 		return 0;
 	}
 
-	uint32_t TextureResource::CalculateMipLevelsFromSize(uint32_t _width, uint32_t _height)
+	uint32_t TextureResource::CalculateMipLevelsFromSize(uint32_t _width, uint32_t _height) const
 	{
 		double dWidth = static_cast<double>(_width);
 		double dHeight = static_cast<double>(_height);
 		double exactMips = log2(std::min(dWidth, dHeight));
-		if ((exactMips - std::trunc(exactMips)) != 0)
-		{
-			LogWarning("Texture '%s' has dimensions which are not a power-of-two (%u, %u)! This will generate inefficient mip-maps", name.c_str(), _width, _height);
-		}
-
 		return static_cast<uint32_t>(exactMips);
 	}
 }

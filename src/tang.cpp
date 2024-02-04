@@ -9,19 +9,19 @@
 #include "tang.h"
 #include "utils/sanity_check.h"
 
-static TANG::PipelineType GetPipelineTypeFromFilePath(const std::string& filePath)
+static TANG::CorePipeline GetCorePipelineFromFilePath(const std::string& filePath)
 {
 	if (filePath == TANG::CONFIG::SkyboxCubeMeshFilePath)
 	{
-		return TANG::PipelineType::CUBEMAP_PREPROCESSING;
+		return TANG::CorePipeline::CUBEMAP_PREPROCESSING;
 	}
 	else if (filePath == TANG::CONFIG::FullscreenQuadMeshFilePath)
 	{
-		return TANG::PipelineType::FULLSCREEN_QUAD;
+		return TANG::CorePipeline::FULLSCREEN_QUAD;
 	}
 	else
 	{
-		return TANG::PipelineType::PBR;
+		return TANG::CorePipeline::PBR;
 	}
 }
 
@@ -141,9 +141,9 @@ namespace TANG
 		}
 
 		// TODO - Find a better way to determine which pipeline type to use
-		PipelineType pipelineType = GetPipelineTypeFromFilePath(std::string(filepath));
+		CorePipeline corePipeline = GetCorePipelineFromFilePath(std::string(filepath));
 
-		AssetResources* resources = renderer.CreateAssetResources(asset, pipelineType);
+		AssetResources* resources = renderer.CreateAssetResources(asset, corePipeline);
 		if (resources == nullptr)
 		{
 			LogError("Failed to create asset resources for asset '%s'", filepath);

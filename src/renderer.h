@@ -18,6 +18,7 @@
 #include "descriptors/set_layout/set_layout_cache.h"
 #include "descriptors/set_layout/set_layout_summary.h"
 
+#include "passes/bloom_pass.h"
 #include "passes/cubemap_preprocessing_pass.h"
 #include "passes/skybox_pass.h"
 
@@ -91,7 +92,7 @@ namespace TANG
 		// Before calling this function, make sure you've called LoaderUtils::LoadAsset() and have
 		// successfully loaded an asset from file! This functions assumes this, and if it can't retrieve
 		// the loaded asset data it will return prematurely
-		AssetResources* CreateAssetResources(AssetDisk* asset, PipelineType pipelineType);
+		AssetResources* CreateAssetResources(AssetDisk* asset, CorePipeline corePipeline);
 
 		void CreatePBRAssetResources(AssetDisk* asset, AssetResources& out_resources);
 		void CreateSkyboxAssetResources(AssetDisk* asset, AssetResources& out_resources);
@@ -105,6 +106,142 @@ namespace TANG
 
 		// Updates the view matrix using the provided position and inverted view matrix. The caller can get this data from any derived BaseCamera object
 		void UpdateCameraData(const glm::vec3& position, const glm::mat4& viewMatrix);
+
+	private:
+
+		VkInstance vkInstance;
+		VkDebugUtilsMessengerEXT debugMessenger;
+
+		VkSurfaceKHR surface;
+
+		std::unordered_map<QueueType, VkQueue> queues;
+
+		VkSwapchainKHR swapChain;
+		VkFormat swapChainImageFormat;
+		VkExtent2D swapChainExtent;
+
+		// Stores all the data we need to describe an asset. We need to have a vector of descriptor sets per asset
+		// because we divide the descriptor sets based on how frequently they're updated. For example the asset's
+		// position might change every frame, but the PBR textures will likely seldom change (if at all)
+		struct AssetDescriptorData
+		{
+			std::vector<DescriptorSet> descriptorSets;
+
+			UniformBuffer transformUBO;
+		};
+
+
+		////////////////////////////////////////////////////////////////////
+		// 
+		//	FRAME-DEPENDENT DATA
+		//
+		//	Organizes data that depends on the maximum number of frames in flight
+		// 
+		////////////////////////////////////////////////////////////////////
+		struct FrameDependentData
+		{
+			// Assets
+			std::unordered_map<UUID, AssetDescriptorData> assetDescriptorDataMap;
+
+			UniformBuffer viewUBO;
+			UniformBuffer projUBO;
+			UniformBuffer cameraDataUBO;
+
+			// Skybox
+			std::array<DescriptorSet, 3> skyboxDescriptorSets;
+
+			// LDR
+			UniformBuffer ldrCameraDataUBO;
+			DescriptorSet ldrDescriptorSet;
+
+			// Sync objects
+			VkSemaphore imageAvailableSemaphore;			// Signalled when swap-chain image becomes available
+			VkSemaphore coreRenderFinishedSemaphore;		// Signalled when the core render loop is finished
+			VkSemaphore postProcessingFinishedSemaphore;	// Signalled when image post-processing is finished
+			VkSemaphore renderFinishedSemaphore;			// Signalled when the frame's rendering is finished (includes core pass and post-processing)
+			VkFence inFlightFence;
+
+			// We need one primary command buffer per frame in flight, since we can be rendering multiple frames at the same time and
+			// we want to still be able to reset and record a primary buffer
+			PrimaryCommandBuffer hdrCommandBuffer;
+			PrimaryCommandBuffer postProcessingCommandBuffer;
+			PrimaryCommandBuffer ldrCommandBuffer;
+			std::unordered_map<UUID, SecondaryCommandBuffer> assetCommandBuffers;
+
+			TextureResource hdrDepthBuffer;
+			TextureResource hdrAttachment;
+			Framebuffer hdrFramebuffer;
+		};
+		std::vector<FrameDependentData> frameDependentData;
+		// We want to organize our descriptor sets as follows:
+		// 
+		// FOR EVERY ASSET:
+		//		FOR EVERY FRAME IN FLIGHT:
+		//			Descriptor set 0:
+		//				- diffuse sampler			(binding 0)
+		//				- normal sampler			(binding 1)
+		//				- metallic sampler			(binding 2)
+		//				- roughness sampler			(binding 3)
+		//				- lightmap sampler			(binding 4)
+		//			Descriptor set 1:
+		//				- Projection matrix UBO		(binding 0)
+		//			Descriptor set 2:
+		//				- CameraData UBO			(binding 0)
+		//				- Transform matrix UBO		(binding 1)
+		//				- View matrix UBO			(binding 2)
+		// 
+		// Total per frame in flight: 3 descriptor sets - 4 uniform buffers and 5 image samplers
+		// Total per all frames in flight (2): 6 descriptor sets - 8 uniform buffers and 10 image samplers
+
+
+		////////////////////////////////////////////////////////////////////
+		// 
+		//	SWAP-CHAIN IMAGE-DEPENDENT DATA
+		//
+		//	Organizes data that depends on the number of images in the swap chain, which may differ from the number of frames in flight
+		// 
+		////////////////////////////////////////////////////////////////////
+		struct SwapChainImageDependentData
+		{
+			TextureResource ldrAttachment;
+			TextureResource swapChainImage;
+			Framebuffer swapChainFramebuffer;
+		};
+		std::vector<SwapChainImageDependentData> swapChainImageDependentData;
+
+
+		PBRPipeline pbrPipeline;
+		SetLayoutCache pbrSetLayoutCache;
+
+		BloomPass bloomPass;
+		SkyboxPass skyboxPass;
+		CubemapPreprocessingPass cubemapPreprocessingPass;
+
+		HDRRenderPass hdrRenderPass;
+
+		LDRRenderPass ldrRenderPass;
+		LDRPipeline ldrPipeline;
+		SetLayoutCache ldrSetLayoutCache;
+
+		UUID skyboxAssetUUID;
+		UUID fullscreenQuadAssetUUID;
+
+		uint32_t currentFrame;
+
+		// TODO - Rework this garbage
+		glm::vec3 startingCameraPosition;
+		glm::mat4 startingCameraViewMatrix;
+		glm::mat4 startingProjectionMatrix;
+
+		// The assetResources vector contains all the vital information that we need for every asset in order to render it
+		// The resourcesMap maps an asset's UUID to a location within the assetResources vector
+		std::unordered_map<UUID, uint32_t> resourcesMap;
+		std::vector<AssetResources> assetResources;
+
+		DescriptorPool descriptorPool;
+
+		// Cached window sizes
+		uint32_t framebufferWidth, framebufferHeight;
 
 	private:
 
@@ -204,7 +341,10 @@ namespace TANG
 		void UpdateLDRUniformBuffer();
 
 		// Submits the provided queue type, along with the provided command buffer. Return value should _not_ be ignored
-		[[nodiscard]] VkResult SubmitQueue(QueueType type, VkSubmitInfo* info, uint32_t submitCount, VkFence fence, bool waitUntilIdle = false);
+		[[nodiscard]] VkResult SubmitQueue(QueueType type, VkSubmitInfo* info, uint32_t submitCount, VkFence fence = VK_NULL_HANDLE, bool waitUntilIdle = false);
+		[[nodiscard]] VkResult SubmitCoreRenderingQueue(CommandBuffer* cmdBuffer, FrameDependentData* frameData);
+		[[nodiscard]] VkResult SubmitPostProcessingQueue(CommandBuffer* cmdBuffer, FrameDependentData* frameData);
+		[[nodiscard]] VkResult SubmitLDRConversionQueue(CommandBuffer* cmdBuffer, FrameDependentData* frameData);
 
 		AssetResources* GetAssetResourcesFromUUID(UUID uuid);
 		SecondaryCommandBuffer* GetSecondaryCommandBufferFromUUID(UUID uuid);
@@ -220,141 +360,6 @@ namespace TANG
 		void DestroyAssetBuffersHelper(AssetResources* resources);
 
 		VkFramebuffer GetFramebufferAtIndex(uint32_t frameBufferIndex);
-
-	private:
-
-		VkInstance vkInstance;
-		VkDebugUtilsMessengerEXT debugMessenger;
-
-		VkSurfaceKHR surface;
-
-		std::unordered_map<QueueType, VkQueue> queues;
-
-		VkSwapchainKHR swapChain;
-		VkFormat swapChainImageFormat;
-		VkExtent2D swapChainExtent;
-
-		// Stores all the data we need to describe an asset. We need to have a vector of descriptor sets per asset
-		// because we divide the descriptor sets based on how frequently they're updated. For example the asset's
-		// position might change every frame, but the PBR textures will likely seldom change (if at all)
-		struct AssetDescriptorData
-		{
-			std::vector<DescriptorSet> descriptorSets;
-
-			UniformBuffer transformUBO;
-		};
-
-
-		////////////////////////////////////////////////////////////////////
-		// 
-		//	FRAME-DEPENDENT DATA
-		//
-		//	Organizes data that depends on the maximum number of frames in flight
-		// 
-		////////////////////////////////////////////////////////////////////
-		struct FrameDependentData
-		{
-			// Assets
-			std::unordered_map<UUID, AssetDescriptorData> assetDescriptorDataMap;
-
-			UniformBuffer viewUBO;
-			UniformBuffer projUBO;
-			UniformBuffer cameraDataUBO;
-
-			// Skybox
-			std::array<DescriptorSet, 3> skyboxDescriptorSets;
-
-			// LDR
-			UniformBuffer ldrCameraDataUBO;
-			DescriptorSet ldrDescriptorSet;
-
-			// Sync objects
-			VkSemaphore imageAvailableSemaphore;
-			VkSemaphore renderFinishedSemaphore;
-			VkFence inFlightFence;
-
-			// We need one primary command buffer per frame in flight, since we can be rendering multiple frames at the same time and
-			// we want to still be able to reset and record a primary buffer
-			PrimaryCommandBuffer hdrCommandBuffer;
-			PrimaryCommandBuffer ldrCommandBuffer;
-			std::unordered_map<UUID, SecondaryCommandBuffer> assetCommandBuffers;
-
-			Framebuffer hdrFramebuffer;
-		};
-		std::vector<FrameDependentData> frameDependentData;
-		// We want to organize our descriptor sets as follows:
-		// 
-		// FOR EVERY ASSET:
-		//		FOR EVERY FRAME IN FLIGHT:
-		//			Descriptor set 0:
-		//				- diffuse sampler			(binding 0)
-		//				- normal sampler			(binding 1)
-		//				- metallic sampler			(binding 2)
-		//				- roughness sampler			(binding 3)
-		//				- lightmap sampler			(binding 4)
-		//			Descriptor set 1:
-		//				- Projection matrix UBO		(binding 0)
-		//			Descriptor set 2:
-		//				- CameraData UBO			(binding 0)
-		//				- Transform matrix UBO		(binding 1)
-		//				- View matrix UBO			(binding 2)
-		// 
-		// Total per frame in flight: 3 descriptor sets - 4 uniform buffers and 5 image samplers
-		// Total per all frames in flight (2): 6 descriptor sets - 8 uniform buffers and 10 image samplers
-
-
-		////////////////////////////////////////////////////////////////////
-		// 
-		//	SWAP-CHAIN IMAGE-DEPENDENT DATA
-		//
-		//	Organizes data that depends on the number of images in the swap chain, which may differ from the number of frames in flight
-		// 
-		////////////////////////////////////////////////////////////////////
-		struct SwapChainImageDependentData
-		{
-			TextureResource swapChainImage;
-			Framebuffer swapChainFramebuffer;
-		};
-		std::vector<SwapChainImageDependentData> swapChainImageDependentData;
-
-
-		PBRPipeline pbrPipeline;
-		SetLayoutCache pbrSetLayoutCache;
-
-		SkyboxPass skyboxPass;
-		CubemapPreprocessingPass cubemapPreprocessingPass;
-
-		TextureResource hdrDepthBuffer;
-		TextureResource hdrAttachment;
-		HDRRenderPass hdrRenderPass;
-
-		LDRRenderPass ldrRenderPass;
-		LDRPipeline ldrPipeline;
-		SetLayoutCache ldrSetLayoutCache;
-
-		UUID skyboxAssetUUID;
-		UUID fullscreenQuadAssetUUID;
-
-		uint32_t currentFrame;
-
-		// TODO - Rework this garbage
-		glm::vec3 startingCameraPosition;
-		glm::mat4 startingCameraViewMatrix;
-		glm::mat4 startingProjectionMatrix;
-
-		// The assetResources vector contains all the vital information that we need for every asset in order to render it
-		// The resourcesMap maps an asset's UUID to a location within the assetResources vector
-		std::unordered_map<UUID, uint32_t> resourcesMap;
-		std::vector<AssetResources> assetResources;
-
-		DescriptorPool descriptorPool;
-
-		TextureResource colorAttachment;
-
-		// Cached window sizes
-		uint32_t framebufferWidth, framebufferHeight;
-
-	private:
 
 		// Returns the current frame-dependent data
 		FrameDependentData* GetCurrentFDD();

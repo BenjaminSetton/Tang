@@ -44,7 +44,8 @@ namespace TANG
 
 		void CMD_BindMesh(const AssetResources* resources);
 		void CMD_BindDescriptorSets(const BasePipeline* pipeline, uint32_t descriptorSetCount, VkDescriptorSet* descriptorSets);
-		void CMD_BindGraphicsPipeline(const BasePipeline* graphicsPipeline);
+		void CMD_PushConstants(const BasePipeline* pipeline, void* constantData, uint32_t size, VkShaderStageFlags stageFlags);
+		void CMD_BindPipeline(const BasePipeline* pipeline);
 		void CMD_SetViewport(float width, float height);
 		void CMD_SetScissor(VkOffset2D scissorOffset, VkExtent2D scissorExtent);
 

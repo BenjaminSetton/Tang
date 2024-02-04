@@ -34,6 +34,27 @@ namespace TANG
 		return pipelineLayout;
 	}
 
+	VkPipelineBindPoint BasePipeline::GetBindPoint() const
+	{
+		switch (GetType())
+		{
+		case PipelineType::COMPUTE:
+		{
+			return VK_PIPELINE_BIND_POINT_COMPUTE;
+		}
+		case PipelineType::GRAPHICS:
+		{
+			return VK_PIPELINE_BIND_POINT_GRAPHICS;
+		}
+		default:
+		{
+			TNG_ASSERT_MSG(false, "A new pipeline type has been added, but a new bind point was not added to this switch case!");
+		}
+		}
+
+		return VK_PIPELINE_BIND_POINT_MAX_ENUM;
+	}
+
 	bool BasePipeline::CreateGraphicsPipelineObject(const VkGraphicsPipelineCreateInfo& pipelineCreateInfo)
 	{
 		if (pipelineObject != VK_NULL_HANDLE)

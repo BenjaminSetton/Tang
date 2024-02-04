@@ -39,10 +39,7 @@ namespace TANG
 
 		// Performs and pre-processing necessary for the loaded skybox. 
 		// For example, this performs all IBL calculations
-		void Preprocess(PrimaryCommandBuffer* cmdBuffer, AssetResources* cubemap, AssetResources* fullscreenQuad);
-
-		// No-op, all the work is done during Preprocessing()
-		void Draw(uint32_t currentFrame, const DrawData& data) override;
+		void Draw(PrimaryCommandBuffer* cmdBuffer, AssetResources* cubemap, AssetResources* fullscreenQuad);
 
 		const TextureResource* GetSkyboxCubemap() const;
 		const TextureResource* GetIrradianceMap() const;

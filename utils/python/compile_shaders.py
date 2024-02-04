@@ -8,7 +8,7 @@ def main():
     sourceDir = "src/shaders"
     outputDir = "out/shaders"
     includeDir = "src/shaders/common"
-    shaderTypes = [ "vert", "geom", "frag" ]
+    shaderTypes = [ "vert", "geom", "frag", "comp" ]
     projectDir = str(Path(sys.argv[0]).parent.absolute().parent.parent) # This is ugly, but for some reason it won't let me do .parent 3 times...
     
     # Ensure the Vulkan SDK is installed

@@ -111,9 +111,8 @@ namespace TANG
 	Renderer::Renderer() : 
 		vkInstance(VK_NULL_HANDLE), debugMessenger(VK_NULL_HANDLE), surface(VK_NULL_HANDLE), queues(), swapChain(VK_NULL_HANDLE), 
 		swapChainImageFormat(VK_FORMAT_UNDEFINED), swapChainExtent({ 0, 0 }), frameDependentData(), swapChainImageDependentData(),
-		pbrSetLayoutCache(), pbrPipeline(), currentFrame(0), resourcesMap(), assetResources(), descriptorPool(),
-		colorAttachment(), framebufferWidth(0), framebufferHeight(0), skyboxAssetUUID(INVALID_UUID),
-		fullscreenQuadAssetUUID(INVALID_UUID)
+		pbrSetLayoutCache(), pbrPipeline(), currentFrame(0), resourcesMap(), assetResources(), descriptorPool(), 
+		framebufferWidth(0), framebufferHeight(0), skyboxAssetUUID(INVALID_UUID), fullscreenQuadAssetUUID(INVALID_UUID)
 	{ }
 
 	void Renderer::Initialize(GLFWwindow* windowHandle, uint32_t windowWidth, uint32_t windowHeight)
@@ -140,7 +139,9 @@ namespace TANG
 		CreatePrimaryCommandBuffers();
 		CreateSyncObjects();
 
+		// Setup all the passes
 		cubemapPreprocessingPass.LoadTextureResources();
+		bloomPass.Create(&descriptorPool, swapChainExtent.width, swapChainExtent.height);
 
 		// Calculate the starting view direction and position of the camera
 		glm::vec3 eye = { 0.0f, 0.0f, 1.0f };
@@ -194,6 +195,7 @@ namespace TANG
 
 		cubemapPreprocessingPass.Destroy();
 		skyboxPass.Destroy();
+		bloomPass.Destroy();
 
 		ldrSetLayoutCache.DestroyLayouts();
 		pbrSetLayoutCache.DestroyLayouts();
@@ -220,6 +222,8 @@ namespace TANG
 		for (uint32_t i = 0; i < GetFDDSize(); i++)
 		{
 			auto frameData = GetFDDAtIndex(i);
+			vkDestroySemaphore(logicalDevice, frameData->coreRenderFinishedSemaphore, nullptr);
+			vkDestroySemaphore(logicalDevice, frameData->postProcessingFinishedSemaphore, nullptr);
 			vkDestroySemaphore(logicalDevice, frameData->imageAvailableSemaphore, nullptr);
 			vkDestroySemaphore(logicalDevice, frameData->renderFinishedSemaphore, nullptr);
 			vkDestroyFence(logicalDevice, frameData->inFlightFence, nullptr);
@@ -250,22 +254,22 @@ namespace TANG
 	// and creating vertex/index buffers to contain them. It also includes creating all other
 	// API objects necessary for rendering. Receives a pointer to a loaded asset. This function
 	// assumes the caller handled a null asset correctly
-	AssetResources* Renderer::CreateAssetResources(AssetDisk* asset, PipelineType pipelineType)
+	AssetResources* Renderer::CreateAssetResources(AssetDisk* asset, CorePipeline corePipeline)
 	{
 		assetResources.emplace_back(AssetResources());
 		resourcesMap.insert({ asset->uuid, static_cast<uint32_t>(assetResources.size() - 1) });
 
 		AssetResources& resources = assetResources.back();
 
-		switch (pipelineType)
+		switch (corePipeline)
 		{
-		case PipelineType::PBR:
+		case CorePipeline::PBR:
 		{
 			CreatePBRAssetResources(asset, resources);
 			break;
 		}
-		case PipelineType::CUBEMAP_PREPROCESSING:
-		case PipelineType::SKYBOX:
+		case CorePipeline::CUBEMAP_PREPROCESSING:
+		case CorePipeline::SKYBOX:
 		{
 			if (skyboxAssetUUID != INVALID_UUID)
 			{
@@ -276,7 +280,7 @@ namespace TANG
 			CreateSkyboxAssetResources(asset, resources);
 			break;
 		}
-		case PipelineType::FULLSCREEN_QUAD:
+		case CorePipeline::FULLSCREEN_QUAD:
 		{
 			if (fullscreenQuadAssetUUID != INVALID_UUID)
 			{
@@ -505,7 +509,7 @@ namespace TANG
 		cmdBuffer.Create(GetCommandPool(QueueType::GRAPHICS));
 		cmdBuffer.BeginRecording(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, nullptr);
 
-		cubemapPreprocessingPass.Preprocess(&cmdBuffer, &out_resources, GetAssetResourcesFromUUID(fullscreenQuadAssetUUID));
+		cubemapPreprocessingPass.Draw(&cmdBuffer, &out_resources, GetAssetResourcesFromUUID(fullscreenQuadAssetUUID));
 
 		cmdBuffer.EndRecording();
 
@@ -817,11 +821,17 @@ namespace TANG
 		}
 		else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
 		{
-			TNG_ASSERT_MSG(false, "Failed to acquire swap chain image!");
+			LogError("Failed to acquire swap chain image! Vulkan result: %u", static_cast<uint32_t>(result));
 		}
 
 		// Only reset the fence if we're submitting work, otherwise we might deadlock
 		vkResetFences(logicalDevice, 1, &(frameData->inFlightFence));
+
+		///////////////////////////////////////
+		// 
+		// CORE RENDERING
+		//
+		///////////////////////////////////////
 
 		PrimaryCommandBuffer* hdrCmdBuffer = &(frameData->hdrCommandBuffer);
 		hdrCmdBuffer->Reset();
@@ -837,6 +847,20 @@ namespace TANG
 		hdrCmdBuffer->CMD_EndRenderPass();
 		hdrCmdBuffer->EndRecording();
 
+		///////////////////////////////////////
+		// 
+		// POST-PROCESSING
+		//
+		///////////////////////////////////////
+
+		PrimaryCommandBuffer* postProcessingCmdBuffer = &(frameData->postProcessingCommandBuffer);
+		postProcessingCmdBuffer->Reset();
+		postProcessingCmdBuffer->BeginRecording(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, nullptr);
+		
+		bloomPass.Draw(currentFrame, postProcessingCmdBuffer, &frameData->hdrAttachment);
+
+		postProcessingCmdBuffer->EndRecording();
+
 		// Submit the LDR conversion commands separately, since they use a different render pass
 		Framebuffer& swapChainFramebuffer = GetSWIDDAtIndex(imageIndex)->swapChainFramebuffer;
 		PrimaryCommandBuffer* ldrCmdBuffer = &(frameData->ldrCommandBuffer);
@@ -849,31 +873,20 @@ namespace TANG
 		ldrCmdBuffer->CMD_EndRenderPass();
 		ldrCmdBuffer->EndRecording();
 
-		{
-			std::array<VkCommandBuffer, 2> commandBuffers = { hdrCmdBuffer->GetBuffer(), ldrCmdBuffer->GetBuffer() };
-			std::array<VkSemaphore, 1> signalSemaphores = { frameData->renderFinishedSemaphore };
-			std::array<VkSemaphore, 1> waitSemaphores = { frameData->imageAvailableSemaphore };
-			std::array<VkPipelineStageFlags, 1> waitStages = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+		///////////////////////////////////////
+		// 
+		// QUEUE SUBMISSION
+		//
+		///////////////////////////////////////
 
-			VkSubmitInfo submitInfo{};
-			submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-			submitInfo.waitSemaphoreCount = static_cast<uint32_t>(waitSemaphores.size());
-			submitInfo.pWaitSemaphores = waitSemaphores.data();
-			submitInfo.pWaitDstStageMask = waitStages.data();
-			submitInfo.commandBufferCount = static_cast<uint32_t>(commandBuffers.size());
-			submitInfo.pCommandBuffers = commandBuffers.data();
-			submitInfo.signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size());
-			submitInfo.pSignalSemaphores = signalSemaphores.data();
 
-			if (SubmitQueue(QueueType::GRAPHICS, &submitInfo, 1, frameData->inFlightFence) != VK_SUCCESS)
-			{
-				return;
-			}
-		}
+		result = SubmitCoreRenderingQueue(hdrCmdBuffer, frameData);
+		result = SubmitPostProcessingQueue(postProcessingCmdBuffer, frameData);
+		result = SubmitLDRConversionQueue(ldrCmdBuffer, frameData);
 
 		///////////////////////////////////////
 		// 
-		// Swap chain present
+		// SWAP CHAIN PRESENT
 		//
 		///////////////////////////////////////
 
@@ -1091,6 +1104,7 @@ namespace TANG
 			if (IsDeviceSuitable(device))
 			{
 				DeviceCache::Get().CachePhysicalDevice(device);
+				LogInfo("Using physical device: '%s'", DeviceCache::Get().GetPhysicalDeviceProperties().deviceName);
 				return;
 			}
 		}
@@ -1200,11 +1214,18 @@ namespace TANG
 		if (!indices.IsComplete())
 		{
 			LogError("Failed to create logical device because the queue family indices are incomplete!");
+			return;
 		}
+
+		LogInfo("Selected graphics queue from queue family at index %u"	, indices.GetIndex(QueueType::GRAPHICS));
+		LogInfo("Selected compute queue from queue family at index %u"	, indices.GetIndex(QueueType::COMPUTE));
+		LogInfo("Selected transfer queue from queue family at index %u"	, indices.GetIndex(QueueType::TRANSFER));
+		LogInfo("Selected present queue from queue family at index %u"	, indices.GetIndex(QueueType::PRESENT));
 
 		std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
 		std::set<uint32_t> uniqueQueueFamilies = {
 			indices.GetIndex(QueueType::GRAPHICS),
+			indices.GetIndex(QueueType::COMPUTE),
 			indices.GetIndex(QueueType::PRESENT),
 			indices.GetIndex(QueueType::TRANSFER)
 		};
@@ -1254,10 +1275,10 @@ namespace TANG
 		DeviceCache::Get().CacheLogicalDevice(device);
 
 		// Get the queues from the logical device
-		vkGetDeviceQueue(device, indices.GetIndex(QueueType::GRAPHICS), 0, &queues[QueueType::GRAPHICS]);
-		vkGetDeviceQueue(device, indices.GetIndex(QueueType::PRESENT), 0, &queues[QueueType::PRESENT]);
-		vkGetDeviceQueue(device, indices.GetIndex(QueueType::TRANSFER), 0, &queues[QueueType::TRANSFER]);
-
+		vkGetDeviceQueue(device, indices.GetIndex(QueueType::GRAPHICS)	, 0, &queues[QueueType::GRAPHICS]);
+		vkGetDeviceQueue(device, indices.GetIndex(QueueType::COMPUTE)	, 0, &queues[QueueType::COMPUTE	]);
+		vkGetDeviceQueue(device, indices.GetIndex(QueueType::TRANSFER)	, 0, &queues[QueueType::TRANSFER]);
+		vkGetDeviceQueue(device, indices.GetIndex(QueueType::PRESENT)	, 0, &queues[QueueType::PRESENT	]);
 	}
 
 	void Renderer::CreateSwapChain()
@@ -1389,7 +1410,7 @@ namespace TANG
 		{
 			std::vector<TextureResource*> attachments =
 			{
-				&colorAttachment,
+				&swidd[i].ldrAttachment,
 				&swidd[i].swapChainImage
 			};
 
@@ -1413,21 +1434,21 @@ namespace TANG
 
 	void Renderer::CreateHDRFramebuffers()
 	{
-		std::vector<TextureResource*> attachments =
-		{
-			&hdrAttachment,
-			&hdrDepthBuffer
-		};
-
-		std::vector<uint32_t> imageViewIndices =
-		{
-			0,
-			0
-		};
-
 		for (uint32_t i = 0; i < GetFDDSize(); i++)
 		{
 			auto frameData = GetFDDAtIndex(i);
+
+			std::vector<TextureResource*> attachments =
+			{
+				&(frameData->hdrAttachment),
+				&(frameData->hdrDepthBuffer)
+			};
+
+			std::vector<uint32_t> imageViewIndices =
+			{
+				0,
+				0
+			};
 
 			FramebufferCreateInfo framebufferInfo{};
 			framebufferInfo.renderPass = &hdrRenderPass;
@@ -1448,6 +1469,7 @@ namespace TANG
 			auto frameData = GetFDDAtIndex(i);
 
 			frameData->hdrCommandBuffer.Create(GetCommandPool(QueueType::GRAPHICS));
+			frameData->postProcessingCommandBuffer.Create(GetCommandPool(QueueType::COMPUTE));
 			frameData->ldrCommandBuffer.Create(GetCommandPool(QueueType::GRAPHICS));
 		}
 	}
@@ -1477,6 +1499,16 @@ namespace TANG
 			if(vkCreateSemaphore(logicalDevice, &semaphoreInfo, nullptr, &(frameData->renderFinishedSemaphore)) != VK_SUCCESS)
 			{
 				TNG_ASSERT_MSG(false, "Failed to create render finished semaphore!");
+			}
+
+			if (vkCreateSemaphore(logicalDevice, &semaphoreInfo, nullptr, &(frameData->coreRenderFinishedSemaphore)) != VK_SUCCESS)
+			{
+				TNG_ASSERT_MSG(false, "Failed to create core render finished semaphore!");
+			}
+
+			if (vkCreateSemaphore(logicalDevice, &semaphoreInfo, nullptr, &(frameData->postProcessingFinishedSemaphore)) != VK_SUCCESS)
+			{
+				TNG_ASSERT_MSG(false, "Failed to create post processing finished semaphore!");
 			}
 
 			if(vkCreateFence(logicalDevice, &fenceInfo, nullptr, &(frameData->inFlightFence)) != VK_SUCCESS)
@@ -1674,12 +1706,16 @@ namespace TANG
 		samplerInfo.enableAnisotropicFiltering = false;
 		samplerInfo.maxAnisotropy = 1.0f;
 
-		hdrDepthBuffer.Create(&imageInfo, &imageViewInfo, &samplerInfo);
+		for (uint32_t i = 0; i < GetFDDSize(); i++)
+		{
+			auto frameData = GetFDDAtIndex(i);
+			frameData->hdrDepthBuffer.Create(&imageInfo, &imageViewInfo, &samplerInfo);
+		}
 	}
 
 	void Renderer::CreateColorAttachmentTextures()
 	{
-		// Swap chain color attachment resolve
+		// Swap chain color attachment resolve (LDR attachment)
 		BaseImageCreateInfo imageInfo{};
 		imageInfo.width = swapChainExtent.width;
 		imageInfo.height = swapChainExtent.height;
@@ -1693,6 +1729,7 @@ namespace TANG
 		ImageViewCreateInfo imageViewInfo{};
 		imageViewInfo.aspect = VK_IMAGE_ASPECT_COLOR_BIT;
 		imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		imageViewInfo.viewScope = ImageViewScope::ENTIRE_IMAGE;
 
 		SamplerCreateInfo samplerInfo{};
 		samplerInfo.addressModeUVW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
@@ -1701,7 +1738,11 @@ namespace TANG
 		samplerInfo.enableAnisotropicFiltering = false;
 		samplerInfo.maxAnisotropy = 1.0f;
 
-		colorAttachment.Create(&imageInfo, &imageViewInfo, &samplerInfo);
+		for (uint32_t i = 0; i < GetSWIDDSize(); i++)
+		{
+			auto swidd = GetSWIDDAtIndex(i);
+			swidd->ldrAttachment.Create(&imageInfo, &imageViewInfo, &samplerInfo);
+		}
 
 		// HDR attachment
 		imageInfo.width = swapChainExtent.width;
@@ -1719,7 +1760,11 @@ namespace TANG
 		samplerInfo.minificationFilter = VK_FILTER_LINEAR;
 		samplerInfo.maxAnisotropy = 1.0f;
 
-		hdrAttachment.Create(&imageInfo, &imageViewInfo, &samplerInfo);
+		for (uint32_t i = 0; i < GetFDDSize(); i++)
+		{
+			auto frameData = GetFDDAtIndex(i);
+			frameData->hdrAttachment.Create(&imageInfo, &imageViewInfo, &samplerInfo);
+		}
 	}
 
 	void Renderer::DrawAssets(PrimaryCommandBuffer* cmdBuffer)
@@ -1778,7 +1823,7 @@ namespace TANG
 
 		cmdBuffer->CMD_BindMesh(resources);
 		cmdBuffer->CMD_BindDescriptorSets(&pbrPipeline, static_cast<uint32_t>(vkDescSets.size()), vkDescSets.data());
-		cmdBuffer->CMD_BindGraphicsPipeline(&pbrPipeline);
+		cmdBuffer->CMD_BindPipeline(&pbrPipeline);
 		cmdBuffer->CMD_SetScissor({ 0, 0 }, swapChainExtent);
 		cmdBuffer->CMD_SetViewport(static_cast<float>(swapChainExtent.width), static_cast<float>(swapChainExtent.height));
 		cmdBuffer->CMD_DrawIndexed(resources->indexCount);
@@ -1794,7 +1839,7 @@ namespace TANG
 		AssetResources* fullscreenQuadAsset = GetAssetResourcesFromUUID(fullscreenQuadAssetUUID);
 		auto frameData = GetCurrentFDD();
 
-		cmdBuffer->CMD_BindGraphicsPipeline(&ldrPipeline);
+		cmdBuffer->CMD_BindPipeline(&ldrPipeline);
 		cmdBuffer->CMD_BindDescriptorSets(&ldrPipeline, 1, reinterpret_cast<VkDescriptorSet*>(&frameData->ldrDescriptorSet));
 		cmdBuffer->CMD_SetScissor({ 0, 0 }, swapChainExtent);
 		cmdBuffer->CMD_SetViewport(static_cast<float>(swapChainExtent.width), static_cast<float>(swapChainExtent.height));
@@ -1826,19 +1871,22 @@ namespace TANG
 	{
 		VkDevice logicalDevice = GetLogicalDevice();
 
-		hdrAttachment.Destroy();
-		colorAttachment.Destroy();
-
-		hdrDepthBuffer.Destroy();
-
-		for (auto& swidd : swapChainImageDependentData)
+		// These are tied to the swapchain only because their size matches the backbuffer
+		for (uint32_t i = 0; i < GetFDDSize(); i++)
 		{
-			swidd.swapChainFramebuffer.Destroy();
+			auto frameData = GetFDDAtIndex(i);
+
+			frameData->hdrAttachment.Destroy();
+			frameData->hdrDepthBuffer.Destroy();
 		}
 
-		for (auto& swidd : swapChainImageDependentData)
+		for (uint32_t i = 0; i < GetSWIDDSize(); i++)
 		{
-			swidd.swapChainImage.DestroyImageViews();
+			auto swidd = GetSWIDDAtIndex(i);
+
+			swidd->ldrAttachment.Destroy();
+			swidd->swapChainFramebuffer.Destroy();
+			swidd->swapChainImage.DestroyImageViews();
 		}
 
 		vkDestroySwapchainKHR(logicalDevice, swapChain, nullptr);
@@ -1887,14 +1935,14 @@ namespace TANG
 
 		// Update PBR textures
 		WriteDescriptorSets writeDescSets(0, 8);
-		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 0, &asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::DIFFUSE)]);
-		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 1, &asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::NORMAL)]);
-		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 2, &asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::METALLIC)]);
-		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 3, &asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::ROUGHNESS)]);
-		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 4, &asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::LIGHTMAP)]);
-		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 5, cubemapPreprocessingPass.GetIrradianceMap());
-		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 6, cubemapPreprocessingPass.GetPrefilterMap());
-		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 7, cubemapPreprocessingPass.GetBRDFConvolutionMap());
+		writeDescSets.AddImage(descSet.GetDescriptorSet(), 0, &asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::DIFFUSE)]		, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0);
+		writeDescSets.AddImage(descSet.GetDescriptorSet(), 1, &asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::NORMAL)]		, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0);
+		writeDescSets.AddImage(descSet.GetDescriptorSet(), 2, &asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::METALLIC)]		, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0);
+		writeDescSets.AddImage(descSet.GetDescriptorSet(), 3, &asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::ROUGHNESS)]	, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0);
+		writeDescSets.AddImage(descSet.GetDescriptorSet(), 4, &asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::LIGHTMAP)]		, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0);
+		writeDescSets.AddImage(descSet.GetDescriptorSet(), 5, cubemapPreprocessingPass.GetIrradianceMap()									, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0);
+		writeDescSets.AddImage(descSet.GetDescriptorSet(), 6, cubemapPreprocessingPass.GetPrefilterMap()									, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0);
+		writeDescSets.AddImage(descSet.GetDescriptorSet(), 7, cubemapPreprocessingPass.GetBRDFConvolutionMap()								, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0);
 
 		descSet.Update(writeDescSets);
 	}
@@ -1906,7 +1954,7 @@ namespace TANG
 
 		// Update view matrix + camera data descriptor set
 		WriteDescriptorSets writeDescSets(1, 1);
-		writeDescSets.AddImageSampler(descSet.GetDescriptorSet(), 0, &hdrAttachment);
+		writeDescSets.AddImage(descSet.GetDescriptorSet(), 0, &frameData->hdrAttachment, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0);
 		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 1, &frameData->ldrCameraDataUBO);
 		descSet.Update(writeDescSets);
 	}
@@ -1997,11 +2045,15 @@ namespace TANG
 	{
 		VkResult res;
 		VkQueue queue = queues[type];
+		if (queue == VK_NULL_HANDLE)
+		{
+			TNG_ASSERT_MSG(false, "No queue was found for the given type, failed to submit!");
+		}
 
 		res = vkQueueSubmit(queue, submitCount, info, fence);
 		if (res != VK_SUCCESS)
 		{
-			TNG_ASSERT_MSG(false, "Failed to submit queue!");
+			LogError("Failed to submit queue of type %u!", static_cast<uint32_t>(type));
 		}
 
 		if (waitUntilIdle)
@@ -2009,11 +2061,75 @@ namespace TANG
 			res = vkQueueWaitIdle(queue);
 			if (res != VK_SUCCESS)
 			{
-				TNG_ASSERT_MSG(false, "Failed to wait until queue was idle after submitting!");
+				LogError("Failed to wait until queue of type %u was idle after submitting!", static_cast<uint32_t>(type));
 			}
 		}
 
 		return res;
+	}
+
+	VkResult Renderer::SubmitCoreRenderingQueue(CommandBuffer* cmdBuffer, FrameDependentData* frameData)
+	{
+		std::array<VkCommandBuffer		, 1> commandBuffers		= { cmdBuffer->GetBuffer()							};
+		std::array<VkSemaphore			, 1> waitSemaphores		= { frameData->imageAvailableSemaphore				};
+		std::array<VkSemaphore			, 1> signalSemaphores	= { frameData->coreRenderFinishedSemaphore			};
+		std::array<VkPipelineStageFlags	, 1> waitStages			= { VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT				};
+
+		VkSubmitInfo submitInfo{};
+		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		submitInfo.waitSemaphoreCount = static_cast<uint32_t>(waitSemaphores.size());
+		submitInfo.pWaitSemaphores = waitSemaphores.data();
+		submitInfo.pWaitDstStageMask = waitStages.data();
+		submitInfo.commandBufferCount = static_cast<uint32_t>(commandBuffers.size());
+		submitInfo.pCommandBuffers = commandBuffers.data();
+		submitInfo.signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size());
+		submitInfo.pSignalSemaphores = signalSemaphores.data();
+
+		// Submit the HDR command buffer
+		return SubmitQueue(QueueType::GRAPHICS, &submitInfo, 1);
+	}
+
+	VkResult Renderer::SubmitPostProcessingQueue(CommandBuffer* cmdBuffer, FrameDependentData* frameData)
+	{
+		std::array<VkCommandBuffer			, 1> commandBuffers		= { cmdBuffer->GetBuffer()							};
+		std::array<VkSemaphore				, 1> waitSemaphores		= { frameData->coreRenderFinishedSemaphore			};
+		std::array<VkSemaphore				, 1> signalSemaphores	= { frameData->postProcessingFinishedSemaphore		};
+		std::array<VkPipelineStageFlags		, 1> waitStages			= { VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT				};
+
+		VkSubmitInfo submitInfo{};
+		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		submitInfo.waitSemaphoreCount = static_cast<uint32_t>(waitSemaphores.size());
+		submitInfo.pWaitSemaphores = waitSemaphores.data();
+		submitInfo.pWaitDstStageMask = waitStages.data();
+		submitInfo.commandBufferCount = static_cast<uint32_t>(commandBuffers.size());
+		submitInfo.pCommandBuffers = commandBuffers.data();
+		submitInfo.signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size());
+		submitInfo.pSignalSemaphores = signalSemaphores.data();
+
+		// Submit all compute post-processing effects
+		return SubmitQueue(QueueType::COMPUTE, &submitInfo, 1);
+	}
+
+	VkResult Renderer::SubmitLDRConversionQueue(CommandBuffer* cmdBuffer, FrameDependentData* frameData)
+	{
+		std::array<VkCommandBuffer			, 1> commandBuffers		= { cmdBuffer->GetBuffer()						};
+		std::array<VkSemaphore				, 1> waitSemaphores		= { frameData->postProcessingFinishedSemaphore	};
+		std::array<VkSemaphore				, 1> signalSemaphores	= { frameData->renderFinishedSemaphore			};
+		std::array<VkPipelineStageFlags		, 1> waitStages			= { VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT			};
+
+		VkSubmitInfo submitInfo{};
+		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		submitInfo.waitSemaphoreCount = static_cast<uint32_t>(waitSemaphores.size());
+		submitInfo.pWaitSemaphores = waitSemaphores.data();
+		submitInfo.pWaitDstStageMask = waitStages.data();
+		submitInfo.commandBufferCount = static_cast<uint32_t>(commandBuffers.size());
+		submitInfo.pCommandBuffers = commandBuffers.data();
+		submitInfo.signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size());
+		submitInfo.pSignalSemaphores = signalSemaphores.data();
+
+		// Submit LDR conversion command buffer. This is the last step in drawing 
+		// the current frame, so also signal the inFlight fence that the frame is done
+		return SubmitQueue(QueueType::GRAPHICS, &submitInfo, 1, frameData->inFlightFence);
 	}
 
 	AssetResources* Renderer::GetAssetResourcesFromUUID(UUID uuid)

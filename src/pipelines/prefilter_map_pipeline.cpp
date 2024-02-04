@@ -120,6 +120,11 @@ namespace TANG
 		}
 	}
 
+	PipelineType PrefilterMapPipeline::GetType() const
+	{
+		return PipelineType::GRAPHICS;
+	}
+
 	void PrefilterMapPipeline::FlushData()
 	{
 		renderPass = nullptr;

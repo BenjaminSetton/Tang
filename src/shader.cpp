@@ -19,6 +19,7 @@ static const std::unordered_map<TANG::ShaderType, std::string> ShaderTypeToFolde
 	{ TANG::ShaderType::IRRADIANCE_SAMPLING		, "irradiance_sampling"		},
 	{ TANG::ShaderType::PREFILTER_MAP			, "prefilter_skybox"		},
 	{ TANG::ShaderType::BRDF_CONVOLUTION		, "brdf_convolution"		},
+	{ TANG::ShaderType::BLOOM_PREFILTER			, "bloom_prefilter"			},
 	{ TANG::ShaderType::BLOOM_UPSCALING			, "bloom_upscaling"			},
 	{ TANG::ShaderType::BLOOM_DOWNSCALING		, "bloom_downscaling"		},
 };
@@ -62,7 +63,7 @@ namespace TANG
 		uint32_t bytesRead = ReadFile(defaultShaderCompiledPath, &shaderCode);
 		if (bytesRead == 0)
 		{
-			LogError("Failed to read shader code for shader of type '%u' and stage '%u'", static_cast<uint32_t>(type), static_cast<uint32_t>(_stage));
+			LogError("Failed to read shader code for shader of type '%u' and stage '%u'", static_cast<uint32_t>(_type), static_cast<uint32_t>(_stage));
 			return;
 		}
 

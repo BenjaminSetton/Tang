@@ -1,0 +1,44 @@
+
+#version 450
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(binding = 0) uniform sampler2D inTexture;
+layout(binding = 1, rgba32f) uniform writeonly image2D outTexture;
+
+layout(push_constant) uniform constants
+{
+	float brightnessThreshold;
+} data;
+
+const float ONE_THIRD = 1.0 / 3.0;
+
+void main()
+{
+    ivec2 outImageSize = imageSize(outTexture);
+    vec2 uv = gl_GlobalInvocationID.xy / vec2(outImageSize);
+    
+    vec3 sampledColor = texture(inTexture, uv).rgb;
+
+    float brightness = dot(sampledColor, vec3(ONE_THIRD));
+    if(brightness < data.brightnessThreshold)
+    {
+        sampledColor = vec3(0.0);
+    }
+
+    imageStore(outTexture, ivec2(gl_GlobalInvocationID.xy), vec4(sampledColor, 1.0));
+}
+
+//uvec2 texel = gl_GlobalInvocationID.xy;
+//
+//vec3 color = imageLoad(inTexture, ivec2(texel)).rgb;
+//float brightness = dot(color, vec3(1/3));
+//
+//if(brightness < data.brightnessThreshold)
+//{
+//	color = vec3(0.0);
+//}
+//
+//// Output the thresholded color to the output texture. Note that
+//// the output texture is actually at a quarter resolution!
+//imageStore(outTexture, ivec2(texel >> 1), vec4(color, 1.0));

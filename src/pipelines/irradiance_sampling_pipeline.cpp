@@ -111,6 +111,11 @@ namespace TANG
 		}
 	}
 
+	PipelineType IrradianceSamplingPipeline::GetType() const
+	{
+		return PipelineType::GRAPHICS;
+	}
+
 	void IrradianceSamplingPipeline::FlushData()
 	{
 		renderPass = nullptr;

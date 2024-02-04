@@ -64,31 +64,43 @@ namespace TANG
 		numBuffers--;
 	}
 
-	void WriteDescriptorSets::AddImageSampler(VkDescriptorSet descriptorSet, uint32_t binding, const TextureResource* texResource)
+	void WriteDescriptorSets::AddImage(VkDescriptorSet descriptorSet, uint32_t binding, const TextureResource* texResource, VkDescriptorType type, uint32_t imageViewIndex)
 	{
+		// We'll return in this case because the internal temporary vectors that hold the buffers and images will be forced to
+		// resize if we add this next image sampler. This will cause all the pointers to become invalid and we'll eventually
+		// crash
 		if (numImages == 0)
 		{
-			// We'll return in this case because the internal temporary vectors that hold the buffers and images will be forced to
-			// resize if we add this next image sampler. This will cause all the pointers to become invalid and we'll eventually
-			// crash
-			LogError("Failed to add image sampler to WriteDescriptorSet. Exceeded the number of promised image samplers!");
+			LogError("Failed to update image descriptor. Exceeded the number of promised image samplers!");
 			return;
 		}
 
-		if ((texResource->GetLayout() & VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) == 0)
+		// Log an error message if we already have a write for the specified binding. At the moment we don't
+		// bundle up descriptor set writes, so looping over the vector should not be a problem...for now
+		for (const auto& writeDescSet : writeDescriptorSets)
 		{
-			LogWarning("Attempting to update descriptor set on binding %u with texture resource that does not have the SHADER_READ_ONLY layout!", binding);
+			if (writeDescSet.dstBinding == binding)
+			{
+				LogError("A descriptor set write was already specified for binding %u! This write will be ignored", binding);
+				return;
+			}
+		}
+
+		VkImageLayout layout = texResource->GetLayout();
+		if (layout != VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL && layout != VK_IMAGE_LAYOUT_GENERAL)
+		{
+			LogWarning("Attempting to update image descriptor on binding %u with texture resource that does not have a layout appropriate for shader read/write operations!", binding);
 		}
 
 		if (texResource->GetGeneratedMipLevels() > 1 && texResource->GetViewScope() == ImageViewScope::PER_MIP_LEVEL)
 		{
-			LogWarning("Attempting to add an image sampler which has more than 1 generated mip level, but it's view scope is declared per mip level! Image sampling will exclusively read from mip level 0");
+			LogWarning("Attempting to update image descriptor on binding %u which has more than 1 generated mip level, but it's view scope is declared per mip level! Image sampling will exclusively read from mip level 0", binding);
 		}
 
 		descriptorImageInfo.emplace_back(std::move(VkDescriptorImageInfo()));
 		VkDescriptorImageInfo& imageInfo = descriptorImageInfo.back();
-		imageInfo.imageLayout = texResource->GetLayout();
-		imageInfo.imageView = texResource->GetImageView(0); // 0 represent either the entire image (ImageViewScope::ENTIRE_IMAGE) or the first mip level (highest quality/resolution - ImageViewScope::PER_MIP_LEVEL)
+		imageInfo.imageLayout = layout;
+		imageInfo.imageView = texResource->GetImageView(imageViewIndex); // Index 0 represent either the entire image (ImageViewScope::ENTIRE_IMAGE) or the first mip level (highest quality/resolution - ImageViewScope::PER_MIP_LEVEL)
 		imageInfo.sampler = texResource->GetSampler();
 
 		VkWriteDescriptorSet writeDescSet{};
@@ -96,7 +108,7 @@ namespace TANG
 		writeDescSet.dstSet = descriptorSet;
 		writeDescSet.dstBinding = binding;
 		writeDescSet.dstArrayElement = 0;
-		writeDescSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		writeDescSet.descriptorType = type;
 		writeDescSet.descriptorCount = 1;
 		writeDescSet.pImageInfo = &imageInfo;
 

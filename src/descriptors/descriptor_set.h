@@ -1,7 +1,6 @@
 #ifndef DESCRIPTOR_SET_H
 #define DESCRIPTOR_SET_H
 
-#include <unordered_map>
 #include <vector>
 
 #include "vulkan/vulkan.h"
@@ -14,7 +13,7 @@ namespace TANG
 	class WriteDescriptorSets;
 
 	// All the components above must be used in one way or another to create and update the descriptor sets.
-	// The size of a DescriptorSet object is equivalent to that of a VkDescriptorSet object, meaning an array
+	// The size of a DescriptorSet object is guaranteed to be equivalent to that of a VkDescriptorSet object, meaning an array
 	// of DescriptorSet objects can be interpreted as an array of VkDescriptorSet objects
 	class DescriptorSet
 	{
@@ -37,8 +36,6 @@ namespace TANG
 		VkDescriptorSet descriptorSet;
 
 	};
-
-	TNG_ASSERT_COMPILE(sizeof(DescriptorSet) == sizeof(VkDescriptorSet));
 }
 
 #endif

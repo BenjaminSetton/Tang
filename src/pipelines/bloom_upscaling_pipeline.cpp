@@ -64,6 +64,11 @@ namespace TANG
 		}
 	}
 
+	PipelineType BloomUpscalingPipeline::GetType() const
+	{
+		return PipelineType::COMPUTE;
+	}
+
 	void BloomUpscalingPipeline::FlushData()
 	{
 		setLayoutCache = nullptr;

@@ -25,10 +25,11 @@ project "TANG"
 	{
 		"src/**.h",
 		"src/**.cpp",
-		"src/**.vert",
-		"src/**.geo",
-		"src/**.frag",
-		"src/**.glsl"
+		"src/shaders/**.vert",
+		"src/shaders/**.geo",
+		"src/shaders/**.frag",
+		"src/shaders/**.comp",
+		"src/shaders/**.glsl"
 	}
 	
 	includedirs
