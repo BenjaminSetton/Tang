@@ -12,7 +12,7 @@ vec3 BilinearSample(uvec2 uv, vec4 kernel, vec2 offset)
 {
 	vec2 uvf = vec2(uv);
 
-	vec4 result =  imageLoad(inTexture, ivec2(uvf + vec2(-1.0, -1.0) + offset)) * kernel.x; // top left
+	vec4 result  = imageLoad(inTexture, ivec2(uvf + vec2(-1.0, -1.0) + offset)) * kernel.x; // top left
 	     result += imageLoad(inTexture, ivec2(uvf + vec2( 1.0, -1.0) + offset)) * kernel.y; // top right
 	     result += imageLoad(inTexture, ivec2(uvf + vec2(-1.0,  1.0) + offset)) * kernel.z; // bottom left
 	     result += imageLoad(inTexture, ivec2(uvf + vec2( 1.0,  1.0) + offset)) * kernel.w; // bottom right
@@ -32,6 +32,13 @@ void main()
 	// Specifies the weight for each sample
 	vec4 kernel = vec4(0.25);
 
-	vec3 bilinear = BilinearSample(upper, kernel, vec2(0.0, 0.0));
-	imageStore(outTexture, ivec2(lower), vec4(bilinear, 1.0));
+	// These bilinear samples are weighted according to their offset. The central sample is the most important,
+	// receiving a weight of 0.5 while the other 4 samples receive a weight of 0.125
+	vec3 sampleAverage  = BilinearSample(upper, kernel, vec2( 0.0,  0.0)) * 0.5  ; // central sample (no offset)
+	     sampleAverage += BilinearSample(upper, kernel, vec2(-1.0, -1.0)) * 0.125; // top-left sample
+	     sampleAverage += BilinearSample(upper, kernel, vec2( 1.0, -1.0)) * 0.125; // top-right sample
+	     sampleAverage += BilinearSample(upper, kernel, vec2(-1.0,  1.0)) * 0.125; // bottom-left sample
+		 sampleAverage += BilinearSample(upper, kernel, vec2( 1.0,  1.0)) * 0.125; // bottom-right sample
+
+	imageStore(outTexture, ivec2(lower), vec4(sampleAverage, 1.0));
 }

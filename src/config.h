@@ -19,7 +19,7 @@ namespace TANG
 		static const uint32_t BRDFConvolutionMapSize = 512;
 
 		static const float BloomBrightnessThreshold = 1.0f;
-		static const uint32_t BloomMaxMips = 5;
+		static const uint32_t BloomMaxMips = 6;
 
 		static const uint32_t MaxFramesInFlight = 2;
 		static const uint32_t MaxAssetCount = 100;
