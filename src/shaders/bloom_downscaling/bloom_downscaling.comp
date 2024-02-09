@@ -24,6 +24,7 @@ vec3 BilinearSample(uvec2 uv, vec4 kernel, vec2 offset)
 // Bloom implementation based on CoD Advanced Warfare:
 // https://www.iryoku.com/next-generation-post-processing-in-call-of-duty-advanced-warfare/
 //
+// TODO - Karis Average on the first downsample pass. This is done to reduce firefly artifacts
 void main()
 {
 	uvec2 upper = gl_GlobalInvocationID.xy;

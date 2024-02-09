@@ -630,7 +630,7 @@ namespace TANG
 		stagingBuffer.Destroy();
 	}
 
-	void TextureResource::CopyFromTexture(CommandBuffer* cmdBuffer, TextureResource* sourceTexture, uint32_t mipCount)
+	void TextureResource::CopyFromTexture(CommandBuffer* cmdBuffer, TextureResource* sourceTexture, uint32_t baseMip, uint32_t mipCount)
 	{
 		// Either source or destination (this) textures are invalid
 		if (sourceTexture == nullptr || baseImage == VK_NULL_HANDLE)
@@ -649,14 +649,18 @@ namespace TANG
 			LogWarning("Failed to copy from texture. Mismatched array layers: source (%u) vs. destination (%u)", sourceTexture->baseImageInfo.arrayLayers, baseImageInfo.arrayLayers);
 			return;
 		}
-		else if ((sourceTexture->baseImageInfo.width != baseImageInfo.width) || (sourceTexture->baseImageInfo.height != baseImageInfo.height))
+
+		if ((baseMip + mipCount) > baseImageInfo.mipLevels || (baseMip + mipCount) > sourceTexture->baseImageInfo.mipLevels)
 		{
-			LogWarning("Failed to copy from texture. Mismatched texture size: source (%ux%u) vs. destination (%ux%u)",
-				sourceTexture->baseImageInfo.width, sourceTexture->baseImageInfo.height,
-				baseImageInfo.width, baseImageInfo.height);
-			return;
+			LogWarning("Failed to copy from texture. Specified mips (%u base + %u count) are higher than the number of allocated mips in the source and/or destination texture: source (%u) vs. destination (%u)!",
+				baseMip,
+				mipCount,
+				sourceTexture->baseImageInfo.mipLevels,
+				baseImageInfo.mipLevels
+			);
 		}
-		else if (mipCount > sourceTexture->baseImageInfo.mipLevels || mipCount > baseImageInfo.mipLevels)
+
+		if (mipCount > sourceTexture->baseImageInfo.mipLevels || mipCount > baseImageInfo.mipLevels)
 		{
 			LogWarning("Failed to copy from texture. Requested more mips than are allocated in source and/or destination textures: source (%u) vs. destination (%u).",
 				sourceTexture->baseImageInfo.mipLevels, baseImageInfo.mipLevels);
@@ -670,8 +674,8 @@ namespace TANG
 		TransitionLayout_Internal(cmdBuffer->GetBuffer(), sourceTexture, sourceTexture->layout, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 		TransitionLayout_Internal(cmdBuffer->GetBuffer(), this, layout, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-		uint32_t mipWidth = baseImageInfo.width;
-		uint32_t mipHeight = baseImageInfo.height;
+		uint32_t mipWidth = baseImageInfo.width >> baseMip;
+		uint32_t mipHeight = baseImageInfo.height >> baseMip;
 
 		VkImageCopy copyRegion{};
 		copyRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -689,8 +693,8 @@ namespace TANG
 		// Generate all the regions we're going to copy over
 		for (uint32_t i = 0; i < mipCount; i++)
 		{
-			copyRegion.srcSubresource.mipLevel = i;
-			copyRegion.dstSubresource.mipLevel = i;
+			copyRegion.srcSubresource.mipLevel = baseMip + i;
+			copyRegion.dstSubresource.mipLevel = baseMip + i;
 			copyRegion.extent = { mipWidth, mipHeight, 1u };
 
 			regions.push_back(copyRegion);
@@ -704,12 +708,13 @@ namespace TANG
 			baseImage, layout,
 			static_cast<uint32_t>(regions.size()), regions.data());
 
-		// Transfer the textures to their old layouts, unless their old layout was undefined
-		if (oldSourceLayout != VK_IMAGE_LAYOUT_UNDEFINED) TransitionLayout_Internal(cmdBuffer->GetBuffer(), sourceTexture, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, oldSourceLayout);
-		if (oldDestinationLayout != VK_IMAGE_LAYOUT_UNDEFINED) TransitionLayout_Internal(cmdBuffer->GetBuffer(), this, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, oldDestinationLayout);
+		// Transfer the textures to their old layouts, unless their old layout was UNDEFINED
+		if (oldSourceLayout != VK_IMAGE_LAYOUT_UNDEFINED)		TransitionLayout_Internal(cmdBuffer->GetBuffer(), sourceTexture, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, oldSourceLayout);
+		if (oldDestinationLayout != VK_IMAGE_LAYOUT_UNDEFINED)	TransitionLayout_Internal(cmdBuffer->GetBuffer(), this, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, oldDestinationLayout);
 	
 		// We didn't technically "generate" them, but for all practical purposes this is 
 		// the amount of valid mips we have
+		// TODO - Track which mips were generated now that we can copy from specific mip levels
 		generatedMips = mipCount;
 	}
 
@@ -1040,6 +1045,26 @@ namespace TANG
 
 			sourceStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
 			destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+
+			commandQueueType = QueueType::GRAPHICS;
+		}
+		else if (sourceLayout == VK_IMAGE_LAYOUT_GENERAL && destinationLayout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
+		{
+			barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+			barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+
+			sourceStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+			destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+
+			commandQueueType = QueueType::GRAPHICS;
+		}
+		else if (sourceLayout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL && destinationLayout == VK_IMAGE_LAYOUT_GENERAL)
+		{
+			barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+			barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+			sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+			destinationStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
 
 			commandQueueType = QueueType::GRAPHICS;
 		}

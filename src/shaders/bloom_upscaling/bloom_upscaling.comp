@@ -3,22 +3,23 @@
 
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
-layout(binding = 0, rgba32f) uniform readonly image2D inTexture;
-layout(binding = 1, rgba32f) uniform writeonly image2D outTexture;
+layout(binding = 0, rgba32f) uniform readonly image2D inPrevUpscaledTexture;
+layout(binding = 1, rgba32f) uniform readonly image2D inDownscaledTexture;
+layout(binding = 2, rgba32f) uniform writeonly image2D outTexture;
 
 // Returns a bilinearly-filtered sample at the specified texel position (UV), weighted
 // according to the kernel and offset in some direction
 vec3 Filter3x3(uvec2 texel, uint[9] kernel, uint kernelWeight)
 {
-	vec4 result  = imageLoad(inTexture, ivec2(texel + uvec2(-1, -1))) * kernel[0]; // top left
-		 result += imageLoad(inTexture, ivec2(texel + uvec2( 0, -1))) * kernel[1]; // top center
-		 result += imageLoad(inTexture, ivec2(texel + uvec2( 1, -1))) * kernel[2]; // top right
-		 result += imageLoad(inTexture, ivec2(texel + uvec2(-1,  0))) * kernel[3]; // middle left
-		 result += imageLoad(inTexture, ivec2(texel + uvec2( 0,  0))) * kernel[4]; // middle center
-		 result += imageLoad(inTexture, ivec2(texel + uvec2( 1,  0))) * kernel[5]; // middle right
-		 result += imageLoad(inTexture, ivec2(texel + uvec2(-1,  1))) * kernel[6]; // bottom left
-		 result += imageLoad(inTexture, ivec2(texel + uvec2( 0,  1))) * kernel[7]; // bottom center
-		 result += imageLoad(inTexture, ivec2(texel + uvec2( 1,  1))) * kernel[8]; // bottom right
+	vec4 result  = imageLoad(inPrevUpscaledTexture, ivec2(texel + uvec2(-1, -1))) * kernel[0]; // top left
+		 result += imageLoad(inPrevUpscaledTexture, ivec2(texel + uvec2( 0, -1))) * kernel[1]; // top center
+		 result += imageLoad(inPrevUpscaledTexture, ivec2(texel + uvec2( 1, -1))) * kernel[2]; // top right
+		 result += imageLoad(inPrevUpscaledTexture, ivec2(texel + uvec2(-1,  0))) * kernel[3]; // middle left
+		 result += imageLoad(inPrevUpscaledTexture, ivec2(texel + uvec2( 0,  0))) * kernel[4]; // middle center
+		 result += imageLoad(inPrevUpscaledTexture, ivec2(texel + uvec2( 1,  0))) * kernel[5]; // middle right
+		 result += imageLoad(inPrevUpscaledTexture, ivec2(texel + uvec2(-1,  1))) * kernel[6]; // bottom left
+		 result += imageLoad(inPrevUpscaledTexture, ivec2(texel + uvec2( 0,  1))) * kernel[7]; // bottom center
+		 result += imageLoad(inPrevUpscaledTexture, ivec2(texel + uvec2( 1,  1))) * kernel[8]; // bottom right
 
 	return result.rgb / kernelWeight;
 }
@@ -29,7 +30,10 @@ vec3 Filter3x3(uvec2 texel, uint[9] kernel, uint kernelWeight)
 //
 // The general process of this upsampling step is to use a 3x3 tent filter from the input samples to
 // achieve the blur, and then write the result of that tent filter blur PLUS a direct sample from
-// the input image. This can be summarized as follows, with E being the lowest mip level and A the highest:
+// the input image. In this case, the direct sample comes from the downscaled texture, one mip level
+// above what is currently being calculated. For example, if a 15x8 image is being upscaled to 30x16,
+// then the 30x16 mip level of the downscaled image is selected as the input. 
+// This can be summarized as follows, with E being the lowest mip level and A the highest:
 // E' = E
 // D' = D + blur(E')
 // C' = C + blur(D')
@@ -46,7 +50,7 @@ void main()
 	kernel[3] = 2; kernel[4] = 4; kernel[5] = 2;
 	kernel[6] = 1; kernel[7] = 2; kernel[8] = 1;
 
-	//vec3 directSample = imageLoad(inTexture, ivec2(lower)).rgb;
+	vec3 directSample = imageLoad(inDownscaledTexture, ivec2(upper)).rgb;
 	vec3 filterSample = Filter3x3(lower, kernel, 16);
 
 	imageStore(outTexture, ivec2(upper), vec4(filterSample, 1.0));

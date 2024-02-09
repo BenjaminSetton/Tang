@@ -82,7 +82,7 @@ namespace TANG
 		void CopyFromData(void* data, VkDeviceSize bytes);
 
 		// Copies the image data from the provided source texture, including all the specified mips
-		void CopyFromTexture(CommandBuffer* cmdBuffer, TextureResource* sourceTexture, uint32_t mipCount);
+		void CopyFromTexture(CommandBuffer* cmdBuffer, TextureResource* sourceTexture, uint32_t baseMip, uint32_t mipCount);
 
 		// Deletes the existing image views (if any) and creates them depending on the data contained within the viewInfo parameter
 		void RecreateImageViews(const ImageViewCreateInfo* viewInfo);

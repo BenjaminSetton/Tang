@@ -22,6 +22,7 @@ static const std::unordered_map<TANG::ShaderType, std::string> ShaderTypeToFolde
 	{ TANG::ShaderType::BLOOM_PREFILTER			, "bloom_prefilter"			},
 	{ TANG::ShaderType::BLOOM_UPSCALING			, "bloom_upscaling"			},
 	{ TANG::ShaderType::BLOOM_DOWNSCALING		, "bloom_downscaling"		},
+	{ TANG::ShaderType::BLOOM_COMPOSITION		, "bloom_composition"		},
 };
 
 static const std::unordered_map<TANG::ShaderStage, std::string> ShaderStageToFileName =

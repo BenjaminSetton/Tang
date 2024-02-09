@@ -49,7 +49,6 @@ namespace TANG
 		void CreateDescriptorSets(const DescriptorPool* descriptorPool);
 		void CreateTextures(uint32_t width, uint32_t height);
 
-		SetLayoutCache bloomFilteringSetLayoutCache;
 
 		BloomPrefilterPipeline bloomPrefilterPipeline;
 		SetLayoutCache bloomPrefilterSetLayoutCache;
@@ -57,11 +56,13 @@ namespace TANG
 
 		BloomDownscalingPipeline bloomDownscalingPipeline;
 		TextureResource bloomDownscalingTexture;
+		SetLayoutCache bloomDownscalingSetLayoutCache;
 		std::array<std::array<DescriptorSet, CONFIG::BloomMaxMips - 1>, CONFIG::MaxFramesInFlight> bloomDownscalingDescriptorSets;
 
 		BloomUpscalingPipeline bloomUpscalingPipeline;
 		TextureResource bloomUpscalingTexture;
-		std::array<std::array<DescriptorSet, CONFIG::BloomMaxMips>, CONFIG::MaxFramesInFlight> bloomUpscalingDescriptorSets;
+		SetLayoutCache bloomUpscalingSetLayoutCache;
+		std::array<std::array<DescriptorSet, CONFIG::BloomMaxMips - 1>, CONFIG::MaxFramesInFlight> bloomUpscalingDescriptorSets;
 
 		bool wasCreated;
 	};

@@ -50,14 +50,10 @@ namespace TANG
 			uint32_t maxMipIndex = CONFIG::BloomMaxMips - 1;
 			for (uint32_t j = 0; j < CONFIG::BloomMaxMips - 1; j++)
 			{
-				// Rather than copying the lowest mip of the downsampling process to the upscaling texture,
-				// we'll bind the downscaling texture for the bottom mip, and then the upscaling texture
-				// the rest of the way up
-				TextureResource* inputTexture = j == 0 ? &bloomDownscalingTexture : &bloomUpscalingTexture;
-
-				WriteDescriptorSets bloomUpscalingWriteDescSets(0, 2);
-				bloomUpscalingWriteDescSets.AddImage(bloomUpscalingDescriptorSets[i][j].GetDescriptorSet(), 0, inputTexture			 , VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, maxMipIndex - j	);	// Input image
-				bloomUpscalingWriteDescSets.AddImage(bloomUpscalingDescriptorSets[i][j].GetDescriptorSet(), 1, &bloomUpscalingTexture, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, maxMipIndex - j - 1);	// Output image
+				WriteDescriptorSets bloomUpscalingWriteDescSets(0, 3);
+				bloomUpscalingWriteDescSets.AddImage(bloomUpscalingDescriptorSets[i][j].GetDescriptorSet(), 0, &bloomUpscalingTexture  , VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, maxMipIndex - j    );	// Input previous upscale mip (blur upsample)
+				bloomUpscalingWriteDescSets.AddImage(bloomUpscalingDescriptorSets[i][j].GetDescriptorSet(), 1, &bloomDownscalingTexture, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, maxMipIndex - j - 1);	// Input current downscale mip (direct sample)
+				bloomUpscalingWriteDescSets.AddImage(bloomUpscalingDescriptorSets[i][j].GetDescriptorSet(), 2, &bloomUpscalingTexture  , VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, maxMipIndex - j - 1);	// Output image
 				bloomUpscalingDescriptorSets[i][j].Update(bloomUpscalingWriteDescSets);
 			}
 		}
@@ -73,7 +69,8 @@ namespace TANG
 		bloomUpscalingTexture.Destroy();
 		bloomDownscalingTexture.Destroy();
 
-		bloomFilteringSetLayoutCache.DestroyLayouts();
+		bloomUpscalingSetLayoutCache.DestroyLayouts();
+		bloomDownscalingSetLayoutCache.DestroyLayouts();
 
 		bloomPrefilterPipeline.Destroy();
 		bloomPrefilterSetLayoutCache.DestroyLayouts();
@@ -121,7 +118,22 @@ namespace TANG
 			1
 		);
 
-		// The first mip we output to is actually the second to last mip
+		// Copy the last mip from the downscale texture to the upscale texture to begin upsampling process
+		bloomUpscalingTexture.CopyFromTexture(cmdBuffer, &bloomDownscalingTexture, CONFIG::BloomMaxMips - 1, 1);
+
+		// Finish copying the last mip level to the upscale texture before reading/writing from/to it in the upscaling pass
+		// TODO - The garbage TransitionLayout function actually transitions all mips, so we must wait for the layout
+		//        transition to happen in all mips regardless of how many we write to. This must be reworked ASAP
+		bloomUpscalingTexture.InsertPipelineBarrier(cmdBuffer,
+			VK_ACCESS_TRANSFER_WRITE_BIT,
+			VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+			VK_PIPELINE_STAGE_TRANSFER_BIT,
+			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+			0,
+			CONFIG::BloomMaxMips
+		);
+
+		// The first mip we output to is actually the second to last mip, since we copied the last mip directly from the downsample texture
 		UpscaleTexture(cmdBuffer, currentFrame, bloomUpscalingTexture.GetWidth() >> (CONFIG::BloomMaxMips - 2), bloomUpscalingTexture.GetHeight() >> (CONFIG::BloomMaxMips - 2));
 	}
 
@@ -156,18 +168,18 @@ namespace TANG
 		{
 			cmdBuffer->CMD_BindDescriptorSets(&bloomUpscalingPipeline, 1, reinterpret_cast<VkDescriptorSet*>(&bloomUpscalingDescriptorSets[currentFrame][i]));
 
+			// Dispatch as many work groups as the first mip level of the input texture, divided by the number of invocations (local_size in compute shader)
+			// We starting sampling from mip level 0 (N - 1) and write to mip level 1 (N), all the way down to N = CONFIG::BloomMaxMips
+			cmdBuffer->CMD_Dispatch(static_cast<uint32_t>(ceil(currentWidth / 16.0)), static_cast<uint32_t>(ceil(currentHeight / 16.0)), 1);
+
 			bloomUpscalingTexture.InsertPipelineBarrier(cmdBuffer,
 				VK_ACCESS_SHADER_WRITE_BIT,
 				VK_ACCESS_SHADER_READ_BIT,
 				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
 				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-				CONFIG::BloomMaxMips - i - 1,
+				CONFIG::BloomMaxMips - i - 2,
 				1
 			);
-
-			// Dispatch as many work groups as the first mip level of the input texture, divided by the number of invocations (local_size in compute shader)
-			// We starting sampling from mip level 0 (N - 1) and write to mip level 1 (N), all the way down to N = CONFIG::BloomMaxMips
-			cmdBuffer->CMD_Dispatch(static_cast<uint32_t>(ceil(currentWidth / 16.0)), static_cast<uint32_t>(ceil(currentHeight / 16.0)), 1);
 
 			// Go up a mip level
 			currentWidth <<= 1;
@@ -212,11 +224,11 @@ namespace TANG
 		bloomPrefilterPipeline.Create();
 
 		// Bloom downscaling
-		bloomDownscalingPipeline.SetData(&bloomFilteringSetLayoutCache);
+		bloomDownscalingPipeline.SetData(&bloomDownscalingSetLayoutCache);
 		bloomDownscalingPipeline.Create();
 
 		// Bloom upscaling
-		bloomUpscalingPipeline.SetData(&bloomFilteringSetLayoutCache);
+		bloomUpscalingPipeline.SetData(&bloomUpscalingSetLayoutCache);
 		bloomUpscalingPipeline.Create();
 	}
 
@@ -230,12 +242,21 @@ namespace TANG
 			bloomPrefilterSetLayoutCache.CreateSetLayout(volatileLayout, 0);
 		}
 
-		// Bloom downscaling/upscaling
+		// Bloom downscaling
 		{
 			SetLayoutSummary volatileLayout(0);
 			volatileLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT);	// Input image (readonly)
 			volatileLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT);	// Output image (writeonly)
-			bloomFilteringSetLayoutCache.CreateSetLayout(volatileLayout, 0);
+			bloomDownscalingSetLayoutCache.CreateSetLayout(volatileLayout, 0);
+		}
+
+		// Bloom upscaling
+		{
+			SetLayoutSummary volatileLayout(0);
+			volatileLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT);	// Input previous upscale mip (blur upsample)
+			volatileLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT);	// Input current downscale mip (direct sample)
+			volatileLayout.AddBinding(2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT);	// Output image (writeonly)
+			bloomUpscalingSetLayoutCache.CreateSetLayout(volatileLayout, 0);
 		}
 	}
 
@@ -262,33 +283,50 @@ namespace TANG
 			}
 		}
 
-		// Bloom downscaling/upscaling
+		// Bloom downscaling
 		{
-			if (bloomFilteringSetLayoutCache.GetLayoutCount() != 1)
+			if (bloomDownscalingSetLayoutCache.GetLayoutCount() != 1)
 			{
-				LogError("Failed to create bloom downscaling pass descriptor sets, too many layouts! Expected (%u) vs. actual (%u)", 1, bloomFilteringSetLayoutCache.GetLayoutCount());
+				LogError("Failed to create bloom downscaling pass descriptor sets, too many layouts! Expected (%u) vs. actual (%u)", 1, bloomDownscalingSetLayoutCache.GetLayoutCount());
 				return;
 			}
 
-			std::optional<DescriptorSetLayout> bloomFilteringSetLayout = bloomFilteringSetLayoutCache.GetSetLayout(0);
-			if (!bloomFilteringSetLayout.has_value())
+			std::optional<DescriptorSetLayout> bloomDownscalingSetLayout = bloomDownscalingSetLayoutCache.GetSetLayout(0);
+			if (!bloomDownscalingSetLayout.has_value())
 			{
-				LogError("Failed to create bloom filtering descriptor sets! Descriptor set layout is null");
+				LogError("Failed to create bloom downscaling descriptor sets! Descriptor set layout is null");
 				return;
 			}
 
 			for (uint32_t i = 0; i < CONFIG::MaxFramesInFlight; i++)
 			{
-				// Bloom downscaling
 				for (uint32_t j = 0; j < CONFIG::BloomMaxMips - 1; j++)
 				{
-					bloomDownscalingDescriptorSets[i][j].Create(*descriptorPool, bloomFilteringSetLayout.value());
+					bloomDownscalingDescriptorSets[i][j].Create(*descriptorPool, bloomDownscalingSetLayout.value());
 				}
+			}
+		}
 
-				// Bloom upscaling
-				for (uint32_t j = 0; j < CONFIG::BloomMaxMips; j++)
+		// Bloom upscaling
+		{
+			if (bloomUpscalingSetLayoutCache.GetLayoutCount() != 1)
+			{
+				LogError("Failed to create bloom upscaling pass descriptor sets, too many layouts! Expected (%u) vs. actual (%u)", 1, bloomUpscalingSetLayoutCache.GetLayoutCount());
+				return;
+			}
+
+			std::optional<DescriptorSetLayout> bloomUpscalingSetLayout = bloomUpscalingSetLayoutCache.GetSetLayout(0);
+			if (!bloomUpscalingSetLayout.has_value())
+			{
+				LogError("Failed to create bloom upscaling descriptor sets! Descriptor set layout is null");
+				return;
+			}
+
+			for (uint32_t i = 0; i < CONFIG::MaxFramesInFlight; i++)
+			{
+				for (uint32_t j = 0; j < CONFIG::BloomMaxMips - 1; j++)
 				{
-					bloomUpscalingDescriptorSets[i][j].Create(*descriptorPool, bloomFilteringSetLayout.value());
+					bloomUpscalingDescriptorSets[i][j].Create(*descriptorPool, bloomUpscalingSetLayout.value());
 				}
 			}
 		}
@@ -300,7 +338,7 @@ namespace TANG
 		baseImageInfo.width = width;
 		baseImageInfo.height = height;
 		baseImageInfo.format = VK_FORMAT_R32G32B32A32_SFLOAT;
-		baseImageInfo.usage = VK_IMAGE_USAGE_STORAGE_BIT;
+		baseImageInfo.usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 		baseImageInfo.mipLevels = CONFIG::BloomMaxMips;
 		baseImageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 		baseImageInfo.generateMipMaps = false;

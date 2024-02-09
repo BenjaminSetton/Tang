@@ -237,7 +237,7 @@ namespace TANG
 		CalculateSkyboxCubemap(cmdBuffer, cubemap);
 
 		// Copy the skybox cubemap over to the mipped texture and generate the mip maps
-		skyboxCubemapMipped.CopyFromTexture(cmdBuffer, &skyboxCubemap, 1);
+		skyboxCubemapMipped.CopyFromTexture(cmdBuffer, &skyboxCubemap, 0, 1);
 		skyboxCubemapMipped.GenerateMipmaps(cmdBuffer, CONFIG::PrefilterMapMaxMips);
 
 		// Update the descriptor sets using the skybox cubemap after it's layout has been transitioned, including
