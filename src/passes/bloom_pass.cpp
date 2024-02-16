@@ -56,6 +56,15 @@ namespace TANG
 				bloomUpscalingWriteDescSets.AddImage(bloomUpscalingDescriptorSets[i][j].GetDescriptorSet(), 2, &bloomUpscalingTexture  , VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, maxMipIndex - j - 1);	// Output image
 				bloomUpscalingDescriptorSets[i][j].Update(bloomUpscalingWriteDescSets);
 			}
+
+			// Bloom composition
+			{
+				WriteDescriptorSets bloomCompositionWriteDescSets(0, 2);
+				bloomCompositionWriteDescSets.AddImage(bloomCompositionDescriptorSets[i].GetDescriptorSet(), 0, &bloomUpscalingTexture, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0);	// Input bloom texture
+				// Binding 2 - Input scene texture, updated before composition pass
+				bloomCompositionWriteDescSets.AddImage(bloomCompositionDescriptorSets[i].GetDescriptorSet(), 2, &bloomCompositionTexture, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 0);	// Output image
+				bloomCompositionDescriptorSets[i].Update(bloomCompositionWriteDescSets);
+			}
 		}
 
 		wasCreated = true;
@@ -63,16 +72,18 @@ namespace TANG
 
 	void BloomPass::Destroy()
 	{
+		bloomCompositionPipeline.Destroy();
 		bloomUpscalingPipeline.Destroy();
 		bloomDownscalingPipeline.Destroy();
+		bloomPrefilterPipeline.Destroy();
 
+		bloomCompositionTexture.Destroy();
 		bloomUpscalingTexture.Destroy();
 		bloomDownscalingTexture.Destroy();
 
+		bloomCompositionSetLayoutCache.DestroyLayouts();
 		bloomUpscalingSetLayoutCache.DestroyLayouts();
 		bloomDownscalingSetLayoutCache.DestroyLayouts();
-
-		bloomPrefilterPipeline.Destroy();
 		bloomPrefilterSetLayoutCache.DestroyLayouts();
 	}
 
@@ -106,7 +117,7 @@ namespace TANG
 		);
 
 		// The starting width and height are actually mip level 1 because of how we set up the descriptor sets
-		DownscaleTexture(cmdBuffer, currentFrame, bloomDownscalingTexture.GetWidth(), bloomDownscalingTexture.GetHeight());
+		DownscaleTexture(cmdBuffer, currentFrame);
 
 		// Finish writing to the last mip before we use it as input for upscaling
 		bloomDownscalingTexture.InsertPipelineBarrier(cmdBuffer,
@@ -134,7 +145,15 @@ namespace TANG
 		);
 
 		// The first mip we output to is actually the second to last mip, since we copied the last mip directly from the downsample texture
-		UpscaleTexture(cmdBuffer, currentFrame, bloomUpscalingTexture.GetWidth() >> (CONFIG::BloomMaxMips - 2), bloomUpscalingTexture.GetHeight() >> (CONFIG::BloomMaxMips - 2));
+		UpscaleTexture(cmdBuffer, currentFrame);
+
+		// Pipeline barrier to sync mip 0 of the upscale texture is inserted during upscale pass; no extra synchronization needed here
+		PerformComposition(cmdBuffer, currentFrame, inputTexture);
+	}
+
+	const TextureResource* BloomPass::GetOutputTexture() const
+	{
+		return &bloomCompositionTexture;
 	}
 
 	void BloomPass::PrefilterInputTexture(CommandBuffer* cmdBuffer, uint32_t currentFrame, TextureResource* inputTexture)
@@ -157,12 +176,45 @@ namespace TANG
 		cmdBuffer->CMD_Dispatch(static_cast<uint32_t>(ceil(numDispatchesX / 16.0)), static_cast<uint32_t>(ceil(numDispatchesY / 16.0)), 1);
 	}
 
-	void BloomPass::UpscaleTexture(CommandBuffer* cmdBuffer, uint32_t currentFrame, uint32_t startingWidth, uint32_t startingHeight)
+	void BloomPass::DownscaleTexture(CommandBuffer* cmdBuffer, uint32_t currentFrame)
+	{
+		cmdBuffer->CMD_BindPipeline(&bloomDownscalingPipeline);
+
+		float currentWidth = bloomDownscalingTexture.GetWidth() / 2.0f;
+		float currentHeight = bloomDownscalingTexture.GetHeight() / 2.0f;
+		for (uint32_t mipLevel = 1; mipLevel < CONFIG::BloomMaxMips; mipLevel++)
+		{
+			//float enableKarisAverage = mipLevel == 1 ? 1.0f : 0.0f;
+			float enableKarisAverage = 0.0f;
+			cmdBuffer->CMD_BindDescriptorSets(&bloomDownscalingPipeline, 1, reinterpret_cast<VkDescriptorSet*>(&bloomDownscalingDescriptorSets[currentFrame][mipLevel - 1]));
+			cmdBuffer->CMD_PushConstants(&bloomDownscalingPipeline, static_cast<void*>(&enableKarisAverage), sizeof(enableKarisAverage), VK_SHADER_STAGE_COMPUTE_BIT);
+
+			// Finish writing to mip N - 1 before we can read from it
+			bloomDownscalingTexture.InsertPipelineBarrier(cmdBuffer,
+				VK_ACCESS_SHADER_WRITE_BIT,
+				VK_ACCESS_SHADER_READ_BIT,
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+				mipLevel - 1,
+				1
+			);
+
+			// Dispatch as many work groups as the first mip level of the input texture, divided by the number of invocations (local_size in compute shader)
+			// We starting sampling from mip level 0 (N - 1) and write to mip level 1 (N), all the way down to N = CONFIG::BloomMaxMips
+			cmdBuffer->CMD_Dispatch(static_cast<uint32_t>(ceil(currentWidth / 16.0f)), static_cast<uint32_t>(ceil(currentHeight / 16.0f)), 1);
+
+			// Go down a mip level
+			currentWidth /= 2.0f;
+			currentHeight /= 2.0f;
+		}
+	}
+
+	void BloomPass::UpscaleTexture(CommandBuffer* cmdBuffer, uint32_t currentFrame)
 	{
 		cmdBuffer->CMD_BindPipeline(&bloomUpscalingPipeline);
 
-		uint32_t currentWidth = startingWidth;
-		uint32_t currentHeight = startingHeight;
+		float currentWidth = bloomUpscalingTexture.GetWidth() / powf(2.0f, (CONFIG::BloomMaxMips - 2));
+		float currentHeight = bloomUpscalingTexture.GetHeight() / powf(2.0f, (CONFIG::BloomMaxMips - 2));
 
 		for (uint32_t i = 0; i < CONFIG::BloomMaxMips - 1; i++)
 		{
@@ -170,7 +222,7 @@ namespace TANG
 
 			// Dispatch as many work groups as the first mip level of the input texture, divided by the number of invocations (local_size in compute shader)
 			// We starting sampling from mip level 0 (N - 1) and write to mip level 1 (N), all the way down to N = CONFIG::BloomMaxMips
-			cmdBuffer->CMD_Dispatch(static_cast<uint32_t>(ceil(currentWidth / 16.0)), static_cast<uint32_t>(ceil(currentHeight / 16.0)), 1);
+			cmdBuffer->CMD_Dispatch(static_cast<uint32_t>(ceil(currentWidth / 16.0f)), static_cast<uint32_t>(ceil(currentHeight / 16.0f)), 1);
 
 			bloomUpscalingTexture.InsertPipelineBarrier(cmdBuffer,
 				VK_ACCESS_SHADER_WRITE_BIT,
@@ -182,39 +234,39 @@ namespace TANG
 			);
 
 			// Go up a mip level
-			currentWidth <<= 1;
-			currentHeight <<= 1;
+			currentWidth *= 2.0f;
+			currentHeight *= 2.0f;
 		}
 	}
 
-	void BloomPass::DownscaleTexture(CommandBuffer* cmdBuffer, uint32_t currentFrame, uint32_t startingWidth, uint32_t startingHeight)
+	void BloomPass::PerformComposition(CommandBuffer* cmdBuffer, uint32_t currentFrame, TextureResource* inputTexture)
 	{
-		cmdBuffer->CMD_BindPipeline(&bloomDownscalingPipeline);
-
-		uint32_t currentWidth = startingWidth;
-		uint32_t currentHeight = startingHeight;
-		for (uint32_t mipLevel = 1; mipLevel < CONFIG::BloomMaxMips; mipLevel++)
+		// Update descriptor set with current input scene texture on binding 2
 		{
-			cmdBuffer->CMD_BindDescriptorSets(&bloomDownscalingPipeline, 1, reinterpret_cast<VkDescriptorSet*>(&bloomDownscalingDescriptorSets[currentFrame][mipLevel - 1]));
-
-			// Finish writing to mip N - 1 before we can read from it
-			bloomDownscalingTexture.InsertPipelineBarrier(cmdBuffer,
-				VK_ACCESS_SHADER_WRITE_BIT,
-				VK_ACCESS_SHADER_READ_BIT,
-				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-				mipLevel - 1, 
-				1
-			);
-
-			// Dispatch as many work groups as the first mip level of the input texture, divided by the number of invocations (local_size in compute shader)
-			// We starting sampling from mip level 0 (N - 1) and write to mip level 1 (N), all the way down to N = CONFIG::BloomMaxMips
-			cmdBuffer->CMD_Dispatch(static_cast<uint32_t>(ceil(currentWidth / 16.0)), static_cast<uint32_t>(ceil(currentHeight / 16.0)), 1);
-
-			// Go down a mip level
-			currentWidth >>= 1;
-			currentHeight >>= 1;
+			WriteDescriptorSets bloomCompositionWriteDescSets(0, 1);
+			bloomCompositionWriteDescSets.AddImage(bloomCompositionDescriptorSets[currentFrame].GetDescriptorSet(), 1, inputTexture, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0);	// Input bloom texture
+			bloomCompositionDescriptorSets[currentFrame].Update(bloomCompositionWriteDescSets);
 		}
+
+		cmdBuffer->CMD_BindPipeline(&bloomCompositionPipeline);
+
+		float bloomIntensity = CONFIG::BloomIntensity;
+		cmdBuffer->CMD_PushConstants(&bloomDownscalingPipeline, static_cast<void*>(&bloomIntensity), sizeof(bloomIntensity), VK_SHADER_STAGE_COMPUTE_BIT);
+		cmdBuffer->CMD_BindDescriptorSets(&bloomCompositionPipeline, 1, reinterpret_cast<VkDescriptorSet*>(&bloomCompositionDescriptorSets[currentFrame]));
+
+		// Dispatch as many work groups as the first mip level of the input texture, divided by the number of invocations (local_size in compute shader)
+		uint32_t x = bloomCompositionTexture.GetWidth();
+		uint32_t y = bloomCompositionTexture.GetHeight();
+		cmdBuffer->CMD_Dispatch(static_cast<uint32_t>(ceil(x / 32.0)), static_cast<uint32_t>(ceil(y / 32.0)), 1);
+
+		bloomCompositionTexture.InsertPipelineBarrier(cmdBuffer,
+			VK_ACCESS_SHADER_WRITE_BIT,
+			VK_ACCESS_SHADER_READ_BIT,
+			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+			0,
+			1
+		);
 	}
 
 	void BloomPass::CreatePipelines()
@@ -230,6 +282,10 @@ namespace TANG
 		// Bloom upscaling
 		bloomUpscalingPipeline.SetData(&bloomUpscalingSetLayoutCache);
 		bloomUpscalingPipeline.Create();
+
+		// Bloom composition
+		bloomCompositionPipeline.SetData(&bloomCompositionSetLayoutCache);
+		bloomCompositionPipeline.Create();
 	}
 
 	void BloomPass::CreateSetLayoutCaches()
@@ -257,6 +313,15 @@ namespace TANG
 			volatileLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT);	// Input current downscale mip (direct sample)
 			volatileLayout.AddBinding(2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT);	// Output image (writeonly)
 			bloomUpscalingSetLayoutCache.CreateSetLayout(volatileLayout, 0);
+		}
+
+		// Bloom composition
+		{
+			SetLayoutSummary volatileLayout(0);
+			volatileLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT);	// Input upscaled bloom texture (sampler2D)
+			volatileLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT);	// Input scene texture (sampler2D)
+			volatileLayout.AddBinding(2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT);			// Output image (writeonly)
+			bloomCompositionSetLayoutCache.CreateSetLayout(volatileLayout, 0);
 		}
 	}
 
@@ -330,6 +395,27 @@ namespace TANG
 				}
 			}
 		}
+
+		// Bloom composition
+		{
+			if (bloomCompositionSetLayoutCache.GetLayoutCount() != 1)
+			{
+				LogError("Failed to create bloom composition pass descriptor sets, too many layouts! Expected (%u) vs. actual (%u)", 1, bloomCompositionSetLayoutCache.GetLayoutCount());
+				return;
+			}
+
+			std::optional<DescriptorSetLayout> bloomCompositionSetLayout = bloomCompositionSetLayoutCache.GetSetLayout(0);
+			if (!bloomCompositionSetLayout.has_value())
+			{
+				LogError("Failed to create bloom composition descriptor sets! Descriptor set layout is null");
+				return;
+			}
+
+			for (uint32_t i = 0; i < CONFIG::MaxFramesInFlight; i++)
+			{
+				bloomCompositionDescriptorSets[i].Create(*descriptorPool, bloomCompositionSetLayout.value());
+			}
+		}
 	}
 
 	void BloomPass::CreateTextures(uint32_t width, uint32_t height)
@@ -338,7 +424,7 @@ namespace TANG
 		baseImageInfo.width = width;
 		baseImageInfo.height = height;
 		baseImageInfo.format = VK_FORMAT_R32G32B32A32_SFLOAT;
-		baseImageInfo.usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+		baseImageInfo.usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 		baseImageInfo.mipLevels = CONFIG::BloomMaxMips;
 		baseImageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 		baseImageInfo.generateMipMaps = false;
@@ -348,18 +434,39 @@ namespace TANG
 		viewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
 		viewCreateInfo.viewScope = ImageViewScope::PER_MIP_LEVEL;
 
+		SamplerCreateInfo samplerCreateInfo{};
+		samplerCreateInfo.addressModeUVW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+		samplerCreateInfo.enableAnisotropicFiltering = false;
+		samplerCreateInfo.maxAnisotropy = 1.0f;
+		samplerCreateInfo.magnificationFilter = VK_FILTER_LINEAR;
+		samplerCreateInfo.minificationFilter = VK_FILTER_LINEAR;
+		samplerCreateInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+
 		// Bloom downscaling
 		{
 			// Transition to general layout. This is required to bind the image views of this texture to the descriptor sets
-			bloomDownscalingTexture.Create(&baseImageInfo, &viewCreateInfo);
+			bloomDownscalingTexture.Create(&baseImageInfo, &viewCreateInfo, nullptr);
 			bloomDownscalingTexture.TransitionLayout_Immediate(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 		}
 
 		// Bloom upscaling
 		{
 			// Transition to general layout. This is required to bind the image views of this texture to the descriptor sets
-			bloomUpscalingTexture.Create(&baseImageInfo, &viewCreateInfo);
+			// Sampler is used during composition pass to upsample to base render resolution before adding it to a direct sample from the scene texture
+			bloomUpscalingTexture.Create(&baseImageInfo, &viewCreateInfo, &samplerCreateInfo);
 			bloomUpscalingTexture.TransitionLayout_Immediate(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+		}
+
+		// Bloom composition
+		{
+			// TODO - We should really be getting the current window size from the window manager because the
+			//        the window could potentially be resized at any point
+			baseImageInfo.width = CONFIG::WindowWidth;
+			baseImageInfo.height = CONFIG::WindowHeight;
+
+			// Sampler is used when updating LDR descriptor set
+			bloomCompositionTexture.Create(&baseImageInfo, &viewCreateInfo, &samplerCreateInfo);
+			bloomCompositionTexture.TransitionLayout_Immediate(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 		}
 	}
 }

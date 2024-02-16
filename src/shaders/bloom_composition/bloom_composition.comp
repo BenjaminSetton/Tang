@@ -1,7 +1,25 @@
 
 #version 450
 
+layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
+
+layout(binding = 0) uniform sampler2D inBloomTexture;
+layout(binding = 1) uniform sampler2D inSceneTexture;
+layout(binding = 2, rgba32f) uniform writeonly image2D outTexture;
+
+layout(push_constant) uniform constants
+{
+	float bloomIntensity;
+} data;
+
 void main()
 {
-	return;
+	ivec2 outImageSize = imageSize(outTexture);
+    vec2 uv = gl_GlobalInvocationID.xy / vec2(outImageSize);
+    
+    vec3 sampledBloom = texture(inBloomTexture, uv).rgb;
+    vec3 sampledScene = texture(inSceneTexture, uv).rgb;
+
+    vec3 finalColor = (sampledBloom * data.bloomIntensity) + sampledScene;
+	imageStore(outTexture, ivec2(gl_GlobalInvocationID.xy), vec4(finalColor, 1.0));
 }

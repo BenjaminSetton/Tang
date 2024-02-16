@@ -1754,7 +1754,6 @@ namespace TANG
 		imageInfo.arrayLayers = 1;
 		imageInfo.flags = 0;
 
-		// Maybe used for post-processing? Not sure yet
 		samplerInfo.addressModeUVW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
 		samplerInfo.magnificationFilter = VK_FILTER_LINEAR;
 		samplerInfo.minificationFilter = VK_FILTER_LINEAR;
@@ -1954,7 +1953,7 @@ namespace TANG
 
 		// Update view matrix + camera data descriptor set
 		WriteDescriptorSets writeDescSets(1, 1);
-		writeDescSets.AddImage(descSet.GetDescriptorSet(), 0, &frameData->hdrAttachment, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0);
+		writeDescSets.AddImage(descSet.GetDescriptorSet(), 0, bloomPass.GetOutputTexture(), VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0);
 		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 1, &frameData->ldrCameraDataUBO);
 		descSet.Update(writeDescSets);
 	}

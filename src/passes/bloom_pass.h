@@ -5,8 +5,9 @@
 
 #include "../config.h"
 #include "../descriptors/descriptor_set.h"
-#include "../pipelines/bloom_prefilter_pipeline.h"
+#include "../pipelines/bloom_composition_pipeline.h"
 #include "../pipelines/bloom_downscaling_pipeline.h"
+#include "../pipelines/bloom_prefilter_pipeline.h"
 #include "../pipelines/bloom_upscaling_pipeline.h"
 #include "base_pass.h"
 
@@ -38,11 +39,14 @@ namespace TANG
 		// SRC_OPTIMAL to copy mip level 0 to the downscale texture resource
 		void Draw(uint32_t currentFrame, CommandBuffer* cmdBuffer, TextureResource* inputTexture);
 
+		const TextureResource* GetOutputTexture() const;
+
 	private:
 
 		void PrefilterInputTexture(CommandBuffer* cmdBuffer, uint32_t currentFrame, TextureResource* inputTexture);
-		void DownscaleTexture(CommandBuffer* cmdBuffer, uint32_t currentFrame, uint32_t startingWidth, uint32_t startingHeight);
-		void UpscaleTexture(CommandBuffer* cmdBuffer, uint32_t currentFrame, uint32_t startingWidth, uint32_t startingHeight);
+		void DownscaleTexture(CommandBuffer* cmdBuffer, uint32_t currentFrame);
+		void UpscaleTexture(CommandBuffer* cmdBuffer, uint32_t currentFrame);
+		void PerformComposition(CommandBuffer* cmdBuffer, uint32_t currentFrame, TextureResource* inputTexture);
 
 		void CreatePipelines();
 		void CreateSetLayoutCaches();
@@ -63,6 +67,11 @@ namespace TANG
 		TextureResource bloomUpscalingTexture;
 		SetLayoutCache bloomUpscalingSetLayoutCache;
 		std::array<std::array<DescriptorSet, CONFIG::BloomMaxMips - 1>, CONFIG::MaxFramesInFlight> bloomUpscalingDescriptorSets;
+
+		BloomCompositionPipeline bloomCompositionPipeline;
+		TextureResource bloomCompositionTexture;
+		SetLayoutCache bloomCompositionSetLayoutCache;
+		std::array<DescriptorSet, CONFIG::MaxFramesInFlight> bloomCompositionDescriptorSets;
 
 		bool wasCreated;
 	};

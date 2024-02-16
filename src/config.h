@@ -18,8 +18,9 @@ namespace TANG
 		static const uint32_t PrefilterMapMaxMips = 5; // Ensure 2 to the power of this value does not exceed PrefilterMapSize above, and ensure it matches MAX_REFLECTION_LOD in the PBR shader!
 		static const uint32_t BRDFConvolutionMapSize = 512;
 
-		static const float BloomBrightnessThreshold = 1.0f;
+		static const float BloomBrightnessThreshold = 10.0f;
 		static const uint32_t BloomMaxMips = 6;
+		static const float BloomIntensity = 1.0f;
 
 		static const uint32_t MaxFramesInFlight = 2;
 		static const uint32_t MaxAssetCount = 100;

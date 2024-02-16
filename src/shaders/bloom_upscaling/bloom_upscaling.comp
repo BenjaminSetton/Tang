@@ -9,7 +9,7 @@ layout(binding = 2, rgba32f) uniform writeonly image2D outTexture;
 
 // Returns a bilinearly-filtered sample at the specified texel position (UV), weighted
 // according to the kernel and offset in some direction
-vec3 Filter3x3(uvec2 texel, uint[9] kernel, uint kernelWeight)
+vec3 Filter3x3(uvec2 texel, float[9] kernel, float kernelWeight)
 {
 	vec4 result  = imageLoad(inPrevUpscaledTexture, ivec2(texel + uvec2(-1, -1))) * kernel[0]; // top left
 		 result += imageLoad(inPrevUpscaledTexture, ivec2(texel + uvec2( 0, -1))) * kernel[1]; // top center
@@ -45,13 +45,13 @@ void main()
 	uvec2 upper = gl_GlobalInvocationID.xy;
 	uvec2 lower = upper >> 1;
 
-	uint[9] kernel;
-	kernel[0] = 1; kernel[1] = 2; kernel[2] = 1;
-	kernel[3] = 2; kernel[4] = 4; kernel[5] = 2;
-	kernel[6] = 1; kernel[7] = 2; kernel[8] = 1;
+	float[9] kernel;
+	kernel[0] = 1.0; kernel[1] = 2.0; kernel[2] = 1.0;
+	kernel[3] = 2.0; kernel[4] = 4.0; kernel[5] = 2.0;
+	kernel[6] = 1.0; kernel[7] = 2.0; kernel[8] = 1.0;
 
 	vec3 directSample = imageLoad(inDownscaledTexture, ivec2(upper)).rgb;
-	vec3 filterSample = Filter3x3(lower, kernel, 16);
+	vec3 filterSample = Filter3x3(lower, kernel, 16.0);
 
-	imageStore(outTexture, ivec2(upper), vec4(filterSample, 1.0));
+	imageStore(outTexture, ivec2(upper), vec4(filterSample + directSample, 1.0));
 }

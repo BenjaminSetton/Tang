@@ -1,45 +1,72 @@
 
 #version 450
 
+#include "hdr_utility.glsl"
+
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
 layout(binding = 0, rgba32f) uniform readonly image2D inTexture;
 layout(binding = 1, rgba32f) uniform writeonly image2D outTexture;
 
+layout(push_constant) uniform constants
+{
+	float enableKarisAverage; // Set to either 1.0 or 0.0; no in-between
+} data;
+
 // Returns a bilinearly-filtered sample at the specified texel position (UV), weighted
 // according to the kernel and offset in some direction
-vec3 BilinearSample(uvec2 uv, vec4 kernel, vec2 offset)
+vec3 BilinearSample(uvec2 uv, ivec2 offset)
 {
-	vec2 uvf = vec2(uv);
+	ivec2 uv_i = ivec2(uv);
 
-	vec4 result  = imageLoad(inTexture, ivec2(uvf + vec2(-1.0, -1.0) + offset)) * kernel.x; // top left
-	     result += imageLoad(inTexture, ivec2(uvf + vec2( 1.0, -1.0) + offset)) * kernel.y; // top right
-	     result += imageLoad(inTexture, ivec2(uvf + vec2(-1.0,  1.0) + offset)) * kernel.z; // bottom left
-	     result += imageLoad(inTexture, ivec2(uvf + vec2( 1.0,  1.0) + offset)) * kernel.w; // bottom right
-	
-	return result.rgb;
+	vec3 TL = imageLoad(inTexture, uv_i + ivec2(-1.0, -1.0) + offset).rgb; // top left
+	vec3 TR = imageLoad(inTexture, uv_i + ivec2( 1.0, -1.0) + offset).rgb; // top right
+	vec3 BL = imageLoad(inTexture, uv_i + ivec2(-1.0,  1.0) + offset).rgb; // bottom left
+	vec3 BR = imageLoad(inTexture, uv_i + ivec2( 1.0,  1.0) + offset).rgb; // bottom right
+
+	// Calculate the Karis average on the H(4x4) box
+	// Refer to: http://graphicrants.blogspot.com/2013/12/tone-mapping.html
+	float weightSum;
+	weightSum  = 1.0 / (1.0 + Luma(TL));
+	weightSum += 1.0 / (1.0 + Luma(TR));
+	weightSum += 1.0 / (1.0 + Luma(BL));
+	weightSum += 1.0 / (1.0 + Luma(BR));
+
+	vec3 sampleSum = (TL + TR + BL + BR);
+
+	// We want to perform two things in this shader:
+	// 1) Karis average on first downsample pass (mip0 -> mip1)
+	// 2) Regular downsample blur on all subsequent downsample passes (mip1 -> onwards)
+	//
+	// Perform branchless sum between Karis average and regular bilinear sample. Not sure
+	// how performant this is over a simple branch considering we're calculating the weights
+	// every time regardless of whether we calculate the Karis average or not...
+	//
+	return data.enableKarisAverage         * ((sampleSum / weightSum) * 0.25) +
+		   (1.0 - data.enableKarisAverage) * (sampleSum * 0.25);
 }
 
 //
 // Bloom implementation based on CoD Advanced Warfare:
 // https://www.iryoku.com/next-generation-post-processing-in-call-of-duty-advanced-warfare/
 //
-// TODO - Karis Average on the first downsample pass. This is done to reduce firefly artifacts
 void main()
 {
-	uvec2 upper = gl_GlobalInvocationID.xy;
-	uvec2 lower = upper >> 1;
+	ivec2 upperImageSize = imageSize(inTexture);
+	ivec2 lowerImageSize = imageSize(outTexture);
 
-	// Specifies the weight for each sample
-	vec4 kernel = vec4(0.25);
+	uvec2 lower = gl_GlobalInvocationID.xy;
+	vec2 uv = vec2(lower / vec2(lowerImageSize));
+
+	uvec2 upper = uvec2(upperImageSize * uv);
 
 	// These bilinear samples are weighted according to their offset. The central sample is the most important,
 	// receiving a weight of 0.5 while the other 4 samples receive a weight of 0.125
-	vec3 sampleAverage  = BilinearSample(upper, kernel, vec2( 0.0,  0.0)) * 0.5  ; // central sample (no offset)
-	     sampleAverage += BilinearSample(upper, kernel, vec2(-1.0, -1.0)) * 0.125; // top-left sample
-	     sampleAverage += BilinearSample(upper, kernel, vec2( 1.0, -1.0)) * 0.125; // top-right sample
-	     sampleAverage += BilinearSample(upper, kernel, vec2(-1.0,  1.0)) * 0.125; // bottom-left sample
-		 sampleAverage += BilinearSample(upper, kernel, vec2( 1.0,  1.0)) * 0.125; // bottom-right sample
+	vec3 sampleAverage  = BilinearSample(upper, ivec2( 0.0,  0.0)) * 0.5  ; // central sample (no offset)
+	     sampleAverage += BilinearSample(upper, ivec2(-1.0, -1.0)) * 0.125; // top-left sample
+	     sampleAverage += BilinearSample(upper, ivec2( 1.0, -1.0)) * 0.125; // top-right sample
+	     sampleAverage += BilinearSample(upper, ivec2(-1.0,  1.0)) * 0.125; // bottom-left sample
+		 sampleAverage += BilinearSample(upper, ivec2( 1.0,  1.0)) * 0.125; // bottom-right sample
 
 	imageStore(outTexture, ivec2(lower), vec4(sampleAverage, 1.0));
 }
