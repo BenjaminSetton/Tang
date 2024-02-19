@@ -194,7 +194,7 @@ namespace TANG
 	{
 		if (viewIndex < 0 || viewIndex >= imageViews.size())
 		{
-			LogWarning("Image view index out of range!");
+			LogError("Image view index out of range!");
 			return VK_NULL_HANDLE;
 		}
 

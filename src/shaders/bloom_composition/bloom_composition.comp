@@ -9,7 +9,7 @@ layout(binding = 2, rgba32f) uniform writeonly image2D outTexture;
 
 layout(push_constant) uniform constants
 {
-	float bloomIntensity;
+	vec2 bloomData; // x: bloom intensity, y: bloom mix percentage
 } data;
 
 void main()
@@ -17,9 +17,9 @@ void main()
 	ivec2 outImageSize = imageSize(outTexture);
     vec2 uv = gl_GlobalInvocationID.xy / vec2(outImageSize);
     
-    vec3 sampledBloom = texture(inBloomTexture, uv).rgb;
-    vec3 sampledScene = texture(inSceneTexture, uv).rgb;
+    vec3 bloomSample = texture(inBloomTexture, uv).rgb * data.bloomData.x;
+    vec3 sceneSample = texture(inSceneTexture, uv).rgb;
 
-    vec3 finalColor = (sampledBloom * data.bloomIntensity) + sampledScene;
+    vec3 finalColor = mix(sceneSample, bloomSample, data.bloomData.y);
 	imageStore(outTexture, ivec2(gl_GlobalInvocationID.xy), vec4(finalColor, 1.0));
 }

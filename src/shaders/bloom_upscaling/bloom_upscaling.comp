@@ -7,19 +7,29 @@ layout(binding = 0, rgba32f) uniform readonly image2D inPrevUpscaledTexture;
 layout(binding = 1, rgba32f) uniform readonly image2D inDownscaledTexture;
 layout(binding = 2, rgba32f) uniform writeonly image2D outTexture;
 
+layout(push_constant) uniform constants
+{
+	float filterRadius;
+} data;
+
 // Returns a bilinearly-filtered sample at the specified texel position (UV), weighted
 // according to the kernel and offset in some direction
 vec3 Filter3x3(uvec2 texel, float[9] kernel, float kernelWeight)
 {
-	vec4 result  = imageLoad(inPrevUpscaledTexture, ivec2(texel + uvec2(-1, -1))) * kernel[0]; // top left
-		 result += imageLoad(inPrevUpscaledTexture, ivec2(texel + uvec2( 0, -1))) * kernel[1]; // top center
-		 result += imageLoad(inPrevUpscaledTexture, ivec2(texel + uvec2( 1, -1))) * kernel[2]; // top right
-		 result += imageLoad(inPrevUpscaledTexture, ivec2(texel + uvec2(-1,  0))) * kernel[3]; // middle left
-		 result += imageLoad(inPrevUpscaledTexture, ivec2(texel + uvec2( 0,  0))) * kernel[4]; // middle center
-		 result += imageLoad(inPrevUpscaledTexture, ivec2(texel + uvec2( 1,  0))) * kernel[5]; // middle right
-		 result += imageLoad(inPrevUpscaledTexture, ivec2(texel + uvec2(-1,  1))) * kernel[6]; // bottom left
-		 result += imageLoad(inPrevUpscaledTexture, ivec2(texel + uvec2( 0,  1))) * kernel[7]; // bottom center
-		 result += imageLoad(inPrevUpscaledTexture, ivec2(texel + uvec2( 1,  1))) * kernel[8]; // bottom right
+	// Convert the filter radius to integer coordinates from UV
+	ivec2 radius = ivec2(vec2(imageSize(inPrevUpscaledTexture)) * data.filterRadius);
+
+	vec4 result  = imageLoad(inPrevUpscaledTexture, ivec2(texel) + ivec2(-1, -1) + ivec2(-radius.x,  radius.y)) * kernel[0]; // top left
+		 result += imageLoad(inPrevUpscaledTexture, ivec2(texel) + ivec2( 0, -1) + ivec2(        0,  radius.y)) * kernel[1]; // top center
+		 result += imageLoad(inPrevUpscaledTexture, ivec2(texel) + ivec2( 1, -1) + ivec2( radius.x,  radius.y)) * kernel[2]; // top right
+
+		 result += imageLoad(inPrevUpscaledTexture, ivec2(texel) + ivec2(-1,  0) + ivec2(-radius.x,         0)) * kernel[3]; // middle left
+		 result += imageLoad(inPrevUpscaledTexture, ivec2(texel) + ivec2( 0,  0) + ivec2(        0,         0)) * kernel[4]; // middle center
+		 result += imageLoad(inPrevUpscaledTexture, ivec2(texel) + ivec2( 1,  0) + ivec2( radius.x,         0)) * kernel[5]; // middle right
+
+		 result += imageLoad(inPrevUpscaledTexture, ivec2(texel) + ivec2(-1,  1) + ivec2(-radius.x, -radius.y)) * kernel[6]; // bottom left
+		 result += imageLoad(inPrevUpscaledTexture, ivec2(texel) + ivec2( 0,  1) + ivec2(        0, -radius.y)) * kernel[7]; // bottom center
+		 result += imageLoad(inPrevUpscaledTexture, ivec2(texel) + ivec2( 1,  1) + ivec2( radius.x, -radius.y)) * kernel[8]; // bottom right
 
 	return result.rgb / kernelWeight;
 }

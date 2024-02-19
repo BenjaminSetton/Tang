@@ -42,7 +42,7 @@ namespace TANG
 		// Enable Karis average
 		VkPushConstantRange pushConstant{};
 		pushConstant.offset = 0;
-		pushConstant.size = sizeof(float);
+		pushConstant.size = sizeof(uint32_t);
 		pushConstant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
 		VkPipelineLayoutCreateInfo pipelineLayoutInfo = PopulatePipelineLayoutCreateInfo(setLayoutArray.data(), static_cast<uint32_t>(setLayoutArray.size()), &pushConstant, 1);

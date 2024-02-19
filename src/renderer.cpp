@@ -1748,7 +1748,7 @@ namespace TANG
 		imageInfo.width = swapChainExtent.width;
 		imageInfo.height = swapChainExtent.height;
 		imageInfo.format = VK_FORMAT_R32G32B32A32_SFLOAT;
-		imageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+		imageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
 		imageInfo.mipLevels = 1;
 		imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 		imageInfo.arrayLayers = 1;

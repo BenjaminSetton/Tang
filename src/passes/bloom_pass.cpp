@@ -36,12 +36,13 @@ namespace TANG
 		// Update the descriptor sets with the downscaling image view for every mip level. We're reusing the images so we can update the desc sets only once
 		for (uint32_t i = 0; i < CONFIG::MaxFramesInFlight; i++)
 		{
-			// Bloom downscaling
-			for (uint32_t j = 0; j < CONFIG::BloomMaxMips - 1; j++)
+			// Bloom downscaling 
+			// NOTE - descriptors on first iteration are updated BEFORE starting downscaling pass, since we need to use the input texture and write to mip 0
+			for (uint32_t j = 1; j < CONFIG::BloomMaxMips - 1; j++)
 			{
 				WriteDescriptorSets bloomDownsamplingWriteDescSets(0, 2);
-				bloomDownsamplingWriteDescSets.AddImage(bloomDownscalingDescriptorSets[i][j].GetDescriptorSet(), 0, &bloomDownscalingTexture, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, j);	// Input image
-				bloomDownsamplingWriteDescSets.AddImage(bloomDownscalingDescriptorSets[i][j].GetDescriptorSet(), 1, &bloomDownscalingTexture, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, j + 1);	// Output image
+				bloomDownsamplingWriteDescSets.AddImage(bloomDownscalingDescriptorSets[i][j].GetDescriptorSet(), 0, &bloomDownscalingTexture, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, j - 1);	// Input image
+				bloomDownsamplingWriteDescSets.AddImage(bloomDownscalingDescriptorSets[i][j].GetDescriptorSet(), 1, &bloomDownscalingTexture, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, j);	// Output image
 				bloomDownscalingDescriptorSets[i][j].Update(bloomDownsamplingWriteDescSets);
 
 			}
@@ -75,7 +76,6 @@ namespace TANG
 		bloomCompositionPipeline.Destroy();
 		bloomUpscalingPipeline.Destroy();
 		bloomDownscalingPipeline.Destroy();
-		bloomPrefilterPipeline.Destroy();
 
 		bloomCompositionTexture.Destroy();
 		bloomUpscalingTexture.Destroy();
@@ -84,7 +84,6 @@ namespace TANG
 		bloomCompositionSetLayoutCache.DestroyLayouts();
 		bloomUpscalingSetLayoutCache.DestroyLayouts();
 		bloomDownscalingSetLayoutCache.DestroyLayouts();
-		bloomPrefilterSetLayoutCache.DestroyLayouts();
 	}
 
 	void BloomPass::Draw(uint32_t currentFrame, CommandBuffer* cmdBuffer, TextureResource* inputTexture)
@@ -105,16 +104,24 @@ namespace TANG
 			return;
 		}
 
-		PrefilterInputTexture(cmdBuffer, currentFrame, inputTexture);
-
-		bloomDownscalingTexture.InsertPipelineBarrier(cmdBuffer,
-			VK_ACCESS_SHADER_WRITE_BIT,
+		VkImageLayout oldLayout = inputTexture->GetLayout();
+		inputTexture->TransitionLayout(cmdBuffer, oldLayout, VK_IMAGE_LAYOUT_GENERAL);
+		inputTexture->InsertPipelineBarrier(cmdBuffer,
+			VK_ACCESS_TRANSFER_WRITE_BIT,
 			VK_ACCESS_SHADER_READ_BIT,
-			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+			VK_PIPELINE_STAGE_TRANSFER_BIT,
 			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
 			0,
-			1
+			inputTexture->GetAllocatedMipLevels()
 		);
+
+		// Update descriptor for first downscale pass to include input texture
+		{
+			WriteDescriptorSets bloomDownsamplingWriteDescSets(0, 2);
+			bloomDownsamplingWriteDescSets.AddImage(bloomDownscalingDescriptorSets[currentFrame][0].GetDescriptorSet(), 0, inputTexture, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 0); // Input image
+			bloomDownsamplingWriteDescSets.AddImage(bloomDownscalingDescriptorSets[currentFrame][0].GetDescriptorSet(), 1, &bloomDownscalingTexture, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 0); // Output image
+			bloomDownscalingDescriptorSets[currentFrame][0].Update(bloomDownsamplingWriteDescSets);
+		}
 
 		// The starting width and height are actually mip level 1 because of how we set up the descriptor sets
 		DownscaleTexture(cmdBuffer, currentFrame);
@@ -149,6 +156,8 @@ namespace TANG
 
 		// Pipeline barrier to sync mip 0 of the upscale texture is inserted during upscale pass; no extra synchronization needed here
 		PerformComposition(cmdBuffer, currentFrame, inputTexture);
+
+		inputTexture->TransitionLayout(cmdBuffer, VK_IMAGE_LAYOUT_GENERAL, oldLayout);
 	}
 
 	const TextureResource* BloomPass::GetOutputTexture() const
@@ -156,38 +165,20 @@ namespace TANG
 		return &bloomCompositionTexture;
 	}
 
-	void BloomPass::PrefilterInputTexture(CommandBuffer* cmdBuffer, uint32_t currentFrame, TextureResource* inputTexture)
-	{
-		uint32_t numDispatchesX = inputTexture->GetWidth() >> 1;
-		uint32_t numDispatchesY = inputTexture->GetHeight() >> 1;
-
-		// Bloom prefilter
-		{
-			WriteDescriptorSets bloomPrefilterWriteDescSets(0, 2);
-			bloomPrefilterWriteDescSets.AddImage(bloomPrefilterDescriptorSets[currentFrame].GetDescriptorSet(), 0, inputTexture, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0);		// Input image
-			bloomPrefilterWriteDescSets.AddImage(bloomPrefilterDescriptorSets[currentFrame].GetDescriptorSet(), 1, &bloomDownscalingTexture, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 0);	// Output image
-			bloomPrefilterDescriptorSets[currentFrame].Update(bloomPrefilterWriteDescSets);
-		}
-
-		float brightnessThreshold = CONFIG::BloomBrightnessThreshold;
-		cmdBuffer->CMD_BindPipeline(&bloomPrefilterPipeline);
-		cmdBuffer->CMD_PushConstants(&bloomPrefilterPipeline, static_cast<void*>(&brightnessThreshold), sizeof(brightnessThreshold), VK_SHADER_STAGE_COMPUTE_BIT);
-		cmdBuffer->CMD_BindDescriptorSets(&bloomPrefilterPipeline, 1, reinterpret_cast<VkDescriptorSet*>(&bloomPrefilterDescriptorSets[currentFrame]));
-		cmdBuffer->CMD_Dispatch(static_cast<uint32_t>(ceil(numDispatchesX / 16.0)), static_cast<uint32_t>(ceil(numDispatchesY / 16.0)), 1);
-	}
-
 	void BloomPass::DownscaleTexture(CommandBuffer* cmdBuffer, uint32_t currentFrame)
 	{
 		cmdBuffer->CMD_BindPipeline(&bloomDownscalingPipeline);
 
-		float currentWidth = bloomDownscalingTexture.GetWidth() / 2.0f;
-		float currentHeight = bloomDownscalingTexture.GetHeight() / 2.0f;
-		for (uint32_t mipLevel = 1; mipLevel < CONFIG::BloomMaxMips; mipLevel++)
+		float currentWidth = static_cast<float>(bloomDownscalingTexture.GetWidth());
+		float currentHeight = static_cast<float>(bloomDownscalingTexture.GetHeight());
+		for (uint32_t mipLevel = 0; mipLevel < CONFIG::BloomMaxMips - 1; mipLevel++)
 		{
-			//float enableKarisAverage = mipLevel == 1 ? 1.0f : 0.0f;
-			float enableKarisAverage = 0.0f;
-			cmdBuffer->CMD_BindDescriptorSets(&bloomDownscalingPipeline, 1, reinterpret_cast<VkDescriptorSet*>(&bloomDownscalingDescriptorSets[currentFrame][mipLevel - 1]));
-			cmdBuffer->CMD_PushConstants(&bloomDownscalingPipeline, static_cast<void*>(&enableKarisAverage), sizeof(enableKarisAverage), VK_SHADER_STAGE_COMPUTE_BIT);
+			cmdBuffer->CMD_BindDescriptorSets(&bloomDownscalingPipeline, 1, reinterpret_cast<VkDescriptorSet*>(&bloomDownscalingDescriptorSets[currentFrame][mipLevel]));
+			cmdBuffer->CMD_PushConstants(&bloomDownscalingPipeline, static_cast<void*>(&mipLevel), sizeof(mipLevel), VK_SHADER_STAGE_COMPUTE_BIT);
+
+			// Dispatch as many work groups as the first mip level of the input texture, divided by the number of invocations (local_size in compute shader)
+			// We starting sampling from mip level 0 (N - 1) and write to mip level 1 (N), all the way down to N = CONFIG::BloomMaxMips
+			cmdBuffer->CMD_Dispatch(static_cast<uint32_t>(ceil(currentWidth / 16.0f)), static_cast<uint32_t>(ceil(currentHeight / 16.0f)), 1);
 
 			// Finish writing to mip N - 1 before we can read from it
 			bloomDownscalingTexture.InsertPipelineBarrier(cmdBuffer,
@@ -195,13 +186,9 @@ namespace TANG
 				VK_ACCESS_SHADER_READ_BIT,
 				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
 				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-				mipLevel - 1,
+				mipLevel,
 				1
 			);
-
-			// Dispatch as many work groups as the first mip level of the input texture, divided by the number of invocations (local_size in compute shader)
-			// We starting sampling from mip level 0 (N - 1) and write to mip level 1 (N), all the way down to N = CONFIG::BloomMaxMips
-			cmdBuffer->CMD_Dispatch(static_cast<uint32_t>(ceil(currentWidth / 16.0f)), static_cast<uint32_t>(ceil(currentHeight / 16.0f)), 1);
 
 			// Go down a mip level
 			currentWidth /= 2.0f;
@@ -216,8 +203,10 @@ namespace TANG
 		float currentWidth = bloomUpscalingTexture.GetWidth() / powf(2.0f, (CONFIG::BloomMaxMips - 2));
 		float currentHeight = bloomUpscalingTexture.GetHeight() / powf(2.0f, (CONFIG::BloomMaxMips - 2));
 
+		float filterRadius = CONFIG::BloomFilterRadius;
 		for (uint32_t i = 0; i < CONFIG::BloomMaxMips - 1; i++)
 		{
+			cmdBuffer->CMD_PushConstants(&bloomDownscalingPipeline, static_cast<void*>(&filterRadius), sizeof(filterRadius), VK_SHADER_STAGE_COMPUTE_BIT);
 			cmdBuffer->CMD_BindDescriptorSets(&bloomUpscalingPipeline, 1, reinterpret_cast<VkDescriptorSet*>(&bloomUpscalingDescriptorSets[currentFrame][i]));
 
 			// Dispatch as many work groups as the first mip level of the input texture, divided by the number of invocations (local_size in compute shader)
@@ -250,8 +239,8 @@ namespace TANG
 
 		cmdBuffer->CMD_BindPipeline(&bloomCompositionPipeline);
 
-		float bloomIntensity = CONFIG::BloomIntensity;
-		cmdBuffer->CMD_PushConstants(&bloomDownscalingPipeline, static_cast<void*>(&bloomIntensity), sizeof(bloomIntensity), VK_SHADER_STAGE_COMPUTE_BIT);
+		glm::vec2 bloomData(CONFIG::BloomIntensity, CONFIG::BloomCompositionWeight); // x: bloom intensity, y: bloom mix percentage
+		cmdBuffer->CMD_PushConstants(&bloomCompositionPipeline, static_cast<void*>(&bloomData), sizeof(bloomData), VK_SHADER_STAGE_COMPUTE_BIT);
 		cmdBuffer->CMD_BindDescriptorSets(&bloomCompositionPipeline, 1, reinterpret_cast<VkDescriptorSet*>(&bloomCompositionDescriptorSets[currentFrame]));
 
 		// Dispatch as many work groups as the first mip level of the input texture, divided by the number of invocations (local_size in compute shader)
@@ -271,10 +260,6 @@ namespace TANG
 
 	void BloomPass::CreatePipelines()
 	{
-		// Bloom prefilter
-		bloomPrefilterPipeline.SetData(&bloomPrefilterSetLayoutCache);
-		bloomPrefilterPipeline.Create();
-
 		// Bloom downscaling
 		bloomDownscalingPipeline.SetData(&bloomDownscalingSetLayoutCache);
 		bloomDownscalingPipeline.Create();
@@ -290,14 +275,6 @@ namespace TANG
 
 	void BloomPass::CreateSetLayoutCaches()
 	{
-		// Bloom prefilter
-		{
-			SetLayoutSummary volatileLayout(0);
-			volatileLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER	, VK_SHADER_STAGE_COMPUTE_BIT);	// Input image (sampler)
-			volatileLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE			, VK_SHADER_STAGE_COMPUTE_BIT);	// Output image (writeonly)
-			bloomPrefilterSetLayoutCache.CreateSetLayout(volatileLayout, 0);
-		}
-
 		// Bloom downscaling
 		{
 			SetLayoutSummary volatileLayout(0);
@@ -327,27 +304,6 @@ namespace TANG
 
 	void BloomPass::CreateDescriptorSets(const DescriptorPool* descriptorPool)
 	{
-		// Bloom prefilter
-		{
-			if (bloomPrefilterSetLayoutCache.GetLayoutCount() != 1)
-			{
-				LogError("Failed to create bloom prefilter pass descriptor sets, too many layouts! Expected (%u) vs. actual (%u)", 1, bloomPrefilterSetLayoutCache.GetLayoutCount());
-				return;
-			}
-
-			std::optional<DescriptorSetLayout> bloomPrefilterSetLayout = bloomPrefilterSetLayoutCache.GetSetLayout(0);
-			if (!bloomPrefilterSetLayout.has_value())
-			{
-				LogError("Failed to create bloom prefilter descriptor sets! Descriptor set layout is null");
-				return;
-			}
-
-			for (uint32_t i = 0; i < CONFIG::MaxFramesInFlight; i++)
-			{
-				bloomPrefilterDescriptorSets[i].Create(*descriptorPool, bloomPrefilterSetLayout.value());
-			}
-		}
-
 		// Bloom downscaling
 		{
 			if (bloomDownscalingSetLayoutCache.GetLayoutCount() != 1)
@@ -365,7 +321,7 @@ namespace TANG
 
 			for (uint32_t i = 0; i < CONFIG::MaxFramesInFlight; i++)
 			{
-				for (uint32_t j = 0; j < CONFIG::BloomMaxMips - 1; j++)
+				for (uint32_t j = 0; j < CONFIG::BloomMaxMips; j++)
 				{
 					bloomDownscalingDescriptorSets[i][j].Create(*descriptorPool, bloomDownscalingSetLayout.value());
 				}
@@ -389,7 +345,7 @@ namespace TANG
 
 			for (uint32_t i = 0; i < CONFIG::MaxFramesInFlight; i++)
 			{
-				for (uint32_t j = 0; j < CONFIG::BloomMaxMips - 1; j++)
+				for (uint32_t j = 0; j < CONFIG::BloomMaxMips; j++)
 				{
 					bloomUpscalingDescriptorSets[i][j].Create(*descriptorPool, bloomUpscalingSetLayout.value());
 				}

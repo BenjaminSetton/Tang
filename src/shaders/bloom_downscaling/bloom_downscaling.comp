@@ -10,7 +10,7 @@ layout(binding = 1, rgba32f) uniform writeonly image2D outTexture;
 
 layout(push_constant) uniform constants
 {
-	float enableKarisAverage; // Set to either 1.0 or 0.0; no in-between
+	uint mipLevel;
 } data;
 
 // Returns a bilinearly-filtered sample at the specified texel position (UV), weighted
@@ -24,26 +24,7 @@ vec3 BilinearSample(uvec2 uv, ivec2 offset)
 	vec3 BL = imageLoad(inTexture, uv_i + ivec2(-1.0,  1.0) + offset).rgb; // bottom left
 	vec3 BR = imageLoad(inTexture, uv_i + ivec2( 1.0,  1.0) + offset).rgb; // bottom right
 
-	// Calculate the Karis average on the H(4x4) box
-	// Refer to: http://graphicrants.blogspot.com/2013/12/tone-mapping.html
-	float weightSum;
-	weightSum  = 1.0 / (1.0 + Luma(TL));
-	weightSum += 1.0 / (1.0 + Luma(TR));
-	weightSum += 1.0 / (1.0 + Luma(BL));
-	weightSum += 1.0 / (1.0 + Luma(BR));
-
-	vec3 sampleSum = (TL + TR + BL + BR);
-
-	// We want to perform two things in this shader:
-	// 1) Karis average on first downsample pass (mip0 -> mip1)
-	// 2) Regular downsample blur on all subsequent downsample passes (mip1 -> onwards)
-	//
-	// Perform branchless sum between Karis average and regular bilinear sample. Not sure
-	// how performant this is over a simple branch considering we're calculating the weights
-	// every time regardless of whether we calculate the Karis average or not...
-	//
-	return data.enableKarisAverage         * ((sampleSum / weightSum) * 0.25) +
-		   (1.0 - data.enableKarisAverage) * (sampleSum * 0.25);
+	return ((TL + TR + BL + BR) * 0.25);
 }
 
 //
@@ -62,11 +43,29 @@ void main()
 
 	// These bilinear samples are weighted according to their offset. The central sample is the most important,
 	// receiving a weight of 0.5 while the other 4 samples receive a weight of 0.125
-	vec3 sampleAverage  = BilinearSample(upper, ivec2( 0.0,  0.0)) * 0.5  ; // central sample (no offset)
-	     sampleAverage += BilinearSample(upper, ivec2(-1.0, -1.0)) * 0.125; // top-left sample
-	     sampleAverage += BilinearSample(upper, ivec2( 1.0, -1.0)) * 0.125; // top-right sample
-	     sampleAverage += BilinearSample(upper, ivec2(-1.0,  1.0)) * 0.125; // bottom-left sample
-		 sampleAverage += BilinearSample(upper, ivec2( 1.0,  1.0)) * 0.125; // bottom-right sample
+	vec3 CTR = BilinearSample(upper, ivec2( 0.0,  0.0)) * 0.5  ; // central sample (no offset)
+	vec3 TL  = BilinearSample(upper, ivec2(-1.0, -1.0)) * 0.125; // top-left sample
+	vec3 TR  = BilinearSample(upper, ivec2( 1.0, -1.0)) * 0.125; // top-right sample
+	vec3 BL  = BilinearSample(upper, ivec2(-1.0,  1.0)) * 0.125; // bottom-left sample
+	vec3 BR  = BilinearSample(upper, ivec2( 1.0,  1.0)) * 0.125; // bottom-right sample
+
+	// Calculate the Karis average on each of the H(4x4) boxes just for mip 0 to mip 1 downscale
+	// Refer to: http://graphicrants.blogspot.com/2013/12/tone-mapping.html
+	switch(data.mipLevel)
+	{
+	case 0:
+		CTR *= 1.0 / (1.0 + (Luma(CTR) * 0.25));
+		TL  *= 1.0 / (1.0 + (Luma(TL ) * 0.25));
+		TR  *= 1.0 / (1.0 + (Luma(TR ) * 0.25));
+		BL  *= 1.0 / (1.0 + (Luma(BL ) * 0.25));
+		BR  *= 1.0 / (1.0 + (Luma(BR ) * 0.25));
+		break;
+	}
+
+	vec3 sampleAverage = (CTR + TL + TR + BL + BR);
+
+	// Clamp value to EPSILON to prevent black pixels from taking over after multiple downscale passes
+	sampleAverage = max(sampleAverage, 0.0001f);
 
 	imageStore(outTexture, ivec2(lower), vec4(sampleAverage, 1.0));
 }

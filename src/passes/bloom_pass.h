@@ -7,7 +7,6 @@
 #include "../descriptors/descriptor_set.h"
 #include "../pipelines/bloom_composition_pipeline.h"
 #include "../pipelines/bloom_downscaling_pipeline.h"
-#include "../pipelines/bloom_prefilter_pipeline.h"
 #include "../pipelines/bloom_upscaling_pipeline.h"
 #include "base_pass.h"
 
@@ -43,7 +42,6 @@ namespace TANG
 
 	private:
 
-		void PrefilterInputTexture(CommandBuffer* cmdBuffer, uint32_t currentFrame, TextureResource* inputTexture);
 		void DownscaleTexture(CommandBuffer* cmdBuffer, uint32_t currentFrame);
 		void UpscaleTexture(CommandBuffer* cmdBuffer, uint32_t currentFrame);
 		void PerformComposition(CommandBuffer* cmdBuffer, uint32_t currentFrame, TextureResource* inputTexture);
@@ -53,20 +51,15 @@ namespace TANG
 		void CreateDescriptorSets(const DescriptorPool* descriptorPool);
 		void CreateTextures(uint32_t width, uint32_t height);
 
-
-		BloomPrefilterPipeline bloomPrefilterPipeline;
-		SetLayoutCache bloomPrefilterSetLayoutCache;
-		std::array<DescriptorSet, CONFIG::MaxFramesInFlight> bloomPrefilterDescriptorSets;
-
 		BloomDownscalingPipeline bloomDownscalingPipeline;
 		TextureResource bloomDownscalingTexture;
 		SetLayoutCache bloomDownscalingSetLayoutCache;
-		std::array<std::array<DescriptorSet, CONFIG::BloomMaxMips - 1>, CONFIG::MaxFramesInFlight> bloomDownscalingDescriptorSets;
+		std::array<std::array<DescriptorSet, CONFIG::BloomMaxMips>, CONFIG::MaxFramesInFlight> bloomDownscalingDescriptorSets;
 
 		BloomUpscalingPipeline bloomUpscalingPipeline;
 		TextureResource bloomUpscalingTexture;
 		SetLayoutCache bloomUpscalingSetLayoutCache;
-		std::array<std::array<DescriptorSet, CONFIG::BloomMaxMips - 1>, CONFIG::MaxFramesInFlight> bloomUpscalingDescriptorSets;
+		std::array<std::array<DescriptorSet, CONFIG::BloomMaxMips>, CONFIG::MaxFramesInFlight> bloomUpscalingDescriptorSets;
 
 		BloomCompositionPipeline bloomCompositionPipeline;
 		TextureResource bloomCompositionTexture;
