@@ -8,7 +8,6 @@
 #include "../pipelines/bloom_composition_pipeline.h"
 #include "../pipelines/bloom_downscaling_pipeline.h"
 #include "../pipelines/bloom_upscaling_pipeline.h"
-#include "base_pass.h"
 
 namespace TANG
 {
@@ -26,8 +25,8 @@ namespace TANG
 
 		BloomPass();
 		~BloomPass();
-		BloomPass(BloomPass&& other) noexcept;
 
+		BloomPass(BloomPass&& other) = delete;
 		BloomPass(const BloomPass& other) = delete;
 		BloomPass& operator=(const BloomPass& other) = delete;
 

@@ -33,37 +33,37 @@ namespace TANG
 	{
 		if (framebuffer != VK_NULL_HANDLE)
 		{
-			LogWarning("Attempting to create a framebuffer twice!");
+			LogError("Attempting to create a framebuffer twice!");
 			return;
 		}
 
 		if (createInfo.attachments.size() == 0)
 		{
-			LogWarning("Attempting to create a framebuffer with no attachments!");
+			LogError("Attempting to create a framebuffer with no attachments!");
 			return;
 		}
 
 		if (createInfo.width == 0 || createInfo.height == 0 || createInfo.layers == 0)
 		{
-			LogWarning("Attempting to create a framebuffer with no width, height or layer count!");
+			LogError("Attempting to create a framebuffer with no width, height or layer count!");
 			return;
 		}
 
 		if (createInfo.renderPass == nullptr)
 		{
-			LogWarning("Attempting to create framebuffer with an invalid render pass. Pointer is null");
+			LogError("Attempting to create framebuffer with an invalid render pass. Pointer is null");
 			return;
 		}
 
 		if (createInfo.imageViewIndices.size() == 0)
 		{
-			LogWarning("Attempting to create framebuffer with no image view indices! Every attachment must have a corresponding image view index");
+			LogError("Attempting to create framebuffer with no image view indices! Every attachment must have a corresponding image view index");
 			return;
 		}
 
 		if (createInfo.attachments.size() != createInfo.imageViewIndices.size())
 		{
-			LogWarning("Attempting to create framebuffer with mismatched attachment and image view index counts! Every attachment must have a corresponding image view index");
+			LogError("Attempting to create framebuffer with mismatched attachment and image view index counts! Every attachment must have a corresponding image view index");
 			return;
 		}
 
@@ -90,6 +90,7 @@ namespace TANG
 		if (vkCreateFramebuffer(GetLogicalDevice(), &framebufferInfo, nullptr, &framebuffer) != VK_SUCCESS)
 		{
 			LogError("Failed to create framebuffer!");
+			return;
 		}
 
 		// Cache the attachments

@@ -1877,6 +1877,7 @@ namespace TANG
 
 			frameData->hdrAttachment.Destroy();
 			frameData->hdrDepthBuffer.Destroy();
+			frameData->hdrFramebuffer.Destroy();
 		}
 
 		for (uint32_t i = 0; i < GetSWIDDSize(); i++)

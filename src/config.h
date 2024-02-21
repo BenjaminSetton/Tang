@@ -21,7 +21,7 @@ namespace TANG
 		static const uint32_t BloomMaxMips = 6;
 		static const float BloomIntensity = 1.5f;
 		static const float BloomCompositionWeight = 0.04f;
-		static const float BloomFilterRadius = 0.0f;
+		static const float BloomFilterRadius = 0.005f;
 
 		static const uint32_t MaxFramesInFlight = 2;
 		static const uint32_t MaxAssetCount = 100;

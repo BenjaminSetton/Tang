@@ -18,7 +18,7 @@ layout(set = 0, binding = 2) uniform sampler2D equirectangularMap;
 #include "hdr_utility.glsl"
 
 const vec2 invAtan = vec2(0.1591, 0.3183);
-const float maxLuminosity = 200;
+const float maxLuminosity = 1000;
 
 vec2 SampleSphericalMap(vec3 dir)
 {

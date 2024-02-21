@@ -15,11 +15,6 @@ namespace TANG
 	BloomPass::~BloomPass()
 	{ }
 
-	BloomPass::BloomPass(BloomPass&& other) noexcept
-	{
-		TNG_TODO();
-	}
-
 	void BloomPass::Create(const DescriptorPool* descriptorPool, uint32_t baseTextureWidth, uint32_t baseTextureHeight)
 	{
 		if (wasCreated)
