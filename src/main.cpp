@@ -45,6 +45,10 @@ int main(uint32_t argc, const char** argv)
     UNUSED(argc);
     UNUSED(argv);
 
+#ifdef TNG_WINDOWS
+    system("cls");
+#endif
+
     // Seed rand()
     srand(static_cast<unsigned int>(time(NULL)));
 

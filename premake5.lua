@@ -51,6 +51,7 @@ project "TANG"
 		cppdialect "C++17"
 		systemversion "latest"
 		warnings "High"
+		defines "TNG_WINDOWS"
 		
 		-- Build shaders
 		prebuildcommands
