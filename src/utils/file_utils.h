@@ -9,7 +9,7 @@ namespace TANG
 	// NOTE - This function dynamically allocates a buffer and returns the size, it is up to the caller to
 	//        clean up the memory! Alternatively, the caller might choose the other ReadFile() override that
 	//        takes in a buffer that's already been allocated and it's size
-	uint32_t ReadFile(const std::string_view& fileName, char** outBuffer);
+	[[nodiscard]] uint32_t ReadFile(const std::string_view& fileName, char** outBuffer);
 
 	// Reads the provided file and returns it's contents. Upon success returns the number of character read and sets
 	// the content of the file inside the outBuffer array. This function will read up to maxBufferSize. In the case where

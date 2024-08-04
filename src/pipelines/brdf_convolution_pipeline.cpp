@@ -2,7 +2,7 @@
 #include <array>
 
 #include "../render_passes/brdf_convolution_render_pass.h"
-#include "../shader.h"
+#include "../shaders/shader.h"
 #include "../utils/logger.h"
 #include "../vertex_types.h"
 #include "brdf_convolution_pipeline.h"

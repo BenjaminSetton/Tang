@@ -3,7 +3,7 @@
 
 #include "../device_cache.h"
 #include "../render_passes/cubemap_preprocessing_render_pass.h"
-#include "../shader.h"
+#include "../shaders/shader.h"
 #include "../utils/sanity_check.h"
 #include "../utils/logger.h"
 #include "../vertex_types.h"

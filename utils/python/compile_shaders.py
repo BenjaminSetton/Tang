@@ -2,6 +2,7 @@ import json
 import os
 import re
 import sys
+import hashlib # Hashing shader source files
 
 from pathlib import Path
 
@@ -10,27 +11,51 @@ G_VULKAN_SDK    = os.environ[ "VULKAN_SDK" ]
 G_SHADER_TYPES  = [ "vert", "geom", "frag", "comp" ]
 G_METADATA_EXT  = "meta"
 
-G_PROJECT_DIR   = None
-G_SOURCE_DIR    = None
-G_SOURCE_PATH   = None
-G_INCLUDE_DIR   = None
-G_INCLUDE_PATH  = None
-G_OUTPUT_DIR    = None
-G_OUTPUT_PATH   = None
+G_PROJECT_DIR       = None
+G_SOURCE_DIR        = None
+G_SOURCE_PATH       = None
+G_INCLUDE_DIR       = None
+G_INCLUDE_PATH      = None
+G_OUTPUT_DIR        = None
+G_OUTPUT_PATH       = None
+G_SHADER_COMPILER   = None
+
+
+# Log a common message
+def LogCommon(msg: str):
+    print(f'[ SHADERS ] {msg}')
+
 
 # Log a shader build error
 def LogError(msg: str):
-    print(f'[SHADER] ERROR - {msg}')
+    LogCommon(f'ERROR - {msg}')
     
 
 # Log a shader build warning
 def LogWarning(msg: str):
-    print(f'[SHADER] WARNING - {msg}')
+    LogCommon(f'WARNING - {msg}')
     
 
 # Log a generic info message
 def LogInfo(msg: str):
-    print(f'[SHADER] INFO - {msg}')
+    LogCommon(f'INFO - {msg}')
+    
+
+# Log a build step
+def LogBuildStep(msg: str):
+    LogCommon(f'[ {msg.upper()} ]')
+    
+
+# Takes in the checksum source in binary format. Usually this comes from calling read() on a
+# file handle marked with the 'b' (binary) flag. The resulting SHA-256 hex is truncated because
+# we really don't need a huge checksum for our purposes (not trying to use cryptographically secure
+# hashes or anything or sorts). I could research more about hashes and use one that returns a smaller
+# has but...meh
+def ShaderChecksum(src):
+    shaObj = hashlib.sha256()
+    shaObj.update(src)
+    hex = shaObj.hexdigest()
+    return hex[:16]
     
 
 # Returns a tuple containing the full output path, and the name of the shader in that respective order
@@ -91,21 +116,26 @@ def ParseLayoutQualifiers(layoutQualifiers: str or None):
     layoutQualifierList = layoutQualifiersStr.split(',')
     
     # Split the list once again based off equals sign. In the end, we'll have dictionary
-    layoutQualifierDict = { "qualifiers" : [] }
+    layoutQualifierDict = { }
     for layoutQualifier in layoutQualifierList:
         qualifierPair = layoutQualifier.split('=')
         qualifierPairLen = len(qualifierPair)
         if qualifierPairLen == 1:
-            layoutQualifierDict["qualifiers"].append({ qualifierPair[0] : None })
+            layoutQualifierDict[qualifierPair[0]] = None
         elif qualifierPairLen == 2: # We found a good split!
-            layoutQualifierDict["qualifiers"].append({ qualifierPair[0] : qualifierPair[1] })
+            # Consider if the string represents an integer. If not, leave it as a string
+            # TODO - Consider floats. I can't think of a case where floats would be valid, but it might come up later!
+            if qualifierPair[1].isdigit():
+                layoutQualifierDict[qualifierPair[0]] = int(qualifierPair[1])
+            else:
+                layoutQualifierDict[qualifierPair[0]] = qualifierPair[1]
         else:
             LogError(f'Found a malformed qualifier pair "{qualifierPair}" in layout "{layoutMatch.group(0)}"')
     
     return layoutQualifierDict
 
 
-def GenerateShaderMetadata(shaderPathList: list):
+def GenerateShaderMetadata(shaderPath: str, fullOutputPath: str, shaderName: str):
     
     #
     # Detects anything matching a layout declaration, whether multi-line of single-line.
@@ -129,84 +159,60 @@ def GenerateShaderMetadata(shaderPathList: list):
     #  } viewProjUBO"
     #
     layoutStringRegex = r"layout\s*\((.*?)\)(.*?)(\{.+?\}.*?)?;"
-    
-    for shaderPath in shaderPathList:
-    
-        outputPath = GetShaderOutputPathFromSourcePath(shaderPath)
-        fullOutputPath = outputPath[0]
-        shaderName = outputPath[1]
-        os.makedirs(fullOutputPath, exist_ok=True)
         
-        # Create new metadata file or overwrite existing one
-        metadataFilePath = f'{fullOutputPath}/{shaderName}.{G_METADATA_EXT}'
-        metadataFileHandle = open(metadataFilePath, "w")
-        if metadataFileHandle is None:
-            LogError(f'Failed to find or create metadata file: "{metadataFilePath}"')
-            continue
+    # Create new metadata file or overwrite existing one
+    metadataFilePath = f'{fullOutputPath}/{shaderName}.{G_METADATA_EXT}'
+    metadataFileHandle = open(metadataFilePath, "w")
+    if metadataFileHandle is None:
+        LogError(f'Failed to find or create metadata file: "{metadataFilePath}"')
+        return
+        
+    layoutJSON = []
+    
+    with open(shaderPath, "r") as shaderSource:
+    
+        for match in re.finditer(layoutStringRegex, shaderSource.read(), re.DOTALL):
             
-        layoutJSON = { "layouts" : [] }
-        
-        with open(shaderPath, "r") as shaderSource:
-        
-            for match in re.finditer(layoutStringRegex, shaderSource.read(), re.DOTALL):
-                
-                # Convert match object to string
-                layoutStr = match.group(0)
-                
-                # Parse the layout qualifier(s) within parenthesis (e.g. "location = 0", "set = 0", "rgba32f", etc)
-                layoutQualifiers = ParseLayoutQualifiers(match.group(1))
-                
-                # Parse the layout declaration (e.g. "uniform readonly image2D" for the type and "inTexture" as the name)
-                layoutDeclaration = ParseLayoutDeclaration(match.group(2))
+            # Convert match object to string
+            layoutStr = match.group(0)
+            
+            # Parse the layout qualifier(s) within parenthesis (e.g. "location = 0", "set = 0", "rgba32f", etc)
+            layoutQualifiers = ParseLayoutQualifiers(match.group(1))
+            
+            # Parse the layout declaration (e.g. "uniform readonly image2D" for the type and "inTexture" as the name)
+            layoutDeclaration = ParseLayoutDeclaration(match.group(2))
 
-                # Parse the uniform struct, if applicable (e.g. "{ mat4 view; mat4 proj; } viewProjUBO" for a uniform declaration)
-                layoutUniformStruct = match.group(3)
-                if layoutUniformStruct is not None:
-                    layoutUniformStruct = ParseLayoutUniformStruct(layoutUniformStruct) # Re-assign from string to dictionary
-                    
+            # Parse the uniform struct, if applicable (e.g. "{ mat4 view; mat4 proj; } viewProjUBO" for a uniform declaration)
+            layoutUniformStruct = match.group(3)
+            if layoutUniformStruct is not None:
+                layoutUniformStruct = ParseLayoutUniformStruct(layoutUniformStruct) # Re-assign from string to dictionary
                 
-                # Now build the final JSON
-                # NOTE - If a uniform struct exists, we require the layout's name to be AFTER the uniform struct
-                layoutName = None
-                if layoutUniformStruct is not None:
-                    layoutName = layoutUniformStruct["uniform_name"]
-                else:
-                    layoutName = layoutDeclaration["attributes"][-1] # The name should come last in the list in this case
-                    
-                layoutDeclarationSize = len(layoutDeclaration["attributes"])
-                layoutJSON["layouts"].append({ "name" : layoutName, "qualifiers" : layoutQualifiers["qualifiers"], "attributes" : layoutDeclaration["attributes"][:layoutDeclarationSize - 1] })
+            
+            # Now build the final JSON
+            # NOTE - If a uniform struct exists, we require the layout's name to be AFTER the uniform struct
+            layoutName = None
+            if layoutUniformStruct is not None:
+                layoutName = layoutUniformStruct["uniform_name"]
+            else:
+                layoutName = layoutDeclaration["attributes"][-1] # The name should come last in the list in this case
+                
+            layoutDeclarationSize = len(layoutDeclaration["attributes"])
+            layoutJSON.append({ "name" : layoutName, "qualifiers" : layoutQualifiers, "attributes" : layoutDeclaration["attributes"][:layoutDeclarationSize - 1] })
                     
         
         # Finally, write out the JSON
         metadataFileHandle.write(json.dumps(layoutJSON, indent = 2))
         metadataFileHandle.close()
         
-        shortShaderSrcPath = f"./TANG{str(shaderPath).replace(G_PROJECT_DIR, '')}"
-        shortShaderDstPath = f"./TANG{metadataFilePath.replace(G_PROJECT_DIR, '')}"
-        LogInfo(f'Generated metadata file for "{os.path.normpath(shortShaderSrcPath)}" into "{os.path.normpath(shortShaderDstPath)}"')
 
-def CompileShaderByteCode(shaderPathList: list):
-
-    shaderCompiler = os.path.normpath(f"{G_VULKAN_SDK}/Bin/glslc.exe")
-    LogInfo(f"Compiling shaders using '{shaderCompiler}'")
+def CompileShaderByteCode(shaderPath: str, fullOutputPath: str, shaderName: str):
     
-    for shaderPath in shaderPathList:
-    
-        outputPath = GetShaderOutputPathFromSourcePath(shaderPath)
-        fullOutputPath = outputPath[0]
-        shaderName = outputPath[1]
-        os.makedirs(fullOutputPath, exist_ok=True)
+    shaderOutputPath = f"{fullOutputPath}/{shaderName}.spv"
         
-        # Compile the input shader
-        os.system(f'{shaderCompiler} "{shaderPath}" -O -I "{G_INCLUDE_PATH}" -o "{fullOutputPath}/{shaderName}.spv"') # Preprocesses, compiles and links input shader (produces optimized binary SPV)
-        #os.system(f'{shaderCompiler} "{shaderPath}" -O0 -I "{G_INCLUDE_PATH}" -o "{fullOutputPath}/{shaderName}.spv"') # Preprocesses, compiles and links input shader (produces un-optimized binary SPV)
-        #os.system(f'{shaderCompiler} "{shaderPath}" -E -I "{G_INCLUDE_PATH}" -o "{fullOutputPath}/{shaderName}.pp"') # Preprocesses input shader
-        
-        # Log the source and output paths to the console
-        fullShaderDstPath = str(f'{fullOutputPath}/{shaderName}')
-        shortShaderSrcPath = f"./TANG{str(shaderPath).replace(G_PROJECT_DIR, '')}"
-        shortShaderDstPath = f"./TANG{fullShaderDstPath.replace(G_PROJECT_DIR, '')}"
-        LogInfo(f'Compiled "{os.path.normpath(shortShaderSrcPath)}" into "{os.path.normpath(shortShaderDstPath)}.spv"')
+    # Compile the input shader
+    os.system(f'{G_SHADER_COMPILER} "{shaderPath}" -O -I "{G_INCLUDE_PATH}" -o "{shaderOutputPath}"') # Preprocesses, compiles and links input shader (produces optimized binary SPV)
+    #os.system(f'{G_SHADER_COMPILER} "{shaderPath}" -O0 -I "{G_INCLUDE_PATH}" -o "{fullOutputPath}/{shaderName}.spv"') # Preprocesses, compiles and links input shader (produces un-optimized binary SPV)
+    #os.system(f'{G_SHADER_COMPILER} "{shaderPath}" -E -I "{G_INCLUDE_PATH}" -o "{fullOutputPath}/{shaderName}.pp"') # Preprocesses input shader
         
 
 def main():
@@ -218,6 +224,9 @@ def main():
     global G_INCLUDE_PATH
     global G_OUTPUT_DIR
     global G_OUTPUT_PATH
+    global G_SHADER_COMPILER
+    
+    LogBuildStep("BUILDING SHADERS START")
 
     G_PROJECT_DIR = str(Path(sys.argv[0]).parent.absolute().parent.parent) # This is ugly, but for some reason it won't let me do .parent 3 times...
     
@@ -250,7 +259,7 @@ def main():
         LogError("Please install the Vulkan SDK to compile shaders")
         return
         
-    LogInfo("Building shaders start...")
+    G_SHADER_COMPILER = os.path.normpath(f"{G_VULKAN_SDK}/Bin/glslc.exe")
     
     # Get list of source shaders to compile
     shaderList = []
@@ -258,13 +267,86 @@ def main():
         for path in Path(f"{G_PROJECT_DIR}/{G_SOURCE_DIR}").rglob(f"*.{shaderType}"):
             shaderList.append(path)
     
-    # TODO - Checksum shader sources and only compile those which are different from the ones
-    #        we already compiled
-    CompileShaderByteCode(shaderList)
+    # Attempt to read in shader checksums from previous compilations
+    checksumFileName = "checksum.json"
+    checksumFilePath = f"{G_OUTPUT_PATH}/{checksumFileName}"
     
-    GenerateShaderMetadata(shaderList)
+    LogBuildStep("LOADING CHECKSUMS START")
     
-    LogInfo("Finished building shaders!")
+    checksums = {}
+    if os.path.isfile(checksumFilePath):
+        checksumFileHandle = open(checksumFilePath, "r+")
+        
+        # Read in the checksums
+        try:
+            if checksumFileHandle is not None:
+                checksumContents = checksumFileHandle.read()
+                checksumFileHandle.seek(0)
+                checksums = json.loads(checksumContents)
+                LogInfo(f'Checksum file loaded "{checksumFileName}"')
+        except Exception as e:
+            LogError('Failed to load shader checksum file contents! Exception raised: {e}')
+            return
+        
+    else: # file doesn't exists so we're going to create it beforehand
+        checksumFileHandle = open(checksumFilePath, "w")
+        
+    LogBuildStep("LOADING CHECKSUMS END")
+    LogBuildStep("SHADER COMPILATION/METADATA START")
+    
+    # Compile all shaders that require compilation
+    newHashesFound = False
+    LogInfo(f'Using shader compiler "{G_SHADER_COMPILER}"')
+    for shaderPath in shaderList:
+    
+        outputPath = GetShaderOutputPathFromSourcePath(shaderPath)
+        fullOutputPath = outputPath[0]
+        shaderName = outputPath[1]
+        
+        fullShaderDstPath = os.path.normpath(str(f'{fullOutputPath}/{shaderName}'))
+        shortShaderSrcPath = os.path.normpath(f"./TANG{str(shaderPath).replace(G_PROJECT_DIR, '')}")
+        shortShaderDstPath = os.path.normpath(f"./TANG{fullShaderDstPath.replace(G_PROJECT_DIR, '')}")
+        
+        # Check if the shader was already compiled by referring to it's checksum (if it exists)
+        if shortShaderSrcPath not in checksums:
+            checksums[shortShaderSrcPath] = None
+            
+        existingHash = checksums[shortShaderSrcPath]
+        
+        shaderHandleAsBinary = open(shaderPath, "rb")
+        newHash = None
+        if shaderHandleAsBinary is not None:
+            
+            newHash = ShaderChecksum(shaderHandleAsBinary.read())
+            if existingHash == newHash:
+                LogInfo(f'Compilation skipped for shader with matching hash ({newHash}): "{os.path.normpath(shortShaderSrcPath)}"')
+                continue
+        
+        # We only really care about the hash diffs if we had an existing one to begin with
+        if existingHash is not None:
+            LogInfo(f'Found mismatched hash for shader source "{os.path.normpath(shortShaderSrcPath)}". Old hash {existingHash} vs. new hash {newHash}')
+            
+        newHashesFound = True
+        
+        # Checksum not found, we'll proceed to compile the shader
+        os.makedirs(fullOutputPath, exist_ok=True)
+        checksums[shortShaderSrcPath] = newHash
+        
+        CompileShaderByteCode(shaderPath, fullOutputPath, shaderName) # Shader source code compilation
+        LogInfo(f'Compiled "{os.path.normpath(shortShaderSrcPath)}" into "{os.path.normpath(shortShaderDstPath)}.spv"')
+        
+        GenerateShaderMetadata(shaderPath, fullOutputPath, shaderName) # Shader metadata generation
+        LogInfo(f'Generated metadata file for "{os.path.normpath(shortShaderSrcPath)}" into "{os.path.normpath(shortShaderDstPath)}"')
+        
+    # Only write to the checksum file if any checksums changed (or new shader files were added)
+    if newHashesFound:
+        json.dump(checksums, checksumFileHandle, indent = 2)
+        LogInfo(f'Updated checksums file in "{os.path.normpath(checksumFilePath)}"')
+        
+    checksumFileHandle.close()
+    
+    LogBuildStep("SHADER COMPILATION/METADATA END")
+    LogBuildStep("BUILDING SHADERS END")
 
 if __name__ == "__main__":
     main()

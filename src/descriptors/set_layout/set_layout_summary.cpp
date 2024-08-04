@@ -143,7 +143,7 @@ namespace TANG
 		for (auto& binding : bindings)
 		{
 			//pack the binding data into a single int64, including the set. Not fully correct but it's ok
-			size_t bindingHash = binding.binding | binding.descriptorType << 8 | binding.descriptorCount << 16 | binding.stageFlags << 24 | set << 32;
+			size_t bindingHash = binding.binding | binding.descriptorType << 8 | binding.descriptorCount << 16 | binding.stageFlags << 24 | static_cast<uint64_t>(set) << 32;
 
 			//shuffle the packed binding data and xor it with the main hash
 			hashResult ^= std::hash<size_t>()(bindingHash);

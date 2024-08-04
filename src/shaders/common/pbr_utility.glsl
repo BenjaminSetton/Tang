@@ -25,7 +25,7 @@ vec3 F_Schlick(float cosTheta, vec3 F0)
     // F0 + ( 1 - F0 ) * ( 1 - dot( view, half ) )^5
     // where F0 represents the base reflectivity
 
-    return F0 + ( 1.0 - F0 ) * pow( 1.0 - cosTheta, 5.0 );
+    return F0 + ( 1.0 - F0 ) * pow( 1.0 - cosTheta, 8.0 );
 }
 
 // Fresnel (Schlick + roughness)

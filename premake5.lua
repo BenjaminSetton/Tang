@@ -39,6 +39,7 @@ project "TANG"
 		"%{IncludeDirs.glm}",
 		"%{IncludeDirs.stb_image}",
 		"%{IncludeDirs.vulkan}",
+		"%{IncludeDirs.nlohmann_json}",
 	}
 	
 	links

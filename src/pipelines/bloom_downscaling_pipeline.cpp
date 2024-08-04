@@ -1,5 +1,5 @@
 
-#include "../shader.h"
+#include "../shaders/shader.h"
 #include "../utils/logger.h"
 #include "bloom_downscaling_pipeline.h"
 

@@ -2,9 +2,13 @@
 #include "vulkan/vulkan.h"
 
 #include <string_view>
+#include <vector>
 
 namespace TANG
 {
+	// Forward declaration
+	struct ShaderLayoutEntry;
+
 	enum class ShaderType
 	{
 		PBR,
@@ -36,7 +40,9 @@ namespace TANG
 	{
 	public:
 
+		// TODO - Replace with a single std::string_view parameter
 		explicit Shader(const ShaderType& type, const ShaderStage& stage);
+		Shader() = delete;
 		~Shader();
 		Shader(Shader&& other) noexcept;
 
@@ -54,8 +60,12 @@ namespace TANG
 		void Create(const ShaderType& type, const ShaderStage& stage);
 		void Destroy();
 
-		VkShaderModule object;
-		ShaderType type;
-		ShaderStage stage;
+		bool ReadShaderByteCode(std::string_view byteCodePath);
+		bool ReadShaderMetadata(std::string_view metadataPath);
+
+		VkShaderModule m_object;
+		ShaderType m_type;
+		ShaderStage m_stage;
+		std::vector<ShaderLayoutEntry> m_layoutEntries;
 	};
 }

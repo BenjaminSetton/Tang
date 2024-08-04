@@ -45,8 +45,9 @@ NOTES:
 - Vulkan SDK (graphics API)
 - GLFW (OS window handling)
 - GLM (math library)
-- stb (image loading)
+- stb_image (image loading)
 - assimp (asset importing)
+- nlohmann_json (JSON parsing)
 
 ## TODO
 
