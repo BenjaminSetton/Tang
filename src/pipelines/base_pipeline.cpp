@@ -1,6 +1,6 @@
 
 #include "../device_cache.h"
-#include "../shader.h"
+#include "../shaders/shader.h"
 #include "../utils/logger.h"
 #include "../utils/sanity_check.h"
 #include "base_pipeline.h"

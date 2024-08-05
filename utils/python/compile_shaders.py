@@ -28,17 +28,17 @@ def LogCommon(msg: str):
 
 # Log a shader build error
 def LogError(msg: str):
-    LogCommon(f'ERROR - {msg}')
+    LogCommon(f'[ ERROR ] {msg}')
     
 
 # Log a shader build warning
 def LogWarning(msg: str):
-    LogCommon(f'WARNING - {msg}')
+    LogCommon(f'[ WARNING ] {msg}')
     
 
 # Log a generic info message
 def LogInfo(msg: str):
-    LogCommon(f'INFO - {msg}')
+    LogCommon(f'[ INFO ] {msg}')
     
 
 # Log a build step
@@ -64,6 +64,12 @@ def GetShaderOutputPathFromSourcePath(shaderPath: str):
         shaderName = (shaderPath.suffix)[1:]
         parentDirName = shaderPath.parent.name
         return ( os.path.normpath(f"{G_OUTPUT_PATH}/{parentDirName}"), shaderName )
+        
+        
+# Converts the given path from an absolute path to one that's relative to the project directory.
+# Returns a normalized relative path
+def ConvertToRelativePath(path: str) -> str:
+    return os.path.normpath(f"{path.replace(G_PROJECT_DIR, '')}")
         
 
 def ParseLayoutUniformStruct(layoutStructure: str):
@@ -214,6 +220,64 @@ def CompileShaderByteCode(shaderPath: str, fullOutputPath: str, shaderName: str)
     #os.system(f'{G_SHADER_COMPILER} "{shaderPath}" -O0 -I "{G_INCLUDE_PATH}" -o "{fullOutputPath}/{shaderName}.spv"') # Preprocesses, compiles and links input shader (produces un-optimized binary SPV)
     #os.system(f'{G_SHADER_COMPILER} "{shaderPath}" -E -I "{G_INCLUDE_PATH}" -o "{fullOutputPath}/{shaderName}.pp"') # Preprocesses input shader
         
+        
+def ComputeDependencies(shaderPath: str, computedDependencies: list):
+
+    includeFileRegex = r"#include\s+\"(.*?)\""
+    with open(shaderPath, "r") as f:
+    
+        fileContents = f.read()
+        matches = re.finditer(includeFileRegex, fileContents)
+        
+        if matches is None:
+            return
+            
+        for match in matches:
+        
+            # Append full patch for all matches
+            dependencyPath = os.path.normpath(f'{G_INCLUDE_PATH}/{match.group(1)}')
+            
+            # Only append dependencies we haven't already run into
+            if dependencyPath not in computedDependencies:
+                computedDependencies.append(dependencyPath)
+                    
+                # Recursively find all other dependencies
+                ComputeDependencies(dependencyPath, computedDependencies)
+        
+        
+def CheckShaderDependencies(shaderPath: str, checksums: dict, dependencyComputedHashes: dict) -> list:
+
+    # Recursively compute all the dependencies for the current shader
+    computedDependencies = []
+    ComputeDependencies(shaderPath, computedDependencies)
+    
+    # Find hashes for all dependencies we haven't hashed yet
+    dependenciesRequiringRecompilation = []
+    for dependency in computedDependencies:
+    
+        # If we haven't hashed this dependency, hash it now
+        if dependency not in dependencyComputedHashes:
+            with open(dependency, "rb") as f:
+                dependencyComputedHashes[dependency] = ShaderChecksum(f.read())
+                
+        # Now we have a hash to compare against
+        newDependencyHash = dependencyComputedHashes[dependency]
+        shortDependencyPath = dependency.replace(G_PROJECT_DIR, "")
+        
+        if shortDependencyPath not in checksums:
+            # Failed to find a checksum for the dependency in checksum.json, so we must compile dependency + source shader anyway
+            # The hashes for the dependencies are all appended after all shaders are built so we can properly re-build all shaders
+            # that had to indirectly be re-built because of the same dependency
+            dependenciesRequiringRecompilation.append(shortDependencyPath)
+            continue
+            
+        existingDependencyHash = checksums[shortDependencyPath]
+        if existingDependencyHash != newDependencyHash:
+            # We must re-compile the dependency and - indirectly - the source shader
+            dependenciesRequiringRecompilation.append(shortDependencyPath)
+            
+    return dependenciesRequiringRecompilation
+
 
 def main():
 
@@ -249,7 +313,7 @@ def main():
     
     # Shader include directory
     G_INCLUDE_DIR = sys.argv[3]
-    G_INCLUDE_PATH = f'{G_PROJECT_DIR}/{G_INCLUDE_DIR}'
+    G_INCLUDE_PATH = os.path.normpath(f'{G_PROJECT_DIR}/{G_INCLUDE_DIR}')
     if G_INCLUDE_DIR is None or not os.path.exists(G_INCLUDE_PATH):
         LogError(f'Please provide a valid shader include directory, the following path does not exist: {G_INCLUDE_PATH}')
         return
@@ -296,16 +360,27 @@ def main():
     
     # Compile all shaders that require compilation
     newHashesFound = False
+    dependencyComputedHashes = {} # Stores the hashes for all the dependencies (a.k.a included .glsl files). We cache them to avoid re-calculating hashes for dependencies
     LogInfo(f'Using shader compiler "{G_SHADER_COMPILER}"')
     for shaderPath in shaderList:
     
+        shaderPathStr = str(shaderPath)
         outputPath = GetShaderOutputPathFromSourcePath(shaderPath)
         fullOutputPath = outputPath[0]
         shaderName = outputPath[1]
         
         fullShaderDstPath = os.path.normpath(str(f'{fullOutputPath}/{shaderName}'))
-        shortShaderSrcPath = os.path.normpath(f"./TANG{str(shaderPath).replace(G_PROJECT_DIR, '')}")
-        shortShaderDstPath = os.path.normpath(f"./TANG{fullShaderDstPath.replace(G_PROJECT_DIR, '')}")
+        shortShaderSrcPath = ConvertToRelativePath(shaderPathStr)
+        shortShaderDstPath = ConvertToRelativePath(fullShaderDstPath)
+        
+        # Log the shader source name for clarity in the build process
+        shaderSourceFileName = shaderPathStr[shaderPathStr.rfind("\\") + 1 : ]
+        LogInfo(f'[ {shaderSourceFileName.upper()} ]')
+        
+        # Check dependencies. This function call returns a list of the dependencies which need to be
+        # re-compiled. If it's empty, we know that the shader either has no dependencies or that no
+        # dependencies need to be re-compiled
+        dependenciesRequiringRecompilation = CheckShaderDependencies(shaderPath, checksums, dependencyComputedHashes)
         
         # Check if the shader was already compiled by referring to it's checksum (if it exists)
         if shortShaderSrcPath not in checksums:
@@ -318,13 +393,20 @@ def main():
         if shaderHandleAsBinary is not None:
             
             newHash = ShaderChecksum(shaderHandleAsBinary.read())
-            if existingHash == newHash:
+            if (existingHash == newHash) and (len(dependenciesRequiringRecompilation) == 0):
                 LogInfo(f'Compilation skipped for shader with matching hash ({newHash}): "{os.path.normpath(shortShaderSrcPath)}"')
                 continue
         
         # We only really care about the hash diffs if we had an existing one to begin with
-        if existingHash is not None:
+        if existingHash != newHash:
             LogInfo(f'Found mismatched hash for shader source "{os.path.normpath(shortShaderSrcPath)}". Old hash {existingHash} vs. new hash {newHash}')
+        elif len(dependenciesRequiringRecompilation) >= 0:
+            dependenciesStr = ""
+            for i, dependency in enumerate(dependenciesRequiringRecompilation):
+                dependenciesStr += "\n" + (" " * 21) + f"{i + 1}) {dependency}"
+            LogInfo(f'Found edited dependencies for shader source "{os.path.normpath(shortShaderSrcPath)}": {dependenciesStr}')
+        else:
+            LogError(f'Passed all checks to compile shader without finding a mismatched hash or updated dependency? Proceeding to compile shader "{shaderPath}"')
             
         newHashesFound = True
         
@@ -337,6 +419,11 @@ def main():
         
         GenerateShaderMetadata(shaderPath, fullOutputPath, shaderName) # Shader metadata generation
         LogInfo(f'Generated metadata file for "{os.path.normpath(shortShaderSrcPath)}" into "{os.path.normpath(shortShaderDstPath)}"')
+        
+    # Add the newest dependency checksums
+    for dependencyPath in dependencyComputedHashes:
+        shortDependencyPath = ConvertToRelativePath(dependencyPath)
+        checksums[shortDependencyPath] = dependencyComputedHashes[dependencyPath]
         
     # Only write to the checksum file if any checksums changed (or new shader files were added)
     if newHashesFound:
