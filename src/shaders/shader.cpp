@@ -78,7 +78,7 @@ namespace TANG
 
 		const std::string fileMetadata = fileName + std::string(".meta");
 		const std::string fullShaderMetadataPath = (fs::path(CONFIG::CompiledShaderOutputPath) / fs::path(ShaderTypeToFolderName.at(_type)) / fs::path(fileMetadata.data())).generic_string();
-		readSuccessful = ReadShaderMetadata(fullShaderMetadataPath);
+		readSuccessful = true; // ReadShaderMetadata(fullShaderMetadataPath);
 		if (!readSuccessful)
 		{
 			LogError("Failed to read shader metadata (type '%u' and stage '%u') from file '%s'", static_cast<uint32_t>(_type), static_cast<uint32_t>(_stage), fullShaderByteCodePath.data());

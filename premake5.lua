@@ -56,7 +56,7 @@ project "TANG"
 		-- Build shaders
 		prebuildcommands
 		{
-			("CALL \"%{wks.location}/utils/compile_shaders.bat\"")
+			("CALL \"%{wks.location}/utils/build_shaders.bat\"")
 		}
 	
 	filter "configurations:Debug"
