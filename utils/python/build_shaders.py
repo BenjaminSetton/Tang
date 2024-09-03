@@ -55,7 +55,7 @@ def ShaderChecksum(src):
     shaObj = hashlib.sha256()
     shaObj.update(src)
     hex = shaObj.hexdigest()
-    return hex[:16]
+    return hex[:32]
     
 
 # Returns a tuple containing the full output path, and the name of the shader in that respective order
@@ -95,7 +95,7 @@ def ParseLayoutUniformStruct(layoutStructure: str):
     return layoutStructureDict
 
 
-def ParseLayoutDeclaration(layoutDeclaration: str or None):
+def ParseLayoutDeclaration(layoutDeclaration: str or None) -> dict:
 
     if layoutDeclaration is None:
         LogError("Failed to parse layout declaration! Layout declaration is None")
@@ -111,7 +111,7 @@ def ParseLayoutDeclaration(layoutDeclaration: str or None):
     return layoutDeclarationDict
 
 
-def ParseLayoutQualifiers(layoutQualifiers: str or None):
+def ParseLayoutQualifiers(layoutQualifiers: str or None) -> dict:
 
     if layoutQualifiers is None:
         LogError("Failed to parse layout qualifiers! Layout qualifiers is None")
@@ -141,7 +141,120 @@ def ParseLayoutQualifiers(layoutQualifiers: str or None):
     return layoutQualifierDict
 
 
-def GenerateShaderMetadata(shaderPath: str, fullOutputPath: str, shaderName: str):
+def FilterShaderMetadata(layoutData: list) -> list:
+
+    uniformMemoryQualifiers = [ "coherent", "volatile", "restrict", "readonly", "writeonly" ]
+    knownTypes = [ "vec4", "vec3", "vec2", "float", "int", "image1D", "image2D", "image3D", "mat2", "mat3", "mat4", "sampler1D", "sampler2D", "sampler3D", "samplerCube", "sampler1DArray", "sampler2DArray" ]
+    knownAttributes = [ "in", "out", "uniform" ]
+    knownQualifiers = [ "location", "set", "binding", "local_size_x", "local_size_y", "local_size_z" ]
+
+    # Format the data in a more sensible way
+    # Separate it into the following dict keys, all holding an array of entries:
+    # INPUTS, OUTPUTS, UNIFORMS, PUSH_CONSTANTS
+    layoutJSON = { "inputs" : [], "outputs" : [], "uniforms" : [], "push_constants" : [] }
+    for layout in layoutData:
+            
+            data = {}
+            qualifiers = layout["qualifiers"].copy() # We make a copy here so we can remove filtered entries and show an error if we fail to filter any entry
+            attribs = layout["attributes"]
+            uniformStruct = layout["uniform_struct"] if "uniform_struct" in layout else None
+            
+            # This might be None in some cases
+            data["name"] = layout["name"]
+            
+            for attrib in attribs:
+                    
+                # Parse out the individual attributes along with their qualifiers
+                if attrib == "in" or attrib == "out":
+                
+                    if "location" in qualifiers:
+                        data["location"] = qualifiers["location"]
+                        qualifiers.pop("location")
+                        
+                    # For the local group size I'm going with "X" here because 
+                    # it's the one that'll probably be explicitly declared in all cases
+                    if "local_size_x" in qualifiers:
+                    
+                        lgs_x = qualifiers["local_size_x"]
+                        lgs_y = 1
+                        lgs_z = 1
+                        
+                        qualifiers.pop("local_size_x")
+                        
+                        if "local_size_y" in qualifiers:
+                            lgs_y = qualifiers["local_size_y"]
+                            qualifiers.pop("local_size_y")
+                        
+                        if "local_size_z" in qualifiers:
+                            lgs_z = qualifiers["local_size_z"]
+                            qualifiers.pop("local_size_z")
+                            
+                        data["local_size"] = [ lgs_x, lgs_y, lgs_z ]
+                    
+                    # Append a reference of the data to the layoutJSON. We'll likely add more data as we loop over the other attributes
+                    layoutJSON["inputs" if attrib == "in" else "outputs"].append(data)
+                    
+                elif attrib == "uniform":
+                
+                    dataKey = None 
+                    # Only append set/binding if it's not a push constant
+                    if "push_constant" in qualifiers:
+                    
+                        dataKey = "push_constants"
+                        qualifiers.pop("push_constant")
+                        
+                    else:
+                    
+                        dataKey = "uniforms"
+                        data["set"] = 0
+                        data["binding"] = 0
+                        
+                        if "set" in qualifiers:
+                            data["set"] = qualifiers["set"]
+                            qualifiers.pop("set")
+                            
+                        if "binding" in qualifiers:
+                            data["binding"] = qualifiers["binding"]
+                            qualifiers.pop("binding")
+                    
+                    # Append uniform struct (might be None)
+                    data["uniform_struct"] = uniformStruct
+                    
+                    # Append a reference of the data to the layoutJSON. We'll likely add more data as we loop over the other attributes
+                    layoutJSON[dataKey].append(data)
+                    
+                elif attrib in uniformMemoryQualifiers:
+                
+                    data["memory_qualifier"] = attrib
+                    
+                elif attrib in knownTypes:
+                
+                    data["type"] = attrib
+                    
+                    if "image" in attrib:
+                        # Can't think of a better way to get image format than to assume that it's
+                        # the qualifier with a "None" value :/
+                        for key, val in qualifiers.items():
+                            if val is None:
+                                data["format"] = key
+                                qualifiers.pop(key)
+                                break
+                    
+                else:
+                    
+                    # If we can't find any match, then we're probably dealing with a custom type in the shader.
+                    # Show a warning so the user can recognize if this is a mistake
+                    LogWarning(f'Found unknown attribute "{attrib}" in layout attributes "{attribs}"! Assuming attribute to be the uniform type.')
+                    data["type"] = attrib
+                    
+            # Show an error if we failed to filter any qualifiers
+            if len(qualifiers) > 0:
+                
+                LogError(f'Failed to filter unknown qualifiers: {qualifiers}') 
+                             
+    return layoutJSON
+
+def GenerateShaderMetadata(shaderPath: str, fullOutputPath: str, shaderName: str) -> None:
     
     #
     # Detects anything matching a layout declaration, whether multi-line of single-line.
@@ -152,10 +265,10 @@ def GenerateShaderMetadata(shaderPath: str, fullOutputPath: str, shaderName: str
     #      mat4 proj;
     # } viewProjUBO;
     #
-    # GROUP 1 - Matches the layout "qualifiers", or anything in parenthesis after the literal "layout". In this case:
+    # GROUP 1 - Matches the layout "attributes", or anything in parenthesis after the literal "layout". In this case:
     #  "set = 0, binding = 0"
     #
-    # GROUP 2 - Matches anything after the "qualifiers" and before either a sub-declaration of the end of the declaration (denoted with a ';'). In this case:
+    # GROUP 2 - Matches the "qualifiers", or anything after the "attributes" and before either a sub-declaration of the end of the declaration (denoted with a ';'). In this case:
     #  " uniform ViewProjObject "
     #
     # GROUP 3 (OPTIONAL) - Matches any uniform struct, if applicable. Since the example refers to a uniform struct, it would match as follows. In the case where the match isn't about a uniform struct, this group would be empty
@@ -172,9 +285,8 @@ def GenerateShaderMetadata(shaderPath: str, fullOutputPath: str, shaderName: str
     if metadataFileHandle is None:
         LogError(f'Failed to find or create metadata file: "{metadataFilePath}"')
         return
-        
-    layoutJSON = []
     
+    layoutData = []
     with open(shaderPath, "r") as shaderSource:
     
         for match in re.finditer(layoutStringRegex, shaderSource.read(), re.DOTALL):
@@ -193,21 +305,35 @@ def GenerateShaderMetadata(shaderPath: str, fullOutputPath: str, shaderName: str
             if layoutUniformStruct is not None:
                 layoutUniformStruct = ParseLayoutUniformStruct(layoutUniformStruct) # Re-assign from string to dictionary
                 
-            
-            # Now build the final JSON
             # NOTE - If a uniform struct exists, we require the layout's name to be AFTER the uniform struct
             layoutName = None
+            isLayoutAnonymous = False
             if layoutUniformStruct is not None:
                 layoutName = layoutUniformStruct["uniform_name"]
             else:
-                layoutName = layoutDeclaration["attributes"][-1] # The name should come last in the list in this case
+                numAttributes = len(layoutDeclaration["attributes"])
+                if numAttributes == 1:
+                    isLayoutAnonymous = True # The layout has no name, only a type or specifier (such as "in" or "out" for example)
+                elif numAttributes > 1:
+                    layoutName = layoutDeclaration["attributes"][-1] # The name should come last in the list in this case
+                else:
+                    LogError(f'Failed to match any attributes for layout "{layoutStr}" in shader "{shaderPath}"')
+            
+            # Figure out if we must reduce the length of the layout declarations because of the layout name
+            if isLayoutAnonymous or layoutUniformStruct is not None:
+                layoutDeclarationSize = len(layoutDeclaration["attributes"])
+            else:
+                layoutDeclarationSize = len(layoutDeclaration["attributes"]) - 1
+            
+            # Append the parsed data to the layoutData list, optionally adding an uniform struct entry if it exists
+            layout = { "name" : layoutName, "qualifiers" : layoutQualifiers, "attributes" : layoutDeclaration["attributes"][ : layoutDeclarationSize] }
+            if layoutUniformStruct is not None:
+                layout["uniform_struct"] = layoutUniformStruct["data_members"]
                 
-            layoutDeclarationSize = len(layoutDeclaration["attributes"])
-            layoutJSON.append({ "name" : layoutName, "qualifiers" : layoutQualifiers, "attributes" : layoutDeclaration["attributes"][:layoutDeclarationSize - 1] })
-                    
+            layoutData.append(layout)
         
         # Finally, write out the JSON
-        metadataFileHandle.write(json.dumps(layoutJSON, indent = 2))
+        metadataFileHandle.write(json.dumps(FilterShaderMetadata(layoutData), indent = 2))
         metadataFileHandle.close()
         
 
@@ -349,7 +475,7 @@ def main():
                 checksums = json.loads(checksumContents)
                 LogInfo(f'Checksum file loaded "{checksumFileName}"')
         except Exception as e:
-            LogError('Failed to load shader checksum file contents! Exception raised: {e}')
+            LogError(f'Failed to read shader checksum file contents! Exception raised: "{e}"')
             return
         
     else: # file doesn't exists so we're going to create it beforehand
@@ -362,7 +488,8 @@ def main():
     newHashesFound = False
     dependencyComputedHashes = {} # Stores the hashes for all the dependencies (a.k.a included .glsl files). We cache them to avoid re-calculating hashes for dependencies
     LogInfo(f'Using shader compiler "{G_SHADER_COMPILER}"')
-    for shaderPath in shaderList:
+    LogInfo(f'Found {len(shaderList)} shaders...')
+    for i, shaderPath in enumerate(shaderList):
     
         shaderPathStr = str(shaderPath)
         outputPath = GetShaderOutputPathFromSourcePath(shaderPath)
@@ -375,7 +502,7 @@ def main():
         
         # Log the shader source name for clarity in the build process
         shaderSourceFileName = shaderPathStr[shaderPathStr.rfind("\\") + 1 : ]
-        LogInfo(f'[ {shaderSourceFileName.upper()} ]')
+        LogInfo(f'({i + 1}/{len(shaderList)}) {shaderSourceFileName.upper()}')
         
         # Check dependencies. This function call returns a list of the dependencies which need to be
         # re-compiled. If it's empty, we know that the shader either has no dependencies or that no
@@ -414,10 +541,12 @@ def main():
         os.makedirs(fullOutputPath, exist_ok=True)
         checksums[shortShaderSrcPath] = newHash
         
-        CompileShaderByteCode(shaderPath, fullOutputPath, shaderName) # Shader source code compilation
+        # Compile shader step
+        CompileShaderByteCode(shaderPath, fullOutputPath, shaderName)
         LogInfo(f'Compiled "{os.path.normpath(shortShaderSrcPath)}" into "{os.path.normpath(shortShaderDstPath)}.spv"')
         
-        GenerateShaderMetadata(shaderPath, fullOutputPath, shaderName) # Shader metadata generation
+        # Generate metadata step
+        GenerateShaderMetadata(shaderPath, fullOutputPath, shaderName)
         LogInfo(f'Generated metadata file for "{os.path.normpath(shortShaderSrcPath)}" into "{os.path.normpath(shortShaderDstPath)}"')
         
     # Add the newest dependency checksums
