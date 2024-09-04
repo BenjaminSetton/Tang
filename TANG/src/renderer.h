@@ -20,6 +20,7 @@
 
 #include "passes/bloom_pass.h"
 #include "passes/cubemap_preprocessing_pass.h"
+#include "passes/pbr_pass.h"
 #include "passes/skybox_pass.h"
 
 #include "pipelines/ldr_pipeline.h"
@@ -216,6 +217,7 @@ namespace TANG
 		BloomPass bloomPass;
 		SkyboxPass skyboxPass;
 		CubemapPreprocessingPass cubemapPreprocessingPass;
+		PBRPass pbrPass;
 
 		HDRRenderPass hdrRenderPass;
 

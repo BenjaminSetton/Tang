@@ -8,9 +8,7 @@ set BUILD_DIR="build"
 
 echo Building project for %GENERATOR%...
 
-pushd ..
-call "vendor/premake/premake5.exe" %GENERATOR%
-popd
+call "TANG/vendor/premake/premake5.exe" %GENERATOR%
 
 echo Finished building project in %BUILD_DIR% folder!
 
