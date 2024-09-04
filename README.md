@@ -18,10 +18,10 @@ NOTES:
 
 ## COMPILING THE SOURCES
 
-1. Clone this repository "```git clone https://github.com/BenjaminSetton/TANG.git```" (no submodules currently)
-2. Under the "utils" folder, edit `build_project.bat`
+1. Clone this repository "```git clone https://github.com/BenjaminSetton/TANG.git```" (no submodules)
+2. Edit `TANG/tools/build_project.bat`
 3. Change the generator to your favorite IDE
-4. Run `build_project.bat`
+4. Run `TANG/tools/build_project.bat`
 
 ## RESOURCES
 
