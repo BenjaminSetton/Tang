@@ -14,6 +14,7 @@ A simple graphics framework that allows any project to quickly display stuff on 
 
 NOTES:
 - The release download will come with two things: the .lib file and a folder containing the headers. Alternatively, you can clone the repository and compile the source code yourself (look at "Compiling the sources")
+- This project also includes a demo scene that demonstrates some of the capabilities of the renderer. Looking through the demo scene's code should also paint a pretty good picture of how to use the renderer
 
 ## COMPILING THE SOURCES
 
