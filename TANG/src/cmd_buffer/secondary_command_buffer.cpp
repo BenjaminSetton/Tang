@@ -57,4 +57,9 @@ namespace TANG
 
 		cmdBufferState = COMMAND_BUFFER_STATE::ALLOCATED;
 	}
+
+	COMMAND_BUFFER_TYPE SecondaryCommandBuffer::GetType()
+	{
+		return COMMAND_BUFFER_TYPE::SECONDARY;
+	}
 }

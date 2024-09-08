@@ -186,4 +186,9 @@ namespace TANG
 
 		vkCmdExecuteCommands(commandBuffer, cmdBufferCount, cmdBuffers);
 	}
+
+	COMMAND_BUFFER_TYPE PrimaryCommandBuffer::GetType()
+	{
+		return COMMAND_BUFFER_TYPE::PRIMARY;
+	}
 }

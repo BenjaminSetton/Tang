@@ -128,10 +128,8 @@ namespace TANG
 		PickPhysicalDevice();
 		CreateLogicalDevice();
 		CreateSwapChain();
-		CreateDescriptorSetLayouts();
 		CreateDescriptorPool();
 		CreateRenderPasses();
-		CreatePipelines();
 		CreateCommandPools();
 		CreateColorAttachmentTextures();
 		CreateDepthTextures();
@@ -190,12 +188,11 @@ namespace TANG
 
 		CleanupSwapChain();
 
+		ldrPass.Destroy();
 		pbrPass.Destroy();
 		cubemapPreprocessingPass.Destroy();
 		skyboxPass.Destroy();
 		bloomPass.Destroy();
-
-		ldrSetLayoutCache.DestroyLayouts();
 
 		for (uint32_t i = 0; i < GetFDDSize(); i++)
 		{
@@ -218,8 +215,6 @@ namespace TANG
 		}
 
 		CommandPoolRegistry::Get().DestroyPools();
-
-		ldrPipeline.Destroy();
 
 		ldrRenderPass.Destroy();
 		hdrRenderPass.Destroy();
@@ -595,8 +590,8 @@ namespace TANG
 		out_resources.indexCount = totalIndexCount;
 		out_resources.uuid = asset->uuid;
 
-		CreateLDRUniformBuffer();
-		CreateLDRDescriptorSet();
+		ldrPass.SetData(&descriptorPool, &ldrRenderPass, swapChainExtent);
+		ldrPass.Create();
 
 		// Cache the UUID
 		fullscreenQuadAssetUUID = asset->uuid;
@@ -1408,12 +1403,6 @@ namespace TANG
 		CommandPoolRegistry::Get().CreatePools(surface);
 	}
 
-	void Renderer::CreatePipelines()
-	{
-		ldrPipeline.SetData(&ldrRenderPass, &ldrSetLayoutCache, swapChainExtent);
-		ldrPipeline.Create();
-	}
-
 	void Renderer::CreateRenderPasses()
 	{
 		// Some terminology about render passes from Reddit thread (https://www.reddit.com/r/vulkan/comments/a27cid/what_is_an_attachment_in_the_render_passes/):
@@ -1558,48 +1547,6 @@ namespace TANG
 		}
 	}
 
-	void Renderer::CreateLDRUniformBuffer()
-	{
-		VkDeviceSize ldrCameraDataUBOSize = sizeof(float);
-
-		for (uint32_t i = 0; i < GetFDDSize(); i++)
-		{
-			auto frameData = GetFDDAtIndex(i);
-
-			frameData->ldrCameraDataUBO.Create(ldrCameraDataUBOSize);
-			frameData->ldrCameraDataUBO.MapMemory();
-		}
-	}
-
-	void Renderer::CreateLDRDescriptorSet()
-	{
-		if (ldrSetLayoutCache.GetLayoutCount() != 1)
-		{
-			LogError("Failed to create LDR descriptor set, invalid layout count! Expected (%u) vs. actual (%u)", 1, ldrSetLayoutCache.GetLayoutCount());
-			return;
-		}
-
-		for (uint32_t i = 0; i < GetFDDSize(); i++)
-		{
-			auto frameData = GetFDDAtIndex(i);
-
-			frameData->ldrDescriptorSet.Create(descriptorPool, ldrSetLayoutCache.GetSetLayout(0).value());
-		}
-	}
-
-	void Renderer::CreateDescriptorSetLayouts()
-	{
-		CreateLDRSetLayouts();
-	}
-
-	void Renderer::CreateLDRSetLayouts()
-	{
-		SetLayoutSummary layout(0);
-		layout.AddBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);	// HDR texture
-		layout.AddBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT);			// Camera exposure
-		ldrSetLayoutCache.CreateSetLayout(layout, 0);
-	}
-
 	void Renderer::CreateDescriptorPool()
 	{
 		// We will create a descriptor pool that can allocate a large number of descriptor sets using the following logic:
@@ -1710,18 +1657,24 @@ namespace TANG
 
 	void Renderer::PerformLDRConversion(PrimaryCommandBuffer* cmdBuffer)
 	{
-		UpdateLDRUniformBuffer();
-		UpdateLDRDescriptorSet();
-
 		AssetResources* fullscreenQuadAsset = GetAssetResourcesFromUUID(fullscreenQuadAssetUUID);
-		auto frameData = GetCurrentFDD();
+		if (fullscreenQuadAsset == nullptr)
+		{
+			LogError("Fullscreen quad asset is not loaded! Failed to perform LDR conversion");
+			return;
+		}
 
-		cmdBuffer->CMD_BindPipeline(&ldrPipeline);
-		cmdBuffer->CMD_BindDescriptorSets(&ldrPipeline, 1, reinterpret_cast<VkDescriptorSet*>(&frameData->ldrDescriptorSet));
-		cmdBuffer->CMD_SetScissor({ 0, 0 }, swapChainExtent);
-		cmdBuffer->CMD_SetViewport(static_cast<float>(swapChainExtent.width), static_cast<float>(swapChainExtent.height));
-		cmdBuffer->CMD_BindMesh(fullscreenQuadAsset);
-		cmdBuffer->CMD_DrawIndexed(fullscreenQuadAsset->indexCount);
+		ldrPass.UpdateExposureUniformBuffer(currentFrame, 1.0f);
+		ldrPass.UpdateDescriptorSets(currentFrame, bloomPass.GetOutputTexture());
+
+		DrawData drawData{};
+		drawData.asset = fullscreenQuadAsset;
+		drawData.cmdBuffer = cmdBuffer;
+		drawData.framebuffer = &GetCurrentFDD()->hdrFramebuffer;
+		drawData.renderPass = &hdrRenderPass;
+		drawData.framebufferWidth = framebufferWidth;
+		drawData.framebufferHeight = framebufferHeight;
+		ldrPass.Draw(currentFrame, drawData);
 
 		// NOTE - color attachment is cleared at the beginning of the frame, so transitioning the layout to something
 		//        else won't make a difference
@@ -1768,26 +1721,6 @@ namespace TANG
 		}
 
 		vkDestroySwapchainKHR(logicalDevice, swapChain, nullptr);
-	}
-
-	void Renderer::UpdateLDRDescriptorSet()
-	{
-		FrameDependentData* frameData = GetCurrentFDD();
-		DescriptorSet& descSet = frameData->ldrDescriptorSet;
-
-		// Update view matrix + camera data descriptor set
-		WriteDescriptorSets writeDescSets(1, 1);
-		writeDescSets.AddImage(descSet.GetDescriptorSet(), 0, bloomPass.GetOutputTexture(), VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0);
-		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 1, &frameData->ldrCameraDataUBO);
-		descSet.Update(writeDescSets);
-	}
-
-	void Renderer::UpdateLDRUniformBuffer()
-	{
-		float exposure = 1.0f;
-
-		auto frameData = GetCurrentFDD();
-		frameData->ldrCameraDataUBO.UpdateData(&exposure, sizeof(exposure));
 	}
 
 	VkResult Renderer::SubmitQueue(QueueType type, VkSubmitInfo* info, uint32_t submitCount, VkFence fence, bool waitUntilIdle)

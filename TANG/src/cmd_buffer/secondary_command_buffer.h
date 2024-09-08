@@ -17,6 +17,8 @@ namespace TANG
 
 		void Create(VkCommandPool commandPool) override;
 
+		COMMAND_BUFFER_TYPE GetType() override;
+
 	};
 }
 

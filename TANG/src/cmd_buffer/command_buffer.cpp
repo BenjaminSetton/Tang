@@ -136,7 +136,7 @@ namespace TANG
 		vkCmdBindIndexBuffer(commandBuffer, resources->indexBuffer.GetBuffer(), 0, resources->indexBuffer.GetIndexType());
 	}
 
-	void CommandBuffer::CMD_BindDescriptorSets(const BasePipeline* pipeline, uint32_t descriptorSetCount, VkDescriptorSet* descriptorSets)
+	void CommandBuffer::CMD_BindDescriptorSets(const BasePipeline* pipeline, uint32_t descriptorSetCount, DescriptorSet* descriptorSets)
 	{
 		if (!IsCommandBufferValid() || !IsRecording())
 		{
@@ -144,7 +144,8 @@ namespace TANG
 			return;
 		}
 
-		vkCmdBindDescriptorSets(commandBuffer, pipeline->GetBindPoint(), pipeline->GetPipelineLayout(), 0, descriptorSetCount, descriptorSets, 0, nullptr);
+		// This explicit cast to a VkDescriptorSet only works because we have a static assert that won't let the program compile unless sizeof(VkDescriptorSet) == sizeof(DescriptorSet )
+		vkCmdBindDescriptorSets(commandBuffer, pipeline->GetBindPoint(), pipeline->GetPipelineLayout(), 0, descriptorSetCount, reinterpret_cast<VkDescriptorSet*>(descriptorSets), 0, nullptr);
 	}
 
 	void CommandBuffer::CMD_PushConstants(const BasePipeline* pipeline, void* constantData, uint32_t size, VkShaderStageFlags stageFlags)

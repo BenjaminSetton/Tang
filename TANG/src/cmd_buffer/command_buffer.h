@@ -20,9 +20,16 @@ namespace TANG
 		DESTROYED		// Command buffer has already been destroyed
 	};
 
+	enum class COMMAND_BUFFER_TYPE
+	{
+		PRIMARY,
+		SECONDARY
+	};
+
 	// Forward declarations
 	struct AssetResources;
 	class BasePipeline;
+	class DescriptorSet;
 
 	// Pure virtual base command buffer class. This encapsulates all basic functionality shared between
 	// a primary and secondary command buffer, both of which derive from this class
@@ -43,7 +50,7 @@ namespace TANG
 		void EndRecording();
 
 		void CMD_BindMesh(const AssetResources* resources);
-		void CMD_BindDescriptorSets(const BasePipeline* pipeline, uint32_t descriptorSetCount, VkDescriptorSet* descriptorSets);
+		void CMD_BindDescriptorSets(const BasePipeline* pipeline, uint32_t descriptorSetCount, DescriptorSet* descriptorSets);
 		void CMD_PushConstants(const BasePipeline* pipeline, void* constantData, uint32_t size, VkShaderStageFlags stageFlags);
 		void CMD_BindPipeline(const BasePipeline* pipeline);
 		void CMD_SetViewport(float width, float height);
@@ -71,10 +78,14 @@ namespace TANG
 		// Performs a few checks that tell us whether we can write commands to this command buffer
 		bool IsCommandBufferValid() const;
 
+		// Returns the type of the command buffer (primary or secondary)
+		virtual COMMAND_BUFFER_TYPE GetType() = 0;
+
 	protected:
 
 		VkCommandBuffer commandBuffer;
 		COMMAND_BUFFER_STATE cmdBufferState;
+		COMMAND_BUFFER_TYPE cmdBufferType;
 		bool isOneTimeSubmit;
 	};
 }

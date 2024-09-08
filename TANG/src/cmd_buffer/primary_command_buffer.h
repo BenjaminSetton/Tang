@@ -37,6 +37,8 @@ namespace TANG
 		// Records an execution command for the provided secondary command buffer
 		void CMD_ExecuteSecondaryCommands(VkCommandBuffer* cmdBuffers, uint32_t cmdBufferCount);
 
+		COMMAND_BUFFER_TYPE GetType() override;
+
 	private:
 
 		// The renderPassState is initialized to ENDED. This sounds weird, but the only state that can transition to BEGUN is ENDED,

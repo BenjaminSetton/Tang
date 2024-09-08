@@ -159,13 +159,7 @@ namespace TANG
 			return;
 		}
 
-		// Retrieve the vector of descriptor sets for the given asset
 		auto& descSets = pbrDescriptorSets[frameIndex];
-		std::vector<VkDescriptorSet> vkDescSets(descSets.size());
-		for (uint32_t i = 0; i < descSets.size(); i++)
-		{
-			vkDescSets[i] = descSets[i].GetDescriptorSet();
-		}
 
 		VkCommandBufferInheritanceInfo inheritanceInfo{};
 		inheritanceInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
@@ -177,7 +171,7 @@ namespace TANG
 		data.cmdBuffer->BeginRecording(VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT | VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT, &inheritanceInfo);
 
 		data.cmdBuffer->CMD_BindMesh(data.asset);
-		data.cmdBuffer->CMD_BindDescriptorSets(&pbrPipeline, static_cast<uint32_t>(vkDescSets.size()), vkDescSets.data());
+		data.cmdBuffer->CMD_BindDescriptorSets(&pbrPipeline, static_cast<uint32_t>(descSets.size()), descSets.data());
 		data.cmdBuffer->CMD_BindPipeline(&pbrPipeline);
 		data.cmdBuffer->CMD_SetScissor({ 0, 0 }, { data.framebufferWidth, data.framebufferHeight });
 		data.cmdBuffer->CMD_SetViewport(static_cast<float>(data.framebufferWidth), static_cast<float>(data.framebufferHeight));

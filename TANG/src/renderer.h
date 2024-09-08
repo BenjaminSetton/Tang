@@ -20,11 +20,9 @@
 
 #include "passes/bloom_pass.h"
 #include "passes/cubemap_preprocessing_pass.h"
+#include "passes/ldr_pass.h"
 #include "passes/pbr_pass.h"
 #include "passes/skybox_pass.h"
-
-#include "pipelines/ldr_pipeline.h"
-#include "pipelines/pbr_pipeline.h"
 
 #include "render_passes/hdr_render_pass.h"
 #include "render_passes/ldr_render_pass.h"
@@ -184,12 +182,10 @@ namespace TANG
 		SkyboxPass skyboxPass;
 		CubemapPreprocessingPass cubemapPreprocessingPass;
 		PBRPass pbrPass;
+		LDRPass ldrPass;
 
 		HDRRenderPass hdrRenderPass;
-
 		LDRRenderPass ldrRenderPass;
-		LDRPipeline ldrPipeline;
-		SetLayoutCache ldrSetLayoutCache;
 
 		UUID skyboxAssetUUID;
 		UUID fullscreenQuadAssetUUID;
@@ -256,8 +252,6 @@ namespace TANG
 
 		void CreateCommandPools();
 
-		void CreatePipelines();
-
 		void CreateRenderPasses();
 
 		void CreateFramebuffers();
@@ -267,12 +261,6 @@ namespace TANG
 		void CreatePrimaryCommandBuffers();
 
 		void CreateSyncObjects();
-
-		void CreateLDRUniformBuffer();
-		void CreateLDRDescriptorSet();
-
-		void CreateDescriptorSetLayouts();
-		void CreateLDRSetLayouts();
 
 		void CreateDescriptorPool();
 
@@ -286,10 +274,6 @@ namespace TANG
 		void RecreateSwapChain();
 
 		void CleanupSwapChain();
-
-		void UpdateLDRDescriptorSet();
-
-		void UpdateLDRUniformBuffer();
 
 		// Submits the provided queue type, along with the provided command buffer. Return value should _not_ be ignored
 		[[nodiscard]] VkResult SubmitQueue(QueueType type, VkSubmitInfo* info, uint32_t submitCount, VkFence fence = VK_NULL_HANDLE, bool waitUntilIdle = false);

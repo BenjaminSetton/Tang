@@ -35,9 +35,8 @@ namespace TANG
 
 	};
 
-	// The size of a DescriptorSet object is guaranteed to be equivalent to that of a VkDescriptorSet object, meaning an array
+	// Guarantee that the size of a DescriptorSet object is equivalent to that of a VkDescriptorSet object, meaning an array
 	// of DescriptorSet objects can be interpreted as an array of VkDescriptorSet objects
-	// Guarantee that the size of DescriptorSet and VkDescriptorSet matches
 	TNG_ASSERT_SAME_SIZE(DescriptorSet, VkDescriptorSet);
 }
 

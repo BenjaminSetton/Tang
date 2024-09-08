@@ -9,7 +9,7 @@
 namespace TANG
 {
 	// Forward declaration
-	class SecondaryCommandBuffer;
+	class CommandBuffer;
 	struct AssetResources;
 	class Framebuffer;
 	class BaseRenderPass;
@@ -20,7 +20,7 @@ namespace TANG
 	{
 		uint32_t framebufferWidth;
 		uint32_t framebufferHeight;
-		SecondaryCommandBuffer* cmdBuffer;
+		CommandBuffer* cmdBuffer;
 		const BaseRenderPass* renderPass;
 		const Framebuffer* framebuffer;
 		const AssetResources* asset;

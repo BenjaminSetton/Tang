@@ -168,7 +168,7 @@ namespace TANG
 		float currentHeight = static_cast<float>(bloomDownscalingTexture.GetHeight());
 		for (uint32_t mipLevel = 0; mipLevel < CONFIG::BloomMaxMips - 1; mipLevel++)
 		{
-			cmdBuffer->CMD_BindDescriptorSets(&bloomDownscalingPipeline, 1, reinterpret_cast<VkDescriptorSet*>(&bloomDownscalingDescriptorSets[currentFrame][mipLevel]));
+			cmdBuffer->CMD_BindDescriptorSets(&bloomDownscalingPipeline, 1, &bloomDownscalingDescriptorSets[currentFrame][mipLevel]);
 			cmdBuffer->CMD_PushConstants(&bloomDownscalingPipeline, static_cast<void*>(&mipLevel), sizeof(mipLevel), VK_SHADER_STAGE_COMPUTE_BIT);
 
 			// Dispatch as many work groups as the first mip level of the input texture, divided by the number of invocations (local_size in compute shader)
@@ -202,7 +202,7 @@ namespace TANG
 		for (uint32_t i = 0; i < CONFIG::BloomMaxMips - 1; i++)
 		{
 			cmdBuffer->CMD_PushConstants(&bloomDownscalingPipeline, static_cast<void*>(&filterRadius), sizeof(filterRadius), VK_SHADER_STAGE_COMPUTE_BIT);
-			cmdBuffer->CMD_BindDescriptorSets(&bloomUpscalingPipeline, 1, reinterpret_cast<VkDescriptorSet*>(&bloomUpscalingDescriptorSets[currentFrame][i]));
+			cmdBuffer->CMD_BindDescriptorSets(&bloomUpscalingPipeline, 1, &bloomUpscalingDescriptorSets[currentFrame][i]);
 
 			// Dispatch as many work groups as the first mip level of the input texture, divided by the number of invocations (local_size in compute shader)
 			// We starting sampling from mip level 0 (N - 1) and write to mip level 1 (N), all the way down to N = CONFIG::BloomMaxMips
@@ -236,7 +236,7 @@ namespace TANG
 
 		glm::vec2 bloomData(CONFIG::BloomIntensity, CONFIG::BloomCompositionWeight); // x: bloom intensity, y: bloom mix percentage
 		cmdBuffer->CMD_PushConstants(&bloomCompositionPipeline, static_cast<void*>(&bloomData), sizeof(bloomData), VK_SHADER_STAGE_COMPUTE_BIT);
-		cmdBuffer->CMD_BindDescriptorSets(&bloomCompositionPipeline, 1, reinterpret_cast<VkDescriptorSet*>(&bloomCompositionDescriptorSets[currentFrame]));
+		cmdBuffer->CMD_BindDescriptorSets(&bloomCompositionPipeline, 1, &bloomCompositionDescriptorSets[currentFrame]);
 
 		// Dispatch as many work groups as the first mip level of the input texture, divided by the number of invocations (local_size in compute shader)
 		uint32_t x = bloomCompositionTexture.GetWidth();

@@ -611,9 +611,7 @@ namespace TANG
 		// a different texture each pass) 
 		for (uint32_t i = 0; i < 6; i++)
 		{
-			VkDescriptorSet descriptors[1] = { cubemapPreprocessingDescriptorSets[i].GetDescriptorSet() };
-			cmdBuffer->CMD_BindDescriptorSets(&cubemapPreprocessingPipeline, 1, descriptors);
-
+			cmdBuffer->CMD_BindDescriptorSets(&cubemapPreprocessingPipeline, 1, &cubemapPreprocessingDescriptorSets[i]);
 			cmdBuffer->CMD_DrawIndexed(asset->indexCount);
 		}
 
@@ -630,9 +628,7 @@ namespace TANG
 		// a different texture each pass) 
 		for (uint32_t i = 0; i < 6; i++)
 		{
-			VkDescriptorSet descriptors[1] = { irradianceSamplingDescriptorSets[i].GetDescriptorSet() };
-			cmdBuffer->CMD_BindDescriptorSets(&irradianceSamplingPipeline, 1, descriptors);
-
+			cmdBuffer->CMD_BindDescriptorSets(&irradianceSamplingPipeline, 1, &irradianceSamplingDescriptorSets[i]);
 			cmdBuffer->CMD_DrawIndexed(asset->indexCount);
 		}
 
@@ -656,10 +652,10 @@ namespace TANG
 			// a different texture each pass) 
 			for (uint32_t j = 0; j < 6; j++)
 			{
-				VkDescriptorSet descriptors[2] = 
+				DescriptorSet descriptors[2] = 
 				{ 
-					prefilterMapCubemapDescriptorSets[j].GetDescriptorSet(),
-					prefilterMapRoughnessDescriptorSets[i].GetDescriptorSet()
+					prefilterMapCubemapDescriptorSets[j],
+					prefilterMapRoughnessDescriptorSets[i]
 				};
 				cmdBuffer->CMD_BindDescriptorSets(&prefilterMapPipeline, 2, descriptors);
 

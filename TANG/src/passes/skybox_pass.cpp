@@ -120,7 +120,7 @@ namespace TANG
 		data.cmdBuffer->CMD_SetViewport(static_cast<float>(data.framebufferWidth), static_cast<float>(data.framebufferHeight));
 		data.cmdBuffer->CMD_BindPipeline(&skyboxPipeline);
 		data.cmdBuffer->CMD_BindMesh(data.asset);
-		data.cmdBuffer->CMD_BindDescriptorSets(&skyboxPipeline, static_cast<uint32_t>(skyboxDescriptorSets.size()), reinterpret_cast<VkDescriptorSet*>(skyboxDescriptorSets[currentFrame].data()));
+		data.cmdBuffer->CMD_BindDescriptorSets(&skyboxPipeline, static_cast<uint32_t>(skyboxDescriptorSets.size()), skyboxDescriptorSets[currentFrame].data());
 		data.cmdBuffer->CMD_DrawIndexed(data.asset->indexCount);
 
 		data.cmdBuffer->EndRecording();
