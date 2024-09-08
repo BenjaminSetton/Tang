@@ -3,6 +3,7 @@
 
 #include <vector>
 
+#include "../utils/sanity_check.h"
 #include "vulkan/vulkan.h"
 
 namespace TANG
@@ -12,9 +13,6 @@ namespace TANG
 	class DescriptorSetLayout;
 	class WriteDescriptorSets;
 
-	// All the components above must be used in one way or another to create and update the descriptor sets.
-	// The size of a DescriptorSet object is guaranteed to be equivalent to that of a VkDescriptorSet object, meaning an array
-	// of DescriptorSet objects can be interpreted as an array of VkDescriptorSet objects
 	class DescriptorSet
 	{
 	public:
@@ -36,6 +34,11 @@ namespace TANG
 		VkDescriptorSet descriptorSet;
 
 	};
+
+	// The size of a DescriptorSet object is guaranteed to be equivalent to that of a VkDescriptorSet object, meaning an array
+	// of DescriptorSet objects can be interpreted as an array of VkDescriptorSet objects
+	// Guarantee that the size of DescriptorSet and VkDescriptorSet matches
+	TNG_ASSERT_SAME_SIZE(DescriptorSet, VkDescriptorSet);
 }
 
 #endif

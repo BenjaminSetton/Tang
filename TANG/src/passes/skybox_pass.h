@@ -24,8 +24,10 @@ namespace TANG
 
 		void SetData(const DescriptorPool* descriptorPool, const HDRRenderPass* hdrRenderPass, VkExtent2D swapChainExtent);
 
-		void UpdateSkyboxCubemapShaderParameter(const TextureResource* skyboxCubemap);
-		void UpdateCameraMatricesShaderParameters(uint32_t frameIndex, const UniformBuffer* view, const UniformBuffer* proj);
+		void UpdateSkyboxCubemap(const TextureResource* skyboxCubemap);
+		void UpdateViewProjUniformBuffers(uint32_t frameIndex, const glm::mat4& view, const glm::mat4 proj);
+
+		void UpdateDescriptorSets(uint32_t frameIndex);
 
 		void Create() override;
 		void Destroy() override;
@@ -37,11 +39,14 @@ namespace TANG
 		void CreatePipelines() override;
 		void CreateSetLayoutCaches() override;
 		void CreateDescriptorSets() override;
+		void CreateUniformBuffers() override;
 
 		void ResetBorrowedData() override;
 
 		SkyboxPipeline skyboxPipeline;
 		SetLayoutCache skyboxSetLayoutCache;
+		std::array<UniformBuffer, CONFIG::MaxFramesInFlight> viewUBO;
+		std::array<UniformBuffer, CONFIG::MaxFramesInFlight> projUBO;
 		std::array<std::array<DescriptorSet, 2>, CONFIG::MaxFramesInFlight> skyboxDescriptorSets;
 
 		struct  

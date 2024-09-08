@@ -15,7 +15,6 @@ namespace TANG
 		// Ensure a new pool is created after a new queue type is added!
 		TNG_ASSERT_COMPILE(static_cast<uint32_t>(QueueType::COUNT) == 4);
 
-		VkDevice logicalDevice = GetLogicalDevice();
 		VkPhysicalDevice physicalDevice = GetPhysicalDevice();
 
 		QueueFamilyIndices queueFamilyIndices = FindQueueFamilies(physicalDevice, surface);

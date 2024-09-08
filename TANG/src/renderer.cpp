@@ -111,7 +111,7 @@ namespace TANG
 	Renderer::Renderer() : 
 		vkInstance(VK_NULL_HANDLE), debugMessenger(VK_NULL_HANDLE), surface(VK_NULL_HANDLE), queues(), swapChain(VK_NULL_HANDLE), 
 		swapChainImageFormat(VK_FORMAT_UNDEFINED), swapChainExtent({ 0, 0 }), frameDependentData(), swapChainImageDependentData(),
-		pbrSetLayoutCache(), pbrPipeline(), currentFrame(0), resourcesMap(), assetResources(), descriptorPool(), 
+		currentFrame(0), resourcesMap(), assetResources(), descriptorPool(), 
 		framebufferWidth(0), framebufferHeight(0), skyboxAssetUUID(INVALID_UUID), fullscreenQuadAssetUUID(INVALID_UUID)
 	{ }
 
@@ -152,9 +152,6 @@ namespace TANG
 		float aspectRatio = swapChainExtent.width / static_cast<float>(swapChainExtent.height);
 		startingProjectionMatrix = glm::perspective(glm::radians(45.0f), aspectRatio, 0.1f, 1000.0f);
 		startingProjectionMatrix[1][1] *= -1; // NOTE - GLM was originally designed for OpenGL, where the Y coordinate of the clip coordinates is inverted
-	
-		CreateFrameUniformBuffers();
-		InitializeFrameUniformBuffers();
 	}
 
 	void Renderer::Update(float deltaTime)
@@ -193,28 +190,19 @@ namespace TANG
 
 		CleanupSwapChain();
 
+		pbrPass.Destroy();
 		cubemapPreprocessingPass.Destroy();
 		skyboxPass.Destroy();
 		bloomPass.Destroy();
 
 		ldrSetLayoutCache.DestroyLayouts();
-		pbrSetLayoutCache.DestroyLayouts();
 
 		for (uint32_t i = 0; i < GetFDDSize(); i++)
 		{
 			auto frameData = GetFDDAtIndex(i);
 
-			for (auto& iter : frameData->assetDescriptorDataMap)
-			{
-				iter.second.transformUBO.Destroy();
-			}
-
 			frameData->hdrFramebuffer.Destroy();
-
 			frameData->ldrCameraDataUBO.Destroy();
-			frameData->cameraDataUBO.Destroy();
-			frameData->viewUBO.Destroy();
-			frameData->projUBO.Destroy();
 		}
 
 		descriptorPool.Destroy();
@@ -232,7 +220,6 @@ namespace TANG
 		CommandPoolRegistry::Get().DestroyPools();
 
 		ldrPipeline.Destroy();
-		pbrPipeline.Destroy();
 
 		ldrRenderPass.Destroy();
 		hdrRenderPass.Destroy();
@@ -248,6 +235,26 @@ namespace TANG
 		}
 
 		vkDestroyInstance(vkInstance, nullptr);
+	}
+
+	DescriptorSet Renderer::AllocateDescriptorSet()
+	{
+		TNG_TODO();
+		return {};
+	}
+
+	PrimaryCommandBuffer Renderer::AllocatePrimaryCommandBuffer(QueueType type)
+	{
+		UNUSED(type);
+		TNG_TODO();
+		return {};
+	}
+
+	SecondaryCommandBuffer Renderer::AllocateSecondaryCommandBuffer(QueueType type)
+	{
+		UNUSED(type);
+		TNG_TODO();
+		return {};
 	}
 
 	// Loads an asset which implies grabbing the vertices and indices from the asset container
@@ -443,17 +450,16 @@ namespace TANG
 		out_resources.indexCount = totalIndexCount;
 		out_resources.uuid = asset->uuid;
 
-		CreateAssetUniformBuffers(out_resources.uuid);
-		CreateAssetDescriptorSets(out_resources.uuid);
+		pbrPass.SetData(&descriptorPool, &hdrRenderPass, swapChainExtent);
+		pbrPass.Create();
 
-		// Initialize the view + projection matrix UBOs to some values, so when new assets are created they get sensible defaults
-		// for their descriptor sets. 
-		// Note that we're operating under the assumption that assets will only be created before
-		// we hit the update loop, simply because we're updating all frames in flight here. If this changes in the future, another
-		// solution must be implemented
-		for (uint32_t i = 0; i < GetFDDSize(); i++)
+		Transform defaultTransform{};
+		for (uint32_t i = 0; i < CONFIG::MaxFramesInFlight; i++)
 		{
-			InitializeDescriptorSets(out_resources.uuid, i);
+			pbrPass.UpdateTransformUniformBuffer(i, defaultTransform);
+			pbrPass.UpdateViewUniformBuffer(i, startingCameraViewMatrix);
+			pbrPass.UpdateProjUniformBuffer(i, startingProjectionMatrix);
+			pbrPass.UpdateCameraUniformBuffer(i, startingCameraPosition);
 		}
 	}
 
@@ -544,7 +550,8 @@ namespace TANG
 		skyboxPass.SetData(&descriptorPool, &hdrRenderPass, swapChainExtent);
 		skyboxPass.Create();
 
-		skyboxPass.UpdateSkyboxCubemapShaderParameter(cubemapPreprocessingPass.GetSkyboxCubemap());
+		skyboxPass.UpdateViewProjUniformBuffers(currentFrame, startingCameraViewMatrix, startingProjectionMatrix);
+		skyboxPass.UpdateSkyboxCubemap(cubemapPreprocessingPass.GetSkyboxCubemap());
 
 		// Cache the skybox mesh UUID. We used it to convert the HDR equirectangular map to a cubemap, but we can
 		// reuse the cube mesh to draw the skybox in future frames as well
@@ -695,36 +702,18 @@ namespace TANG
 
 	void Renderer::UpdateCameraData(const glm::vec3& position, const glm::mat4& viewMatrix)
 	{
-		auto frameData = GetCurrentFDD();
-		auto& assetDescriptorMap = frameData->assetDescriptorDataMap;
+		// Update uniforms
+		pbrPass.UpdateCameraUniformBuffer(currentFrame, position);
+		pbrPass.UpdateViewUniformBuffer(currentFrame, viewMatrix);
+		pbrPass.UpdateProjUniformBuffer(currentFrame, startingProjectionMatrix);
 
-		UpdateCameraDataUniformBuffers(currentFrame, position, viewMatrix);
-		UpdateProjectionUniformBuffer(currentFrame);
+		skyboxPass.UpdateViewProjUniformBuffers(currentFrame, viewMatrix, startingProjectionMatrix);
 
-		// Update the view matrix and camera position UBOs for all assets, as well as the descriptor sets unless they're not being drawn this frame
-		for (auto& assetData : assetDescriptorMap)
-		{
-			UUID assetUUID = assetData.first;
-			AssetResources* resources = GetAssetResourcesFromUUID(assetUUID);
-			if (resources == nullptr)
-			{
-				continue;
-			}
+		// Wait for the frame to finish using the camera buffer before updating it
+		vkWaitForFences(GetLogicalDevice(), 1, &GetCurrentFDD()->inFlightFence, VK_TRUE, UINT64_MAX);
 
-			// Don't update asset resources that are not being drawn this frame
-			if (!resources->shouldDraw)
-			{
-				continue;
-			}
-
-			// Wait for the frame to finish using the camera buffer before updating it
-			vkWaitForFences(GetLogicalDevice(), 1, &frameData->inFlightFence, VK_TRUE, UINT64_MAX);
-
-			UpdateCameraDataDescriptorSet(assetUUID, currentFrame);
-		}
-
-		// Update the camera descriptor for the skybox as well
-		skyboxPass.UpdateCameraMatricesShaderParameters(currentFrame, &frameData->viewUBO, &frameData->projUBO);
+		// Update skybox descriptors - pbr descriptors are updated at once before drawing
+		skyboxPass.UpdateDescriptorSets(currentFrame);
 	}
 
 	void Renderer::RecreateSwapChain()
@@ -917,6 +906,59 @@ namespace TANG
 		}
 	}
 
+	void Renderer::DrawAssets(PrimaryCommandBuffer* cmdBuffer)
+	{
+		std::vector<VkCommandBuffer> secondaryCmdBuffers;
+		secondaryCmdBuffers.resize(assetResources.size()); // At most we can have the same number of cmd buffers as there are asset resources
+		uint32_t secondaryCmdBufferCount = 0;
+
+		for (AssetResources& resources : assetResources)
+		{
+			UUID& uuid = resources.uuid;
+
+			if (resources.shouldDraw)
+			{
+				SecondaryCommandBuffer* secondaryCmdBuffer = GetSecondaryCommandBufferFromUUID(uuid);
+				if (secondaryCmdBuffer == nullptr)
+				{
+					continue;
+				}
+
+				// Update the transform for the asset
+				pbrPass.UpdateTransformUniformBuffer(currentFrame, resources.transform);
+
+				// TODO - This is super hard-coded, but it'll do for now
+				std::array<const TextureResource*, 8> textures;
+				textures[0] = &resources.material[static_cast<uint32_t>(Material::TEXTURE_TYPE::DIFFUSE)];
+				textures[1] = &resources.material[static_cast<uint32_t>(Material::TEXTURE_TYPE::NORMAL)];
+				textures[2] = &resources.material[static_cast<uint32_t>(Material::TEXTURE_TYPE::METALLIC)];
+				textures[3] = &resources.material[static_cast<uint32_t>(Material::TEXTURE_TYPE::ROUGHNESS)];
+				textures[4] = &resources.material[static_cast<uint32_t>(Material::TEXTURE_TYPE::LIGHTMAP)];
+				textures[5] = cubemapPreprocessingPass.GetIrradianceMap();
+				textures[6] = cubemapPreprocessingPass.GetPrefilterMap();
+				textures[7] = cubemapPreprocessingPass.GetBRDFConvolutionMap();
+				pbrPass.UpdateDescriptorSets(currentFrame, textures);
+
+				DrawData drawData{};
+				drawData.asset = &resources;
+				drawData.cmdBuffer = secondaryCmdBuffer;
+				drawData.framebuffer = &(GetCurrentFDD()->hdrFramebuffer);
+				drawData.renderPass = &hdrRenderPass;
+				drawData.framebufferWidth = framebufferWidth;
+				drawData.framebufferHeight = framebufferHeight;
+				pbrPass.Draw(currentFrame, drawData);
+
+				secondaryCmdBuffers[secondaryCmdBufferCount++] = secondaryCmdBuffer->GetBuffer();
+			}
+		}
+
+		// Don't attempt to execute 0 command buffers
+		if (secondaryCmdBufferCount > 0)
+		{
+			cmdBuffer->CMD_ExecuteSecondaryCommands(secondaryCmdBuffers.data(), secondaryCmdBufferCount);
+		}
+	}
+
 	void Renderer::DrawSkybox(PrimaryCommandBuffer* cmdBuffer)
 	{
 		auto frameData = GetCurrentFDD();
@@ -934,15 +976,16 @@ namespace TANG
 			return;
 		}
 
-		DrawData data{};
-		data.asset = skyboxAsset;
-		data.cmdBuffer = secondaryCmdBuffer;
-		data.framebuffer = &frameData->hdrFramebuffer;
-		data.renderPass = &hdrRenderPass;
-		data.framebufferWidth = framebufferWidth;
-		data.framebufferHeight = framebufferHeight;
+		skyboxPass.UpdateDescriptorSets(currentFrame);
 
-		skyboxPass.Draw(currentFrame, data);
+		DrawData drawData{};
+		drawData.asset = skyboxAsset;
+		drawData.cmdBuffer = secondaryCmdBuffer;
+		drawData.framebuffer = &frameData->hdrFramebuffer;
+		drawData.renderPass = &hdrRenderPass;
+		drawData.framebufferWidth = framebufferWidth;
+		drawData.framebufferHeight = framebufferHeight;
+		skyboxPass.Draw(currentFrame, drawData);
 
 		VkCommandBuffer vkCmdBuffer = secondaryCmdBuffer->GetBuffer();
 		cmdBuffer->CMD_ExecuteSecondaryCommands(&vkCmdBuffer, 1);
@@ -1367,9 +1410,6 @@ namespace TANG
 
 	void Renderer::CreatePipelines()
 	{
-		pbrPipeline.SetData(&hdrRenderPass, &pbrSetLayoutCache, swapChainExtent);
-		pbrPipeline.Create();
-
 		ldrPipeline.SetData(&ldrRenderPass, &ldrSetLayoutCache, swapChainExtent);
 		ldrPipeline.Create();
 	}
@@ -1518,49 +1558,6 @@ namespace TANG
 		}
 	}
 
-	void Renderer::CreateAssetUniformBuffers(UUID uuid)
-	{
-		VkDeviceSize transformUBOSize = sizeof(TransformUBO);
-
-		for (uint32_t i = 0; i < GetFDDSize(); i++)
-		{
-			FrameDependentData* currentFDD = GetFDDAtIndex(i);
-			AssetDescriptorData& assetDescriptorData = currentFDD->assetDescriptorDataMap[uuid];
-
-			// Create the TransformUBO
-			UniformBuffer& transUBO = assetDescriptorData.transformUBO;
-			transUBO.Create(transformUBOSize);
-			transUBO.MapMemory();
-		}
-	}
-
-	void Renderer::CreateFrameUniformBuffers()
-	{
-		VkDeviceSize viewUBOSize = sizeof(ViewUBO);
-		VkDeviceSize projUBOSize = sizeof(ProjUBO);
-		VkDeviceSize cameraDataSize = sizeof(CameraDataUBO);
-
-		for (uint32_t i = 0; i < GetFDDSize(); i++)
-		{
-			auto frameData = GetFDDAtIndex(i);
-
-			// Create the ViewUBO
-			UniformBuffer& vpUBO = frameData->viewUBO;
-			vpUBO.Create(viewUBOSize);
-			vpUBO.MapMemory();
-
-			// Create the ProjUBO
-			UniformBuffer& projUBO = frameData->projUBO;
-			projUBO.Create(projUBOSize);
-			projUBO.MapMemory();
-
-			// Create the camera data UBO
-			UniformBuffer& cameraDataUBO = frameData->cameraDataUBO;
-			cameraDataUBO.Create(cameraDataSize);
-			cameraDataUBO.MapMemory();
-		}
-	}
-
 	void Renderer::CreateLDRUniformBuffer()
 	{
 		VkDeviceSize ldrCameraDataUBOSize = sizeof(float);
@@ -1571,32 +1568,6 @@ namespace TANG
 
 			frameData->ldrCameraDataUBO.Create(ldrCameraDataUBOSize);
 			frameData->ldrCameraDataUBO.MapMemory();
-		}
-	}
-
-	void Renderer::CreateAssetDescriptorSets(UUID uuid)
-	{
-		uint32_t fddSize = GetFDDSize();
-
-		for (uint32_t i = 0; i < fddSize; i++)
-		{
-			FrameDependentData* currentFDD = GetFDDAtIndex(i);
-			currentFDD->assetDescriptorDataMap.insert({ uuid, AssetDescriptorData() });
-			AssetDescriptorData& assetDescriptorData = currentFDD->assetDescriptorDataMap[uuid];
-
-			for (uint32_t j = 0; j < pbrSetLayoutCache.GetLayoutCount(); j++)
-			{
-				assetDescriptorData.descriptorSets.push_back(DescriptorSet());
-				DescriptorSet* currentSet = &assetDescriptorData.descriptorSets.back();
-
-				std::optional<DescriptorSetLayout> setLayoutOpt = pbrSetLayoutCache.GetSetLayout(j);
-				if (!setLayoutOpt.has_value())
-				{
-					LogError("Failed to create asset descriptor set #%u for asset with UUID '%u'", j, uuid);
-					continue;
-				}
-				currentSet->Create(descriptorPool, setLayoutOpt.value());
-			}
 		}
 	}
 
@@ -1618,36 +1589,7 @@ namespace TANG
 
 	void Renderer::CreateDescriptorSetLayouts()
 	{
-		CreatePBRSetLayouts();
 		CreateLDRSetLayouts();
-	}
-
-	void Renderer::CreatePBRSetLayouts()
-	{
-		// Holds PBR textures
-		SetLayoutSummary persistentLayout(0);
-		persistentLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Diffuse texture
-		persistentLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Normal texture
-		persistentLayout.AddBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Metallic texture
-		persistentLayout.AddBinding(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Roughness texture
-		persistentLayout.AddBinding(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Lightmap texture
-		persistentLayout.AddBinding(5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Irradiance map (diffuse IBL)
-		persistentLayout.AddBinding(6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // Prefilter map (specular IBL)
-		persistentLayout.AddBinding(7, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT); // BRDF convolution map (specular IBL)
-		pbrSetLayoutCache.CreateSetLayout(persistentLayout, 0);
-
-		// Holds ProjUBO
-		SetLayoutSummary unstableLayout(1);
-		unstableLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);           // Projection matrix
-		unstableLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT);         // Camera exposure
-		pbrSetLayoutCache.CreateSetLayout(unstableLayout, 0);
-
-		// Holds TransformUBO + ViewUBO + CameraDataUBO
-		SetLayoutSummary volatileLayout(2);
-		volatileLayout.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);   // Transform matrix
-		volatileLayout.AddBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT); // Camera data
-		volatileLayout.AddBinding(2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);   // View matrix
-		pbrSetLayoutCache.CreateSetLayout(volatileLayout, 0);
 	}
 
 	void Renderer::CreateLDRSetLayouts()
@@ -1766,70 +1708,6 @@ namespace TANG
 		}
 	}
 
-	void Renderer::DrawAssets(PrimaryCommandBuffer* cmdBuffer)
-	{
-		std::vector<VkCommandBuffer> secondaryCmdBuffers;
-		secondaryCmdBuffers.resize(assetResources.size()); // At most we can have the same number of cmd buffers as there are asset resources
-		uint32_t secondaryCmdBufferCount = 0;
-		for (auto& iter : assetResources)
-		{
-			UUID& uuid = iter.uuid;
-
-			if (iter.shouldDraw)
-			{
-				SecondaryCommandBuffer* secondaryCmdBuffer = GetSecondaryCommandBufferFromUUID(uuid);
-				if (secondaryCmdBuffer == nullptr)
-				{
-					continue;
-				}
-
-				UpdateTransformUniformBuffer(iter.transform, uuid);
-				UpdateTransformDescriptorSet(uuid);
-
-				RecordSecondaryCommandBuffer(secondaryCmdBuffer, &iter);
-
-				secondaryCmdBuffers[secondaryCmdBufferCount++] = secondaryCmdBuffer->GetBuffer();
-			}
-		}
-
-		// Don't attempt to execute 0 command buffers
-		if (secondaryCmdBufferCount > 0)
-		{
-			cmdBuffer->CMD_ExecuteSecondaryCommands(secondaryCmdBuffers.data(), secondaryCmdBufferCount);
-		}
-	}
-
-	void Renderer::RecordSecondaryCommandBuffer(SecondaryCommandBuffer* cmdBuffer, AssetResources* resources)
-	{
-		auto frameData = GetCurrentFDD();
-
-		// Retrieve the vector of descriptor sets for the given asset
-		auto& descSets = frameData->assetDescriptorDataMap[resources->uuid].descriptorSets;
-		std::vector<VkDescriptorSet> vkDescSets(descSets.size());
-		for (uint32_t i = 0; i < descSets.size(); i++)
-		{
-			vkDescSets[i] = descSets[i].GetDescriptorSet();
-		}
-
-		VkCommandBufferInheritanceInfo inheritanceInfo{};
-		inheritanceInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
-		inheritanceInfo.pNext = nullptr;
-		inheritanceInfo.renderPass = hdrRenderPass.GetRenderPass();
-		inheritanceInfo.subpass = 0;
-		inheritanceInfo.framebuffer = frameData->hdrFramebuffer.GetFramebuffer();
-
-		cmdBuffer->BeginRecording(VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT | VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT, &inheritanceInfo);
-
-		cmdBuffer->CMD_BindMesh(resources);
-		cmdBuffer->CMD_BindDescriptorSets(&pbrPipeline, static_cast<uint32_t>(vkDescSets.size()), vkDescSets.data());
-		cmdBuffer->CMD_BindPipeline(&pbrPipeline);
-		cmdBuffer->CMD_SetScissor({ 0, 0 }, swapChainExtent);
-		cmdBuffer->CMD_SetViewport(static_cast<float>(swapChainExtent.width), static_cast<float>(swapChainExtent.height));
-		cmdBuffer->CMD_DrawIndexed(resources->indexCount);
-
-		cmdBuffer->EndRecording();
-	}
-
 	void Renderer::PerformLDRConversion(PrimaryCommandBuffer* cmdBuffer)
 	{
 		UpdateLDRUniformBuffer();
@@ -1892,61 +1770,6 @@ namespace TANG
 		vkDestroySwapchainKHR(logicalDevice, swapChain, nullptr);
 	}
 
-	void Renderer::UpdateProjectionUniformBuffer(uint32_t frameIndex)
-	{
-		using namespace glm;
-
-		// We assume that ProjUBO only has a projection matrix. If that changes we need to change the code below too
-		TNG_ASSERT_COMPILE(sizeof(ProjUBO) == 64);
-
-		ProjUBO projUBO;
-		projUBO.proj = startingProjectionMatrix;
-
-		auto frameData = GetFDDAtIndex(frameIndex);
-		frameData->projUBO.UpdateData(&projUBO, sizeof(ProjUBO));
-	}
-
-	void Renderer::UpdateProjectionDescriptorSet(UUID uuid, uint32_t frameIndex)
-	{
-		auto frameData = GetFDDAtIndex(frameIndex);
-		auto& currentAssetDataMap = frameData->assetDescriptorDataMap[uuid];
-
-		DescriptorSet& descSet = currentAssetDataMap.descriptorSets[1];
-
-		// Update ProjUBO descriptor set
-		WriteDescriptorSets writeDescSets(1, 0);
-		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 0, &frameData->projUBO);
-		descSet.Update(writeDescSets);
-	}
-
-	void Renderer::UpdatePBRTextureDescriptorSet(UUID uuid, uint32_t frameIndex)
-	{
-		FrameDependentData* currentFDD = GetFDDAtIndex(frameIndex);
-		auto& currentAssetDataMap = currentFDD->assetDescriptorDataMap[uuid];
-
-		DescriptorSet& descSet = currentAssetDataMap.descriptorSets[0];
-
-		// Get the asset resources so we can retrieve the textures
-		AssetResources* asset = GetAssetResourcesFromUUID(uuid);
-		if (asset == nullptr)
-		{
-			return;
-		}
-
-		// Update PBR textures
-		WriteDescriptorSets writeDescSets(0, 8);
-		writeDescSets.AddImage(descSet.GetDescriptorSet(), 0, &asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::DIFFUSE)]		, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0);
-		writeDescSets.AddImage(descSet.GetDescriptorSet(), 1, &asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::NORMAL)]		, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0);
-		writeDescSets.AddImage(descSet.GetDescriptorSet(), 2, &asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::METALLIC)]		, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0);
-		writeDescSets.AddImage(descSet.GetDescriptorSet(), 3, &asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::ROUGHNESS)]	, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0);
-		writeDescSets.AddImage(descSet.GetDescriptorSet(), 4, &asset->material[static_cast<uint32_t>(Material::TEXTURE_TYPE::LIGHTMAP)]		, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0);
-		writeDescSets.AddImage(descSet.GetDescriptorSet(), 5, cubemapPreprocessingPass.GetIrradianceMap()									, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0);
-		writeDescSets.AddImage(descSet.GetDescriptorSet(), 6, cubemapPreprocessingPass.GetPrefilterMap()									, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0);
-		writeDescSets.AddImage(descSet.GetDescriptorSet(), 7, cubemapPreprocessingPass.GetBRDFConvolutionMap()								, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0);
-
-		descSet.Update(writeDescSets);
-	}
-
 	void Renderer::UpdateLDRDescriptorSet()
 	{
 		FrameDependentData* frameData = GetCurrentFDD();
@@ -1957,80 +1780,6 @@ namespace TANG
 		writeDescSets.AddImage(descSet.GetDescriptorSet(), 0, bloomPass.GetOutputTexture(), VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0);
 		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 1, &frameData->ldrCameraDataUBO);
 		descSet.Update(writeDescSets);
-	}
-
-	void Renderer::UpdateCameraDataDescriptorSet(UUID uuid, uint32_t frameIndex)
-	{
-		auto frameData = GetFDDAtIndex(frameIndex);
-		auto& currentAssetDataMap = frameData->assetDescriptorDataMap[uuid];
-
-		DescriptorSet& descSet = currentAssetDataMap.descriptorSets[2];
-
-		// Update view matrix + camera data descriptor set
-		WriteDescriptorSets writeDescSets(2, 0);
-		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 2, &frameData->viewUBO);
-		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 0, &frameData->cameraDataUBO);
-		descSet.Update(writeDescSets);
-	}
-
-	void Renderer::UpdateTransformUniformBuffer(const Transform& transform, UUID uuid)
-	{
-		// Construct and update the transform UBO
-		TransformUBO tempUBO{};
-
-		glm::mat4 finalTransform = glm::identity<glm::mat4>();
-
-		glm::mat4 translation = glm::translate(glm::identity<glm::mat4>(), transform.position);
-		glm::mat4 rotation = glm::eulerAngleXYZ(transform.rotation.x, transform.rotation.y, transform.rotation.z);
-		glm::mat4 scale = glm::scale(glm::identity<glm::mat4>(), transform.scale);
-
-		tempUBO.transform = translation * rotation * scale;
-		GetCurrentFDD()->assetDescriptorDataMap[uuid].transformUBO.UpdateData(&tempUBO, sizeof(TransformUBO));
-	}
-
-	void Renderer::UpdateCameraDataUniformBuffers(uint32_t frameIndex, const glm::vec3& position, const glm::mat4& viewMatrix)
-	{
-		auto frameData = GetFDDAtIndex(frameIndex);
-
-		ViewUBO viewUBO{};
-		viewUBO.view = viewMatrix;
-		frameData->viewUBO.UpdateData(&viewUBO, sizeof(ViewUBO));
-
-		CameraDataUBO cameraDataUBO{};
-		cameraDataUBO.position = glm::vec4(position, 1.0f);
-		cameraDataUBO.exposure = 1.0f;
-		frameData->cameraDataUBO.UpdateData(&cameraDataUBO, sizeof(CameraDataUBO));
-	}
-
-	void Renderer::UpdateTransformDescriptorSet(UUID uuid)
-	{
-		auto frameData = GetCurrentFDD();
-		auto& currentAssetDataMap = frameData->assetDescriptorDataMap[uuid];
-
-		DescriptorSet& descSet = currentAssetDataMap.descriptorSets[2];
-
-		// Update transform + cameraData descriptor sets
-		WriteDescriptorSets writeDescSets(2, 0);
-		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 0, &currentAssetDataMap.transformUBO);
-		writeDescSets.AddUniformBuffer(descSet.GetDescriptorSet(), 1, &frameData->cameraDataUBO);
-		descSet.Update(writeDescSets);
-	}
-
-	void Renderer::InitializeDescriptorSets(UUID uuid, uint32_t frameIndex)
-	{
-		// Update all descriptor sets
-		UpdateCameraDataDescriptorSet(uuid, frameIndex);
-		UpdateProjectionDescriptorSet(uuid, frameIndex);
-		UpdatePBRTextureDescriptorSet(uuid, frameIndex);
-	}
-
-	void Renderer::InitializeFrameUniformBuffers()
-	{
-		for (uint32_t i = 0; i < GetFDDSize(); i++)
-		{
-			UpdateCameraDataUniformBuffers(i, startingCameraPosition, startingCameraViewMatrix);
-			UpdateProjectionUniformBuffer(i);
-		}
 	}
 
 	void Renderer::UpdateLDRUniformBuffer()

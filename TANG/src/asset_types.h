@@ -277,6 +277,9 @@ namespace TANG
 		uint32_t offset;							// Describes the offsets into a single combined buffer of vertex buffers, and the length of the offsets vector must match that of the vertex buffer vector!
 		IndexBuffer indexBuffer;
 		uint64_t indexCount = 0;					// Used when calling vkCmdDrawIndexed
+
+		// TODO - Why tf is this a vector of texture resources if there's already a Material class??????
+		//        Also why does this class own the texture resources???????????????????
 		std::vector<TextureResource> material;		// Every entry in this vector corresponds to a type of texture, specifically from Material::TEXTURE_TYPE
 
 		// NOTE - The API user must update and keep track of the transform data for the assets,

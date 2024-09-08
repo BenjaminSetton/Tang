@@ -1,7 +1,6 @@
 
 #include "../device_cache.h"
 #include "../utils/logger.h"
-#include "../utils/sanity_check.h"
 #include "descriptor_set.h"
 #include "descriptor_pool.h"
 #include "set_layout/set_layout.h"
@@ -9,9 +8,6 @@
 
 namespace TANG
 {
-	// Guarantee that the size of DescriptorSet and VkDescriptorSet matches
-	TNG_ASSERT_SAME_SIZE(DescriptorSet, VkDescriptorSet);
-
 	DescriptorSet::DescriptorSet() : descriptorSet(VK_NULL_HANDLE)
 	{
 		// Nothing to do here
@@ -35,7 +31,6 @@ namespace TANG
 	DescriptorSet::DescriptorSet(DescriptorSet&& other) noexcept
 	{
 		descriptorSet = other.descriptorSet;
-
 		other.descriptorSet = VK_NULL_HANDLE;
 	}
 

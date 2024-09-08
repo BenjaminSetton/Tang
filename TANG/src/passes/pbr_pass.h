@@ -11,6 +11,8 @@
 
 namespace TANG
 {
+	struct Transform;
+
 	class PBRPass : public BasePass
 	{
 	public:
@@ -24,25 +26,35 @@ namespace TANG
 
 		void SetData(const DescriptorPool* descriptorPool, const HDRRenderPass* hdrRenderPass, VkExtent2D swapChainExtent);
 
-		void UpdatePBRTextureDescriptors(const TextureResource* skyboxCubemap[8]);
-		//void UpdateCameraMatricesShaderParameters(uint32_t frameIndex, const UniformBuffer* view, const UniformBuffer* proj);
+		void UpdateTransformUniformBuffer(uint32_t frameIndex, Transform& transform);
+		void UpdateViewUniformBuffer(uint32_t frameIndex, const glm::mat4& viewMatrix);
+		void UpdateProjUniformBuffer(uint32_t frameIndex, const glm::mat4& projMatrix);
+		void UpdateCameraUniformBuffer(uint32_t frameIndex, const glm::vec3& position);
+
+		void UpdateDescriptorSets(uint32_t frameIndex, std::array<const TextureResource*, 8>& textures);
 
 		void Create() override;
 		void Destroy() override;
 
-		void Draw(uint32_t currentFrame, const DrawData& data);
+		void Draw(uint32_t frameIndex, const DrawData& data);
 
 	private:
 
 		void CreatePipelines() override;
 		void CreateSetLayoutCaches() override;
 		void CreateDescriptorSets() override;
+		void CreateUniformBuffers() override;
 
 		void ResetBorrowedData() override;
 
 		PBRPipeline pbrPipeline;
 		SetLayoutCache pbrSetLayoutCache;
+		std::array<UniformBuffer, CONFIG::MaxFramesInFlight> transformUBO;
+		std::array<UniformBuffer, CONFIG::MaxFramesInFlight> viewUBO;
+		std::array<UniformBuffer, CONFIG::MaxFramesInFlight> projUBO;
+		std::array<UniformBuffer, CONFIG::MaxFramesInFlight> cameraDataUBO;
 		std::array<std::array<DescriptorSet, 3>, CONFIG::MaxFramesInFlight> pbrDescriptorSets;
+		SecondaryCommandBuffer cmdBuffer;
 
 		struct
 		{

@@ -6,6 +6,8 @@
 #include "../device_cache.h"
 #include "../framebuffer.h"
 #include "../render_passes/base_render_pass.h"
+#include "../ubo_structs.h"
+
 #include "skybox_pass.h"
 
 namespace TANG
@@ -29,7 +31,7 @@ namespace TANG
 		borrowedData.swapChainExtent = swapChainExtent;
 	}
 
-	void SkyboxPass::UpdateSkyboxCubemapShaderParameter(const TextureResource* skyboxCubemap)
+	void SkyboxPass::UpdateSkyboxCubemap(const TextureResource* skyboxCubemap)
 	{
 		for (uint32_t i = 0; i < CONFIG::MaxFramesInFlight; i++)
 		{
@@ -39,12 +41,29 @@ namespace TANG
 		}
 	}
 
-	void SkyboxPass::UpdateCameraMatricesShaderParameters(uint32_t frameIndex, const UniformBuffer* view, const UniformBuffer* proj)
+	void SkyboxPass::UpdateViewProjUniformBuffers(uint32_t frameIndex, const glm::mat4& view, const glm::mat4 proj)
 	{
+		{
+			ViewUBO ubo{};
+			ubo.view = view;
+			viewUBO[frameIndex].UpdateData(&ubo, sizeof(ViewUBO));
+		}
+
+		{
+			ProjUBO ubo{};
+			ubo.proj = proj;
+			projUBO[frameIndex].UpdateData(&ubo, sizeof(ProjUBO));
+		}
+	}
+
+	void SkyboxPass::UpdateDescriptorSets(uint32_t frameIndex)
+	{
+		DescriptorSet& descSet = skyboxDescriptorSets[frameIndex][1];
+
 		WriteDescriptorSets writeSetVolatile(2, 0);
-		writeSetVolatile.AddUniformBuffer(skyboxDescriptorSets[frameIndex][1].GetDescriptorSet(), 0, view);
-		writeSetVolatile.AddUniformBuffer(skyboxDescriptorSets[frameIndex][1].GetDescriptorSet(), 1, proj);
-		skyboxDescriptorSets[frameIndex][1].Update(writeSetVolatile);
+		writeSetVolatile.AddUniformBuffer(descSet.GetDescriptorSet(), 0, &viewUBO[frameIndex]);
+		writeSetVolatile.AddUniformBuffer(descSet.GetDescriptorSet(), 1, &projUBO[frameIndex]);
+		descSet.Update(writeSetVolatile);
 	}
 
 	void SkyboxPass::Create()
@@ -73,6 +92,12 @@ namespace TANG
 	{
 		skyboxSetLayoutCache.DestroyLayouts();
 		skyboxPipeline.Destroy();
+
+		for (uint32_t i = 0; i < CONFIG::MaxFramesInFlight; i++)
+		{
+			viewUBO[i].Destroy();
+			projUBO[i].Destroy();
+		}
 	}
 
 	void SkyboxPass::Draw(uint32_t currentFrame, const DrawData& data)
@@ -141,6 +166,21 @@ namespace TANG
 
 				skyboxDescriptorSets[i][j].Create(*(borrowedData.descriptorPool), setLayoutOpt.value());
 			}
+		}
+	}
+
+	void SkyboxPass::CreateUniformBuffers()
+	{
+		VkDeviceSize viewUBOSize = sizeof(ViewUBO);
+		VkDeviceSize projUBOSize = sizeof(ProjUBO);
+
+		for (uint32_t i = 0; i < CONFIG::MaxFramesInFlight; i++)
+		{
+			viewUBO[i].Create(viewUBOSize);
+			viewUBO[i].MapMemory();
+
+			projUBO[i].Create(projUBOSize);
+			projUBO[i].MapMemory();
 		}
 	}
 

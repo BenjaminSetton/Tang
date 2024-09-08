@@ -72,6 +72,13 @@ namespace TANG
 		// Releases all internal handles to Vulkan objects
 		void Shutdown();
 
+		// Allocates a descriptor set with the given description through one of the renderer's internal descriptor pools
+		[[nodiscard]] DescriptorSet AllocateDescriptorSet();
+
+		// Allocates a primary or secondary command buffer from the provided queue type (graphics, present, compute, etc queue)
+		[[nodiscard]] PrimaryCommandBuffer AllocatePrimaryCommandBuffer(QueueType type);
+		[[nodiscard]] SecondaryCommandBuffer AllocateSecondaryCommandBuffer(QueueType type);
+
 		// Sets the draw state of the given asset to TRUE.
 		// The asset draw state is cleared every frame, so SetAssetDrawState() must be called on a
 		// per-frame basis to draw assets. In other words, assets will not be drawn unless SetAssetDrawState()
@@ -121,16 +128,6 @@ namespace TANG
 		VkFormat swapChainImageFormat;
 		VkExtent2D swapChainExtent;
 
-		// Stores all the data we need to describe an asset. We need to have a vector of descriptor sets per asset
-		// because we divide the descriptor sets based on how frequently they're updated. For example the asset's
-		// position might change every frame, but the PBR textures will likely seldom change (if at all)
-		struct AssetDescriptorData
-		{
-			std::vector<DescriptorSet> descriptorSets;
-
-			UniformBuffer transformUBO;
-		};
-
 
 		////////////////////////////////////////////////////////////////////
 		// 
@@ -141,13 +138,6 @@ namespace TANG
 		////////////////////////////////////////////////////////////////////
 		struct FrameDependentData
 		{
-			// Assets
-			std::unordered_map<UUID, AssetDescriptorData> assetDescriptorDataMap;
-
-			UniformBuffer viewUBO;
-			UniformBuffer projUBO;
-			UniformBuffer cameraDataUBO;
-
 			// Skybox
 			std::array<DescriptorSet, 3> skyboxDescriptorSets;
 
@@ -174,26 +164,6 @@ namespace TANG
 			Framebuffer hdrFramebuffer;
 		};
 		std::vector<FrameDependentData> frameDependentData;
-		// We want to organize our descriptor sets as follows:
-		// 
-		// FOR EVERY ASSET:
-		//		FOR EVERY FRAME IN FLIGHT:
-		//			Descriptor set 0:
-		//				- diffuse sampler			(binding 0)
-		//				- normal sampler			(binding 1)
-		//				- metallic sampler			(binding 2)
-		//				- roughness sampler			(binding 3)
-		//				- lightmap sampler			(binding 4)
-		//			Descriptor set 1:
-		//				- Projection matrix UBO		(binding 0)
-		//			Descriptor set 2:
-		//				- CameraData UBO			(binding 0)
-		//				- Transform matrix UBO		(binding 1)
-		//				- View matrix UBO			(binding 2)
-		// 
-		// Total per frame in flight: 3 descriptor sets - 4 uniform buffers and 5 image samplers
-		// Total per all frames in flight (2): 6 descriptor sets - 8 uniform buffers and 10 image samplers
-
 
 		////////////////////////////////////////////////////////////////////
 		// 
@@ -209,10 +179,6 @@ namespace TANG
 			Framebuffer swapChainFramebuffer;
 		};
 		std::vector<SwapChainImageDependentData> swapChainImageDependentData;
-
-
-		PBRPipeline pbrPipeline;
-		SetLayoutCache pbrSetLayoutCache;
 
 		BloomPass bloomPass;
 		SkyboxPass skyboxPass;
@@ -253,6 +219,7 @@ namespace TANG
 
 		void DrawFrame();
 
+		void DrawAssets(PrimaryCommandBuffer* cmdBuffer);
 		void DrawSkybox(PrimaryCommandBuffer* cmdBuffer);
 
 		void PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo);
@@ -301,24 +268,16 @@ namespace TANG
 
 		void CreateSyncObjects();
 
-		void CreateAssetUniformBuffers(UUID uuid);
-		void CreateFrameUniformBuffers();
 		void CreateLDRUniformBuffer();
-
-		void CreateAssetDescriptorSets(UUID uuid);
 		void CreateLDRDescriptorSet();
 
 		void CreateDescriptorSetLayouts();
-		void CreatePBRSetLayouts();
 		void CreateLDRSetLayouts();
 
 		void CreateDescriptorPool();
 
 		void CreateDepthTextures();
 		void CreateColorAttachmentTextures();
-
-		void DrawAssets(PrimaryCommandBuffer* cmdBuffer);
-		void RecordSecondaryCommandBuffer(SecondaryCommandBuffer* cmdBuffer, AssetResources* resources);
 
 		void PerformLDRConversion(PrimaryCommandBuffer* cmdBuffer);
 
@@ -328,18 +287,8 @@ namespace TANG
 
 		void CleanupSwapChain();
 
-		void InitializeDescriptorSets(UUID uuid, uint32_t frameIndex);
-		void InitializeFrameUniformBuffers();
-
-		void UpdateTransformDescriptorSet(UUID uuid);
-		void UpdateCameraDataDescriptorSet(UUID uuid, uint32_t frameIndex);
-		void UpdateProjectionDescriptorSet(UUID uuid, uint32_t frameIndex);
-		void UpdatePBRTextureDescriptorSet(UUID uuid, uint32_t frameIndex);
 		void UpdateLDRDescriptorSet();
 
-		void UpdateTransformUniformBuffer(const Transform& transform, UUID uuid);
-		void UpdateCameraDataUniformBuffers(uint32_t frameIndex, const glm::vec3& position, const glm::mat4& viewMatrix);
-		void UpdateProjectionUniformBuffer(uint32_t frameIndex);
 		void UpdateLDRUniformBuffer();
 
 		// Submits the provided queue type, along with the provided command buffer. Return value should _not_ be ignored

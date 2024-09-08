@@ -36,17 +36,20 @@ namespace TANG
 	{
 		glm::mat4 view;
 	};
+	TNG_ASSERT_COMPILE(sizeof(ViewUBO) == 64);
 
 	struct ProjUBO
 	{
 		glm::mat4 proj;
 	};
+	TNG_ASSERT_COMPILE(sizeof(ProjUBO) == 64);
 
 	struct ViewProjUBO
 	{
 		glm::mat4 view;
 		glm::mat4 proj;
 	};
+	TNG_ASSERT_COMPILE(sizeof(ViewProjUBO) == 128);
 
 	// The minimum uniform buffer alignment of the chosen physical device is 64 bytes...an entire matrix 4
 	// 
