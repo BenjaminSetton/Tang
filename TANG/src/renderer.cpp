@@ -199,7 +199,6 @@ namespace TANG
 			auto frameData = GetFDDAtIndex(i);
 
 			frameData->hdrFramebuffer.Destroy();
-			frameData->ldrCameraDataUBO.Destroy();
 		}
 
 		descriptorPool.Destroy();
@@ -232,24 +231,30 @@ namespace TANG
 		vkDestroyInstance(vkInstance, nullptr);
 	}
 
-	DescriptorSet Renderer::AllocateDescriptorSet()
+	DescriptorSet Renderer::AllocateDescriptorSet(const DescriptorSetLayout& setLayout)
 	{
-		TNG_TODO();
-		return {};
+		DescriptorSet s;
+		s.Create(descriptorPool, setLayout);
+		return s;
 	}
 
 	PrimaryCommandBuffer Renderer::AllocatePrimaryCommandBuffer(QueueType type)
 	{
-		UNUSED(type);
-		TNG_TODO();
-		return {};
+		PrimaryCommandBuffer cb;
+		cb.Create(GetCommandPool(type));
+		return cb;
 	}
 
 	SecondaryCommandBuffer Renderer::AllocateSecondaryCommandBuffer(QueueType type)
 	{
-		UNUSED(type);
-		TNG_TODO();
-		return {};
+		SecondaryCommandBuffer cb;
+		cb.Create(GetCommandPool(type));
+		return cb;
+	}
+
+	void Renderer::QueuePass(BasePass* pass)
+	{
+		m_passes.push_back(pass);
 	}
 
 	// Loads an asset which implies grabbing the vertices and indices from the asset container
@@ -445,8 +450,7 @@ namespace TANG
 		out_resources.indexCount = totalIndexCount;
 		out_resources.uuid = asset->uuid;
 
-		pbrPass.SetData(&descriptorPool, &hdrRenderPass, swapChainExtent);
-		pbrPass.Create();
+		pbrPass.Create(&descriptorPool, &hdrRenderPass, swapChainExtent.width, swapChainExtent.height);
 
 		Transform defaultTransform{};
 		for (uint32_t i = 0; i < CONFIG::MaxFramesInFlight; i++)
@@ -502,8 +506,7 @@ namespace TANG
 		out_resources.indexCount = totalIndexCount;
 		out_resources.uuid = asset->uuid;
 
-		cubemapPreprocessingPass.SetData(&descriptorPool, swapChainExtent);
-		cubemapPreprocessingPass.Create();
+		cubemapPreprocessingPass.Create(&descriptorPool);
 
 		// Convert the HDR texture into a cubemap and calculate IBL components (irradiance + prefilter map + BRDF LUT)
 		PrimaryCommandBuffer cmdBuffer;
@@ -542,8 +545,7 @@ namespace TANG
 		LogInfo("Cubemap preprocessing done!");
 
 		// Initialize the skybox pass
-		skyboxPass.SetData(&descriptorPool, &hdrRenderPass, swapChainExtent);
-		skyboxPass.Create();
+		skyboxPass.Create(&descriptorPool, &hdrRenderPass, swapChainExtent.width, swapChainExtent.height);
 
 		skyboxPass.UpdateViewProjUniformBuffers(currentFrame, startingCameraViewMatrix, startingProjectionMatrix);
 		skyboxPass.UpdateSkyboxCubemap(cubemapPreprocessingPass.GetSkyboxCubemap());
@@ -590,8 +592,7 @@ namespace TANG
 		out_resources.indexCount = totalIndexCount;
 		out_resources.uuid = asset->uuid;
 
-		ldrPass.SetData(&descriptorPool, &ldrRenderPass, swapChainExtent);
-		ldrPass.Create();
+		ldrPass.Create(&descriptorPool, &ldrRenderPass, swapChainExtent.width, swapChainExtent.height);
 
 		// Cache the UUID
 		fullscreenQuadAssetUUID = asset->uuid;
@@ -862,7 +863,6 @@ namespace TANG
 		// QUEUE SUBMISSION
 		//
 		///////////////////////////////////////
-
 
 		result = SubmitCoreRenderingQueue(hdrCmdBuffer, frameData);
 		result = SubmitPostProcessingQueue(postProcessingCmdBuffer, frameData);

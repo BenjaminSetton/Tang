@@ -71,11 +71,14 @@ namespace TANG
 		void Shutdown();
 
 		// Allocates a descriptor set with the given description through one of the renderer's internal descriptor pools
-		[[nodiscard]] DescriptorSet AllocateDescriptorSet();
+		[[nodiscard]] DescriptorSet AllocateDescriptorSet(const DescriptorSetLayout& setLayout);
 
 		// Allocates a primary or secondary command buffer from the provided queue type (graphics, present, compute, etc queue)
 		[[nodiscard]] PrimaryCommandBuffer AllocatePrimaryCommandBuffer(QueueType type);
 		[[nodiscard]] SecondaryCommandBuffer AllocateSecondaryCommandBuffer(QueueType type);
+
+		// Submits a render pass. Submission order is preserved when drawing
+		void QueuePass(BasePass* pass);
 
 		// Sets the draw state of the given asset to TRUE.
 		// The asset draw state is cleared every frame, so SetAssetDrawState() must be called on a
@@ -136,13 +139,6 @@ namespace TANG
 		////////////////////////////////////////////////////////////////////
 		struct FrameDependentData
 		{
-			// Skybox
-			std::array<DescriptorSet, 3> skyboxDescriptorSets;
-
-			// LDR
-			UniformBuffer ldrCameraDataUBO;
-			DescriptorSet ldrDescriptorSet;
-
 			// Sync objects
 			VkSemaphore imageAvailableSemaphore;			// Signalled when swap-chain image becomes available
 			VkSemaphore coreRenderFinishedSemaphore;		// Signalled when the core render loop is finished
@@ -183,6 +179,8 @@ namespace TANG
 		CubemapPreprocessingPass cubemapPreprocessingPass;
 		PBRPass pbrPass;
 		LDRPass ldrPass;
+
+		std::vector<BasePass*> m_passes;
 
 		HDRRenderPass hdrRenderPass;
 		LDRRenderPass ldrRenderPass;

@@ -3,7 +3,7 @@
 //   TANG renderer
 // 
 //   Benjamin Setton
-//   2023
+//   2024
 // 
 //   TANG is a simple Vulkan rendering library meant to kick-start the rendering process for your own projects! 
 //   The API is written to make it fast and easy to draw something on the screen.
@@ -29,6 +29,13 @@
 #include "utils/uuid.h"    // TANG::UUID
 #include "input_manager.h" // TANG::KeyState
 
+// TEMP TEMP TEMP
+#include "queue_types.h"
+#include "descriptors/descriptor_set.h"
+#include "cmd_buffer/primary_command_buffer.h"
+#include "cmd_buffer/secondary_command_buffer.h"
+// TEMP TEMP TEMP
+
 namespace TANG
 {
 
@@ -47,6 +54,20 @@ namespace TANG
 
 	// Core API update loop
 	void Update(float deltaTime);
+
+	////////////////////////////////////////////////////////////////////////
+	// TEMP TEMP TEMP
+	
+	//void (*DrawPassFunc)(PrimaryCommandBuffer* cmdBuffer /* TODO */);
+
+	DescriptorSet AllocateDescriptorSet(const DescriptorSetLayout& setLayout);
+	PrimaryCommandBuffer AllocatePrimaryCommandBuffer(QueueType type);
+	SecondaryCommandBuffer AllocateSecondaryCommandBuffer(QueueType type);
+	//void QueuePass(BasePass* pass);
+	void Submit();
+
+	// TEMP TEMP TEMP
+	////////////////////////////////////////////////////////////////////////
 
 	// Core API draw loop. Simply calls the renderer system Draw() call
 	void Draw();

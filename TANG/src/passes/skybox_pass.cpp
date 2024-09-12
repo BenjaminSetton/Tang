@@ -24,13 +24,6 @@ namespace TANG
 		TNG_TODO();
 	}
 
-	void SkyboxPass::SetData(const DescriptorPool* descriptorPool, const HDRRenderPass* hdrRenderPass, VkExtent2D swapChainExtent)
-	{
-		borrowedData.descriptorPool = descriptorPool;
-		borrowedData.hdrRenderPass = hdrRenderPass;
-		borrowedData.swapChainExtent = swapChainExtent;
-	}
-
 	void SkyboxPass::UpdateSkyboxCubemap(const TextureResource* skyboxCubemap)
 	{
 		for (uint32_t i = 0; i < CONFIG::MaxFramesInFlight; i++)
@@ -66,7 +59,7 @@ namespace TANG
 		descSet.Update(writeSetVolatile);
 	}
 
-	void SkyboxPass::Create()
+	void SkyboxPass::Create(const DescriptorPool* descriptorPool, const HDRRenderPass* hdrRenderPass, uint32_t swapChainWidth, uint32_t swapChainHeight)
 	{
 		if (wasCreated)
 		{
@@ -74,17 +67,11 @@ namespace TANG
 			return;
 		}
 
-		ResetBaseMembers();
-
 		CreateSetLayoutCaches();
 		CreateUniformBuffers();
-		CreateDescriptorSets();
-		CreateSyncObjects();
-		CreateRenderPasses();
-		CreatePipelines();
-		CreateFramebuffers();
+		CreateDescriptorSets(descriptorPool);
+		CreatePipelines(hdrRenderPass, swapChainWidth, swapChainHeight);
 
-		ResetBorrowedData();
 		wasCreated = true;
 	}
 
@@ -102,7 +89,7 @@ namespace TANG
 
 	void SkyboxPass::Draw(uint32_t currentFrame, const DrawData& data)
 	{
-		if (!IsDrawDataValid(data))
+		if (!data.IsValid())
 		{
 			return;
 		}
@@ -126,9 +113,9 @@ namespace TANG
 		data.cmdBuffer->EndRecording();
 	}
 
-	void SkyboxPass::CreatePipelines()
+	void SkyboxPass::CreatePipelines(const HDRRenderPass* hdrRenderPass, uint32_t swapChainWidth, uint32_t swapChainHeight)
 	{
-		skyboxPipeline.SetData(borrowedData.hdrRenderPass, &skyboxSetLayoutCache, borrowedData.swapChainExtent);
+		skyboxPipeline.SetData(hdrRenderPass, &skyboxSetLayoutCache, { swapChainWidth, swapChainHeight });
 		skyboxPipeline.Create();
 	}
 
@@ -144,7 +131,7 @@ namespace TANG
 		skyboxSetLayoutCache.CreateSetLayout(volatileLayout, 0);
 	}
 
-	void SkyboxPass::CreateDescriptorSets()
+	void SkyboxPass::CreateDescriptorSets(const DescriptorPool* descriptorPool)
 	{
 		uint32_t skyboxSetLayoutCount = skyboxSetLayoutCache.GetLayoutCount();
 		if (skyboxSetLayoutCount != 2)
@@ -164,7 +151,7 @@ namespace TANG
 					continue;
 				}
 
-				skyboxDescriptorSets[i][j].Create(*(borrowedData.descriptorPool), setLayoutOpt.value());
+				skyboxDescriptorSets[i][j].Create(*descriptorPool, setLayoutOpt.value());
 			}
 		}
 	}
@@ -182,10 +169,5 @@ namespace TANG
 			projUBO[i].Create(projUBOSize);
 			projUBO[i].MapMemory();
 		}
-	}
-
-	void SkyboxPass::ResetBorrowedData()
-	{
-		memset(&borrowedData, 0, sizeof(borrowedData));
 	}
 }

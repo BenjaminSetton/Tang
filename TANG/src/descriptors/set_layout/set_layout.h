@@ -6,7 +6,7 @@
 
 namespace TANG
 {
-	// Encapsulates a descriptor set layout, and the size is guaranteed to be the same as the underlying VkDescriptorSetLayout object
+	// Encapsulates a descriptor set layout
 	class DescriptorSetLayout
 	{
 	public:
@@ -27,7 +27,8 @@ namespace TANG
 		VkDescriptorSetLayout setLayout;
 	};
 
-	TNG_ASSERT_COMPILE(sizeof(DescriptorSetLayout) == sizeof(VkDescriptorSetLayout));
+	// The size is guaranteed to be the same as the underlying VkDescriptorSetLayout object
+	TNG_ASSERT_SAME_SIZE(DescriptorSetLayout, VkDescriptorSetLayout);
 }
 
 #endif

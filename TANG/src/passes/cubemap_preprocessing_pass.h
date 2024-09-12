@@ -12,12 +12,12 @@
 #include "../render_passes/brdf_convolution_render_pass.h"
 #include "../render_passes/cubemap_preprocessing_render_pass.h"
 #include "../texture_resource.h"
-#include "base_pass.h"
+#include "base_pass.h" // DrawData
 #include "../config.h"
 
 namespace TANG
 {
-	class CubemapPreprocessingPass : public BasePass
+	class CubemapPreprocessingPass
 	{
 	public:
 
@@ -28,12 +28,10 @@ namespace TANG
 		CubemapPreprocessingPass(const CubemapPreprocessingPass& other) = delete;
 		CubemapPreprocessingPass& operator=(const CubemapPreprocessingPass& other) = delete;
 
-		void SetData(const DescriptorPool* descriptorPool, VkExtent2D swapChainExtent);
-
-		void Create() override;
+		void Create(const DescriptorPool* descriptorPool);
 
 		void DestroyIntermediates();
-		void Destroy() override;
+		void Destroy();
 
 		void LoadTextureResources();
 
@@ -51,15 +49,17 @@ namespace TANG
 		// though, so this must be called by the renderer after we wait for the graphics queue
 		void UpdatePrefilterMapViewScope();
 
+		VkFence GetFence() const;
+
 	private:
 
-		void CreateFramebuffers() override;
-		void CreatePipelines() override;
-		void CreateRenderPasses() override;
-		void CreateSetLayoutCaches() override;
-		void CreateDescriptorSets() override;
-		void CreateUniformBuffers() override;
-		void CreateSyncObjects() override;
+		void CreateFramebuffers();
+		void CreatePipelines();
+		void CreateRenderPasses();
+		void CreateSetLayoutCaches();
+		void CreateDescriptorSets(const DescriptorPool* descriptorPool);
+		void CreateUniformBuffers();
+		void CreateSyncObjects();
 
 		void InitializeShaderParameters();
 
@@ -67,8 +67,6 @@ namespace TANG
 		void CalculateIrradianceMap(PrimaryCommandBuffer* cmdBuffer, const AssetResources* cubemap);
 		void CalculatePrefilterMap(PrimaryCommandBuffer* cmdBuffer, const AssetResources* cubemap);
 		void CalculateBRDFConvolution(PrimaryCommandBuffer* cmdBuffer, const AssetResources* fullscreenQuad);
-
-		void ResetBorrowedData() override;
 
 		CubemapPreprocessingPipeline cubemapPreprocessingPipeline;
 		CubemapPreprocessingRenderPass cubemapPreprocessingRenderPass;
@@ -100,11 +98,8 @@ namespace TANG
 		TextureResource brdfConvolutionMap;
 		Framebuffer brdfConvolutionFramebuffer;
 
-		struct
-		{
-			const DescriptorPool* descriptorPool;
-			VkExtent2D swapChainExtent;
-		} borrowedData;
+		VkFence fence;
+		bool wasCreated;
 	};
 }
 

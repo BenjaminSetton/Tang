@@ -33,13 +33,6 @@ namespace TANG
 		TNG_TODO();
 	}
 
-	void PBRPass::SetData(const DescriptorPool* descriptorPool, const HDRRenderPass* hdrRenderPass, VkExtent2D swapChainExtent)
-	{
-		borrowedData.descriptorPool = descriptorPool;
-		borrowedData.hdrRenderPass = hdrRenderPass;
-		borrowedData.swapChainExtent = swapChainExtent;
-	}
-
 	void PBRPass::UpdateTransformUniformBuffer(uint32_t frameIndex, Transform& transform)
 	{
 		// Construct and update the transform UBO
@@ -115,7 +108,7 @@ namespace TANG
 		}
 	}
 
-	void PBRPass::Create()
+	void PBRPass::Create(const DescriptorPool* descriptorPool, const HDRRenderPass* hdrRenderPass, uint32_t swapChainWidth, uint32_t swapChainHeight)
 	{
 		if (wasCreated)
 		{
@@ -123,17 +116,11 @@ namespace TANG
 			return;
 		}
 
-		ResetBaseMembers();
-
 		CreateSetLayoutCaches();
 		CreateUniformBuffers();
-		CreateDescriptorSets();
-		CreateSyncObjects();
-		CreateRenderPasses();
-		CreatePipelines();
-		CreateFramebuffers();
+		CreateDescriptorSets(descriptorPool);
+		CreatePipelines(hdrRenderPass, swapChainWidth, swapChainHeight);
 
-		ResetBorrowedData();
 		wasCreated = true;
 	}
 
@@ -154,7 +141,7 @@ namespace TANG
 
 	void PBRPass::Draw(uint32_t frameIndex, const DrawData& data)
 	{
-		if (!IsDrawDataValid(data))
+		if (!data.IsValid())
 		{
 			return;
 		}
@@ -180,9 +167,9 @@ namespace TANG
 		data.cmdBuffer->EndRecording();
 	}
 
-	void PBRPass::CreatePipelines()
+	void PBRPass::CreatePipelines(const HDRRenderPass* hdrRenderPass, uint32_t swapChainWidth, uint32_t swapChainHeight)
 	{
-		pbrPipeline.SetData(borrowedData.hdrRenderPass, &pbrSetLayoutCache, borrowedData.swapChainExtent);
+		pbrPipeline.SetData(hdrRenderPass, &pbrSetLayoutCache, { swapChainWidth, swapChainHeight });
 		pbrPipeline.Create();
 	}
 
@@ -210,7 +197,7 @@ namespace TANG
 		pbrSetLayoutCache.CreateSetLayout(volatileLayout, 0);
 	}
 
-	void PBRPass::CreateDescriptorSets()
+	void PBRPass::CreateDescriptorSets(const DescriptorPool* descriptorPool)
 	{
 		uint32_t pbrSetLayoutCount = pbrSetLayoutCache.GetLayoutCount();
 		if (pbrSetLayoutCount != 3)
@@ -230,7 +217,7 @@ namespace TANG
 					continue;
 				}
 
-				pbrDescriptorSets[i][j].Create(*(borrowedData.descriptorPool), setLayoutOpt.value());
+				pbrDescriptorSets[i][j].Create(*descriptorPool, setLayoutOpt.value());
 			}
 		}
 	}
@@ -256,10 +243,5 @@ namespace TANG
 			cameraDataUBO[i].Create(cameraDataUBOSize);
 			cameraDataUBO[i].MapMemory();
 		}
-	}
-
-	void PBRPass::ResetBorrowedData()
-	{
-		memset(&borrowedData, 0, sizeof(borrowedData));
 	}
 }

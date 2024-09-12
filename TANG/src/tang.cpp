@@ -93,6 +93,33 @@ namespace TANG
 		renderer.Update(deltaTime);
 	}
 
+	// TEMP TEMP TEMP
+	DescriptorSet AllocateDescriptorSet(const DescriptorSetLayout& setLayout)
+	{
+		return Renderer::GetInstance().AllocateDescriptorSet(setLayout);
+	}
+
+	PrimaryCommandBuffer AllocatePrimaryCommandBuffer(QueueType type)
+	{
+		return Renderer::GetInstance().AllocatePrimaryCommandBuffer(type);
+	}
+
+	SecondaryCommandBuffer AllocateSecondaryCommandBuffer(QueueType type)
+	{
+		return Renderer::GetInstance().AllocateSecondaryCommandBuffer(type);
+	}
+
+	//void QueuePass(BasePass* pass)
+	//{
+	//	Renderer::GetInstance().QueuePass(pass);
+	//}
+
+	void Submit()
+	{
+		//Renderer::GetInstance().Submit();
+	}
+	// TEMP TEMP TEMP
+
 	void Draw()
 	{
 		Renderer::GetInstance().Draw();

@@ -32,13 +32,6 @@ namespace TANG
 		TNG_TODO();
 	}
 
-	void LDRPass::SetData(const DescriptorPool* descriptorPool, const LDRRenderPass* hdrRenderPass, VkExtent2D swapChainExtent)
-	{
-		borrowedData.descriptorPool = descriptorPool;
-		borrowedData.hdrRenderPass = hdrRenderPass;
-		borrowedData.swapChainExtent = swapChainExtent;
-	}
-
 	void LDRPass::UpdateExposureUniformBuffer(uint32_t frameIndex, float exposure)
 	{
 		ldrExposureUBO[frameIndex].UpdateData(&exposure, sizeof(exposure));
@@ -55,25 +48,19 @@ namespace TANG
 		descSet.Update(writeDescSets);
 	}
 
-	void LDRPass::Create()
+	void LDRPass::Create(const DescriptorPool* descriptorPool, const LDRRenderPass* ldrRenderPass, uint32_t swapChainWidth, uint32_t swapChainHeight)
 	{
 		if (wasCreated)
 		{
-			LogWarning("Attempting to create pbr pass more than once!");
+			LogWarning("Attempting to create LDR pass more than once!");
 			return;
 		}
 
-		ResetBaseMembers();
-
 		CreateSetLayoutCaches();
 		CreateUniformBuffers();
-		CreateDescriptorSets();
-		CreateSyncObjects();
-		CreateRenderPasses();
-		CreatePipelines();
-		CreateFramebuffers();
+		CreateDescriptorSets(descriptorPool);
+		CreatePipelines(ldrRenderPass, swapChainWidth, swapChainHeight);
 
-		ResetBorrowedData();
 		wasCreated = true;
 	}
 
@@ -81,7 +68,6 @@ namespace TANG
 	{
 		ldrSetLayoutCache.DestroyLayouts();
 		ldrPipeline.Destroy();
-		ldrSetLayoutCache.DestroyLayouts();
 
 		for (uint32_t i = 0; i < CONFIG::MaxFramesInFlight; i++)
 		{
@@ -91,7 +77,7 @@ namespace TANG
 
 	void LDRPass::Draw(uint32_t frameIndex, const DrawData& data)
 	{
-		if (!IsDrawDataValid(data))
+		if (!data.IsValid())
 		{
 			return;
 		}
@@ -104,9 +90,9 @@ namespace TANG
 		data.cmdBuffer->CMD_DrawIndexed(data.asset->indexCount);
 	}
 
-	void LDRPass::CreatePipelines()
+	void LDRPass::CreatePipelines(const LDRRenderPass* ldrRenderPass, uint32_t swapChainWidth, uint32_t swapChainHeight)
 	{
-		ldrPipeline.SetData(borrowedData.hdrRenderPass, &ldrSetLayoutCache, borrowedData.swapChainExtent);
+		ldrPipeline.SetData(ldrRenderPass, &ldrSetLayoutCache, { swapChainWidth, swapChainHeight });
 		ldrPipeline.Create();
 	}
 
@@ -118,7 +104,7 @@ namespace TANG
 		ldrSetLayoutCache.CreateSetLayout(layout, 0);
 	}
 
-	void LDRPass::CreateDescriptorSets()
+	void LDRPass::CreateDescriptorSets(const DescriptorPool* descriptorPool)
 	{
 		if (ldrSetLayoutCache.GetLayoutCount() != 1)
 		{
@@ -128,7 +114,7 @@ namespace TANG
 
 		for (uint32_t i = 0; i < CONFIG::MaxFramesInFlight; i++)
 		{
-			ldrDescriptorSet[i].Create(*borrowedData.descriptorPool, ldrSetLayoutCache.GetSetLayout(0).value());
+			ldrDescriptorSet[i].Create(*descriptorPool, ldrSetLayoutCache.GetSetLayout(0).value());
 		}
 	}
 
@@ -141,10 +127,5 @@ namespace TANG
 			ldrExposureUBO[i].Create(ldrCameraDataUBOSize);
 			ldrExposureUBO[i].MapMemory();
 		}
-	}
-
-	void LDRPass::ResetBorrowedData()
-	{
-		memset(&borrowedData, 0, sizeof(borrowedData));
 	}
 }

@@ -39,13 +39,7 @@ namespace TANG
 		TNG_TODO();
 	}
 
-	void CubemapPreprocessingPass::SetData(const DescriptorPool* descriptorPool, VkExtent2D swapChainExtent)
-	{
-		borrowedData.descriptorPool = descriptorPool;
-		borrowedData.swapChainExtent = swapChainExtent;
-	}
-
-	void CubemapPreprocessingPass::Create()
+	void CubemapPreprocessingPass::Create(const DescriptorPool* descriptorPool)
 	{
 		if (wasCreated)
 		{
@@ -53,11 +47,9 @@ namespace TANG
 			return;
 		}
 
-		ResetBaseMembers();
-
 		CreateSetLayoutCaches();
 		CreateUniformBuffers();
-		CreateDescriptorSets();
+		CreateDescriptorSets(descriptorPool);
 		CreateSyncObjects();
 		CreateRenderPasses();
 		CreatePipelines();
@@ -65,7 +57,6 @@ namespace TANG
 
 		InitializeShaderParameters();
 
-		ResetBorrowedData();
 		wasCreated = true;
 	}
 
@@ -294,6 +285,11 @@ namespace TANG
 		prefilterMap.RecreateImageViews(&viewInfo);
 	}
 
+	VkFence CubemapPreprocessingPass::GetFence() const
+	{
+		return fence;
+	}
+
 	void CubemapPreprocessingPass::CreateFramebuffers()
 	{
 		// Skybox cubemap
@@ -445,7 +441,7 @@ namespace TANG
 		}
 	}
 
-	void CubemapPreprocessingPass::CreateDescriptorSets()
+	void CubemapPreprocessingPass::CreateDescriptorSets(const DescriptorPool* descriptorPool)
 	{
 		// Cubemap preprocessing + irradiance sampling
 		// NOTE - We're re-using the cubemap preprocessing descriptor set layout because they do have
@@ -466,8 +462,8 @@ namespace TANG
 
 		for (uint32_t i = 0; i < 6; i++)
 		{
-			cubemapPreprocessingDescriptorSets[i].Create(*(borrowedData.descriptorPool), cubemapSetLayout.value());
-			irradianceSamplingDescriptorSets[i].Create(*(borrowedData.descriptorPool), cubemapSetLayout.value());
+			cubemapPreprocessingDescriptorSets[i].Create(*descriptorPool, cubemapSetLayout.value());
+			irradianceSamplingDescriptorSets[i].Create(*descriptorPool, cubemapSetLayout.value());
 		}
 
 		// Prefilter map
@@ -498,8 +494,8 @@ namespace TANG
 
 		for (uint32_t i = 0; i < 6; i++)
 		{
-			prefilterMapCubemapDescriptorSets[i].Create(*(borrowedData.descriptorPool), prefilterCubemapSetLayout.value());
-			prefilterMapRoughnessDescriptorSets[i].Create(*(borrowedData.descriptorPool), prefilterRoughnessSetLayout.value());
+			prefilterMapCubemapDescriptorSets[i].Create(*descriptorPool, prefilterCubemapSetLayout.value());
+			prefilterMapRoughnessDescriptorSets[i].Create(*descriptorPool, prefilterRoughnessSetLayout.value());
 		}
 	}
 
@@ -678,10 +674,5 @@ namespace TANG
 		cmdBuffer->CMD_DrawIndexed(fullscreenQuad->indexCount);
 
 		cmdBuffer->CMD_EndRenderPass();
-	}
-
-	void CubemapPreprocessingPass::ResetBorrowedData()
-	{
-		memset(&borrowedData, 0, sizeof(borrowedData));
 	}
 }

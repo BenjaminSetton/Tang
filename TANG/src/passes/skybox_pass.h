@@ -6,12 +6,12 @@
 #include "../data_buffer/uniform_buffer.h"
 #include "../descriptors/descriptor_set.h"
 #include "../pipelines/skybox_pipeline.h"
-#include "base_pass.h"
+#include "base_pass.h" // DrawData
 #include "../config.h"
 
 namespace TANG
 {
-	class SkyboxPass : public BasePass
+	class SkyboxPass
 	{
 	public:
 
@@ -22,26 +22,22 @@ namespace TANG
 		SkyboxPass(const SkyboxPass& other) = delete;
 		SkyboxPass& operator=(const SkyboxPass& other) = delete;
 
-		void SetData(const DescriptorPool* descriptorPool, const HDRRenderPass* hdrRenderPass, VkExtent2D swapChainExtent);
-
 		void UpdateSkyboxCubemap(const TextureResource* skyboxCubemap);
 		void UpdateViewProjUniformBuffers(uint32_t frameIndex, const glm::mat4& view, const glm::mat4 proj);
 
 		void UpdateDescriptorSets(uint32_t frameIndex);
 
-		void Create() override;
-		void Destroy() override;
+		void Create(const DescriptorPool* descriptorPool, const HDRRenderPass* hdrRenderPass, uint32_t swapChainWidth, uint32_t swapChainHeight);
+		void Destroy();
 
 		void Draw(uint32_t currentFrame, const DrawData& data);
 
 	private:
 
-		void CreatePipelines() override;
-		void CreateSetLayoutCaches() override;
-		void CreateDescriptorSets() override;
-		void CreateUniformBuffers() override;
-
-		void ResetBorrowedData() override;
+		void CreatePipelines(const HDRRenderPass* hdrRenderPass, uint32_t swapChainWidth, uint32_t swapChainHeight);
+		void CreateSetLayoutCaches();
+		void CreateDescriptorSets(const DescriptorPool* descriptorPool);
+		void CreateUniformBuffers();
 
 		SkyboxPipeline skyboxPipeline;
 		SetLayoutCache skyboxSetLayoutCache;
@@ -49,12 +45,7 @@ namespace TANG
 		std::array<UniformBuffer, CONFIG::MaxFramesInFlight> projUBO;
 		std::array<std::array<DescriptorSet, 2>, CONFIG::MaxFramesInFlight> skyboxDescriptorSets;
 
-		struct  
-		{
-			const DescriptorPool* descriptorPool;
-			const HDRRenderPass* hdrRenderPass;
-			VkExtent2D swapChainExtent;
-		} borrowedData;
+		bool wasCreated;
 	};
 }
 

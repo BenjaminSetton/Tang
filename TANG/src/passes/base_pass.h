@@ -24,8 +24,14 @@ namespace TANG
 		const BaseRenderPass* renderPass;
 		const Framebuffer* framebuffer;
 		const AssetResources* asset;
+
+		bool IsValid() const;
 	};
 
+
+	/////////////////////////////////////////////////////////
+	// DEPRECATED
+	/////////////////////////////////////////////////////////
 	class BasePass
 	{
 	public:
@@ -36,8 +42,6 @@ namespace TANG
 		VkFence GetFence();
 
 	protected:
-
-		bool IsDrawDataValid(const DrawData& data) const;
 
 		virtual void CreateFramebuffers();
 		virtual void CreatePipelines();
@@ -56,6 +60,9 @@ namespace TANG
 		bool wasCreated;
 
 	};
+	/////////////////////////////////////////////////////////
+	// DEPRECATED
+	/////////////////////////////////////////////////////////
 }
 
 

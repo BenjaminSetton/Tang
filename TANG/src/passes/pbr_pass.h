@@ -6,14 +6,14 @@
 #include "../data_buffer/uniform_buffer.h"
 #include "../descriptors/descriptor_set.h"
 #include "../pipelines/pbr_pipeline.h"
-#include "base_pass.h"
+#include "base_pass.h" // DrawData
 #include "../config.h"
 
 namespace TANG
 {
 	struct Transform;
 
-	class PBRPass : public BasePass
+	class PBRPass
 	{
 	public:
 
@@ -24,8 +24,6 @@ namespace TANG
 		PBRPass(const PBRPass& other) = delete;
 		PBRPass& operator=(const PBRPass& other) = delete;
 
-		void SetData(const DescriptorPool* descriptorPool, const HDRRenderPass* hdrRenderPass, VkExtent2D swapChainExtent);
-
 		void UpdateTransformUniformBuffer(uint32_t frameIndex, Transform& transform);
 		void UpdateViewUniformBuffer(uint32_t frameIndex, const glm::mat4& viewMatrix);
 		void UpdateProjUniformBuffer(uint32_t frameIndex, const glm::mat4& projMatrix);
@@ -33,19 +31,17 @@ namespace TANG
 
 		void UpdateDescriptorSets(uint32_t frameIndex, std::array<const TextureResource*, 8>& textures);
 
-		void Create() override;
-		void Destroy() override;
+		void Create(const DescriptorPool* descriptorPool, const HDRRenderPass* hdrRenderPass, uint32_t swapChainWidth, uint32_t swapChainHeight);
+		void Destroy();
 
 		void Draw(uint32_t frameIndex, const DrawData& data);
 
 	private:
 
-		void CreatePipelines() override;
-		void CreateSetLayoutCaches() override;
-		void CreateDescriptorSets() override;
-		void CreateUniformBuffers() override;
-
-		void ResetBorrowedData() override;
+		void CreatePipelines(const HDRRenderPass* hdrRenderPass, uint32_t swapChainWidth, uint32_t swapChainHeight);
+		void CreateSetLayoutCaches();
+		void CreateDescriptorSets(const DescriptorPool* descriptorPool);
+		void CreateUniformBuffers();
 
 		PBRPipeline pbrPipeline;
 		SetLayoutCache pbrSetLayoutCache;
@@ -56,12 +52,7 @@ namespace TANG
 		std::array<std::array<DescriptorSet, 3>, CONFIG::MaxFramesInFlight> pbrDescriptorSets;
 		SecondaryCommandBuffer cmdBuffer;
 
-		struct
-		{
-			const DescriptorPool* descriptorPool;
-			const HDRRenderPass* hdrRenderPass;
-			VkExtent2D swapChainExtent;
-		} borrowedData;
+		bool wasCreated;
 	};
 }
 

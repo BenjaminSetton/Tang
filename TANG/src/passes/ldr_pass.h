@@ -6,12 +6,12 @@
 #include "../data_buffer/uniform_buffer.h"
 #include "../descriptors/descriptor_set.h"
 #include "../pipelines/ldr_pipeline.h"
-#include "base_pass.h"
+#include "base_pass.h" // DrawData
 #include "../config.h"
 
 namespace TANG
 {
-	class LDRPass : public BasePass
+	class LDRPass
 	{
 	public:
 
@@ -22,36 +22,28 @@ namespace TANG
 		LDRPass(const LDRPass& other) = delete;
 		LDRPass& operator=(const LDRPass& other) = delete;
 
-		void SetData(const DescriptorPool* descriptorPool, const LDRRenderPass* hdrRenderPass, VkExtent2D swapChainExtent);
-
 		void UpdateExposureUniformBuffer(uint32_t frameIndex, float exposure);
 		void UpdateDescriptorSets(uint32_t frameIndex, const TextureResource* hdrTexture);
 
-		void Create() override;
-		void Destroy() override;
+		void Create(const DescriptorPool* descriptorPool, const LDRRenderPass* ldrRenderPass, uint32_t swapChainWidth, uint32_t swapChainHeight);
+		void Destroy();
 
 		void Draw(uint32_t frameIndex, const DrawData& data);
 
 	private:
 
-		void CreatePipelines() override;
-		void CreateSetLayoutCaches() override;
-		void CreateDescriptorSets() override;
-		void CreateUniformBuffers() override;
-
-		void ResetBorrowedData() override;
+		void CreatePipelines(const LDRRenderPass* ldrRenderPass, uint32_t swapChainWidth, uint32_t swapChainHeight);
+		void CreateSetLayoutCaches();
+		void CreateDescriptorSets(const DescriptorPool* descriptorPool);
+		void CreateUniformBuffers();
 
 		LDRPipeline ldrPipeline;
 		SetLayoutCache ldrSetLayoutCache;
 		std::array<UniformBuffer, CONFIG::MaxFramesInFlight> ldrExposureUBO;
 		std::array<DescriptorSet, CONFIG::MaxFramesInFlight> ldrDescriptorSet;
 
-		struct
-		{
-			const DescriptorPool* descriptorPool;
-			const LDRRenderPass* hdrRenderPass;
-			VkExtent2D swapChainExtent;
-		} borrowedData;
+		bool wasCreated;
+
 	};
 }
 

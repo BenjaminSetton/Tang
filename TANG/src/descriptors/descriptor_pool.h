@@ -1,12 +1,11 @@
 #ifndef DESCRIPTOR_POOL_H
 #define DESCRIPTOR_POOL_H
 
+#include "../utils/sanity_check.h"
 #include "vulkan/vulkan.h"
 
 namespace TANG
 {
-	// A thin wrapper around a VkDescriptorPool. Contains no object other than the vulkan pool object itself, meaning that an array of
-	// VkDescriptorPool objects is equivalent to an array of DescriptorPool objects
 	class DescriptorPool
 	{
 	public:
@@ -30,6 +29,10 @@ namespace TANG
 		VkDescriptorPool pool;
 
 	};
+
+	// A thin wrapper around a VkDescriptorPool. Contains no object other than the vulkan pool object itself, meaning that an array of
+	// VkDescriptorPool objects is equivalent to an array of DescriptorPool objects
+	TNG_ASSERT_SAME_SIZE(DescriptorPool, VkDescriptorPool);
 }
 
 #endif
