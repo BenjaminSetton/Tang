@@ -62,8 +62,8 @@ layout(set = 0, binding = 2) uniform sampler2D metallicSampler;
 layout(set = 0, binding = 3) uniform sampler2D roughnessSampler;
 layout(set = 0, binding = 4) uniform sampler2D lightmapSampler;
 layout(set = 0, binding = 5) uniform samplerCube irradianceMap;
-layout(set = 0, binding = 7) uniform sampler2D BRDFLUT;
 layout(set = 0, binding = 6) uniform samplerCube prefilterMap;
+layout(set = 0, binding = 7) uniform sampler2D BRDFLUT;
 
 layout(set = 2, binding = 1) uniform CameraData {
     vec4 position;
@@ -147,7 +147,7 @@ void main()
         vec3 irradiance = texture(irradianceMap, normal).rgb;
         vec3 diffuse = irradiance * albedo;
 
-        vec3 prefilteredColor = textureLod(prefilterMap, reflection, roughness * MAX_REFLECTION_LOD).rgb;
+        vec3 prefilteredColor = textureLod(prefilterMap, vec3(reflection.x, -reflection.y, reflection.z), roughness * MAX_REFLECTION_LOD).rgb;
         vec2 BRDFSample = texture(BRDFLUT, vec2(NdotV, roughness)).rg;
         vec3 specular = prefilteredColor * (F * BRDFSample.x + BRDFSample.y);
 
