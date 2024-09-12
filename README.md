@@ -40,6 +40,7 @@ NOTES:
 - Free 3D assets - https://polyhaven.com
 - LearnOpenGL (tutorials) - https://learnopengl.com
 - LearnOpenGL (code repo) - https://github.com/JoeyDeVries/LearnOpenGL
+- Writing an efficient Vulkan renderer - https://zeux.io/2020/02/27/writing-an-efficient-vulkan-renderer/
 
 ## DEPENDENCIES
 
