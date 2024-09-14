@@ -138,7 +138,7 @@ namespace TANG
 
 		// Setup all the passes
 		cubemapPreprocessingPass.LoadTextureResources();
-		bloomPass.Create(&descriptorPool, swapChainExtent.width, swapChainExtent.height);
+		bloomPass.Create(swapChainExtent.width, swapChainExtent.height);
 
 		// Calculate the starting view direction and position of the camera
 		glm::vec3 eye = { 0.0f, 0.0f, 1.0f };
@@ -453,7 +453,7 @@ namespace TANG
 		out_resources.indexCount = totalIndexCount;
 		out_resources.uuid = asset->uuid;
 
-		pbrPass.Create(&descriptorPool, &hdrRenderPass, swapChainExtent.width, swapChainExtent.height);
+		pbrPass.Create(&hdrRenderPass, swapChainExtent.width, swapChainExtent.height);
 
 		Transform defaultTransform{};
 		for (uint32_t i = 0; i < CONFIG::MaxFramesInFlight; i++)
@@ -509,7 +509,7 @@ namespace TANG
 		out_resources.indexCount = totalIndexCount;
 		out_resources.uuid = asset->uuid;
 
-		cubemapPreprocessingPass.Create(&descriptorPool);
+		cubemapPreprocessingPass.Create();
 
 		// Convert the HDR texture into a cubemap and calculate IBL components (irradiance + prefilter map + BRDF LUT)
 		PrimaryCommandBuffer cmdBuffer;
@@ -548,7 +548,7 @@ namespace TANG
 		LogInfo("Cubemap preprocessing done!");
 
 		// Initialize the skybox pass
-		skyboxPass.Create(&descriptorPool, &hdrRenderPass, swapChainExtent.width, swapChainExtent.height);
+		skyboxPass.Create(&hdrRenderPass, swapChainExtent.width, swapChainExtent.height);
 
 		skyboxPass.UpdateViewProjUniformBuffers(currentFrame, startingCameraViewMatrix, startingProjectionMatrix);
 		skyboxPass.UpdateSkyboxCubemap(cubemapPreprocessingPass.GetSkyboxCubemap());
@@ -556,6 +556,8 @@ namespace TANG
 		// Cache the skybox mesh UUID. We used it to convert the HDR equirectangular map to a cubemap, but we can
 		// reuse the cube mesh to draw the skybox in future frames as well
 		skyboxAssetUUID = asset->uuid;
+
+		cmdBuffer.Destroy();
 	}
 
 	void Renderer::CreateFullscreenQuadAssetResources(AssetDisk* asset, AssetResources& out_resources)
@@ -595,7 +597,7 @@ namespace TANG
 		out_resources.indexCount = totalIndexCount;
 		out_resources.uuid = asset->uuid;
 
-		ldrPass.Create(&descriptorPool, &ldrRenderPass, swapChainExtent.width, swapChainExtent.height);
+		ldrPass.Create(&ldrRenderPass, swapChainExtent.width, swapChainExtent.height);
 
 		// Cache the UUID
 		fullscreenQuadAssetUUID = asset->uuid;
@@ -699,14 +701,14 @@ namespace TANG
 		framebufferHeight = newHeight;
 	}
 
-	void Renderer::UpdateCameraData(const glm::vec3& position, const glm::mat4& viewMatrix)
+	void Renderer::UpdateCameraData(const glm::vec3& position, const glm::mat4& viewMatrix, const glm::mat4& projMatrix)
 	{
 		// Update uniforms
 		pbrPass.UpdateCameraUniformBuffer(currentFrame, position);
 		pbrPass.UpdateViewUniformBuffer(currentFrame, viewMatrix);
-		pbrPass.UpdateProjUniformBuffer(currentFrame, startingProjectionMatrix);
+		pbrPass.UpdateProjUniformBuffer(currentFrame, projMatrix);
 
-		skyboxPass.UpdateViewProjUniformBuffers(currentFrame, viewMatrix, startingProjectionMatrix);
+		skyboxPass.UpdateViewProjUniformBuffers(currentFrame, viewMatrix, projMatrix);
 
 		// Wait for the frame to finish using the camera buffer before updating it
 		vkWaitForFences(GetLogicalDevice(), 1, &GetCurrentFDD()->inFlightFence, VK_TRUE, UINT64_MAX);
@@ -815,25 +817,30 @@ namespace TANG
 		// Only reset the fence if we're submitting work, otherwise we might deadlock
 		vkResetFences(logicalDevice, 1, &(frameData->inFlightFence));
 
+		// Delete commands from previous frame index
+		frameData->hdrCommandBuffer.Destroy();
+		frameData->ldrCommandBuffer.Destroy();
+		frameData->postProcessingCommandBuffer.Destroy();
+
 		///////////////////////////////////////
 		// 
 		// CORE RENDERING
 		//
 		///////////////////////////////////////
 
-		PrimaryCommandBuffer* hdrCmdBuffer = &(frameData->hdrCommandBuffer);
-		hdrCmdBuffer->Reset();
-		hdrCmdBuffer->BeginRecording(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, nullptr);
-		hdrCmdBuffer->CMD_BeginRenderPass(&hdrRenderPass, &(frameData->hdrFramebuffer), swapChainExtent, true, true);
+		auto& hdrCmdBuffer = frameData->hdrCommandBuffer;
+		hdrCmdBuffer.Allocate(QUEUE_TYPE::GRAPHICS);
+		hdrCmdBuffer.BeginRecording(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, nullptr);
+		hdrCmdBuffer.CMD_BeginRenderPass(&hdrRenderPass, &(frameData->hdrFramebuffer), swapChainExtent, true, true);
 
 		// Record skybox commands
-		DrawSkybox(hdrCmdBuffer);
+		DrawSkybox(&hdrCmdBuffer);
 
 		// Record PBR asset commands
-		DrawAssets(hdrCmdBuffer);
+		DrawAssets(&hdrCmdBuffer);
 
-		hdrCmdBuffer->CMD_EndRenderPass();
-		hdrCmdBuffer->EndRecording();
+		hdrCmdBuffer.CMD_EndRenderPass();
+		hdrCmdBuffer.EndRecording();
 
 		///////////////////////////////////////
 		// 
@@ -841,25 +848,25 @@ namespace TANG
 		//
 		///////////////////////////////////////
 
-		PrimaryCommandBuffer* postProcessingCmdBuffer = &(frameData->postProcessingCommandBuffer);
-		postProcessingCmdBuffer->Reset();
-		postProcessingCmdBuffer->BeginRecording(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, nullptr);
+		auto& postProcessingCmdBuffer = frameData->postProcessingCommandBuffer;
+		postProcessingCmdBuffer.Allocate(QUEUE_TYPE::COMPUTE);
+		postProcessingCmdBuffer.BeginRecording(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, nullptr);
 		
-		bloomPass.Draw(currentFrame, postProcessingCmdBuffer, &frameData->hdrAttachment);
+		bloomPass.Draw(currentFrame, &postProcessingCmdBuffer, &frameData->hdrAttachment);
 
-		postProcessingCmdBuffer->EndRecording();
+		postProcessingCmdBuffer.EndRecording();
 
 		// Submit the LDR conversion commands separately, since they use a different render pass
 		Framebuffer& swapChainFramebuffer = GetSWIDDAtIndex(imageIndex)->swapChainFramebuffer;
-		PrimaryCommandBuffer* ldrCmdBuffer = &(frameData->ldrCommandBuffer);
-		ldrCmdBuffer->Reset();
-		ldrCmdBuffer->BeginRecording(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, nullptr);
-		ldrCmdBuffer->CMD_BeginRenderPass(&ldrRenderPass, &swapChainFramebuffer, swapChainExtent, false, true);
+		auto& ldrCmdBuffer = frameData->ldrCommandBuffer;
+		ldrCmdBuffer.Allocate(QUEUE_TYPE::GRAPHICS);
+		ldrCmdBuffer.BeginRecording(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, nullptr);
+		ldrCmdBuffer.CMD_BeginRenderPass(&ldrRenderPass, &swapChainFramebuffer, swapChainExtent, false, true);
 
-		PerformLDRConversion(ldrCmdBuffer);
+		PerformLDRConversion(&ldrCmdBuffer);
 
-		ldrCmdBuffer->CMD_EndRenderPass();
-		ldrCmdBuffer->EndRecording();
+		ldrCmdBuffer.CMD_EndRenderPass();
+		ldrCmdBuffer.EndRecording();
 
 		///////////////////////////////////////
 		// 
@@ -867,9 +874,9 @@ namespace TANG
 		//
 		///////////////////////////////////////
 
-		result = SubmitCoreRenderingQueue(hdrCmdBuffer, frameData);
-		result = SubmitPostProcessingQueue(postProcessingCmdBuffer, frameData);
-		result = SubmitLDRConversionQueue(ldrCmdBuffer, frameData);
+		result = SubmitCoreRenderingQueue(&hdrCmdBuffer, frameData);
+		result = SubmitPostProcessingQueue(&postProcessingCmdBuffer, frameData);
+		result = SubmitLDRConversionQueue(&ldrCmdBuffer, frameData);
 
 		///////////////////////////////////////
 		// 

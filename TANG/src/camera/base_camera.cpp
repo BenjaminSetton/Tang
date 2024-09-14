@@ -14,7 +14,7 @@
 namespace TANG
 {
 
-	BaseCamera::BaseCamera() : matrix(glm::identity<glm::mat4>())
+	BaseCamera::BaseCamera() : m_viewMatrix(glm::identity<glm::mat4>()), m_projMatrix(glm::identity<glm::mat4>())
 	{
 		// Nothing to do here
 	}
@@ -24,12 +24,12 @@ namespace TANG
 		// Nothing to do here
 	}
 
-	BaseCamera::BaseCamera(const BaseCamera& other) : matrix(other.matrix)
+	BaseCamera::BaseCamera(const BaseCamera& other) : m_viewMatrix(other.m_viewMatrix), m_projMatrix(other.m_projMatrix)
 	{
 		// Nothing to do here
 	}
 
-	BaseCamera::BaseCamera(BaseCamera&& other) noexcept : matrix(std::move(other.matrix))
+	BaseCamera::BaseCamera(BaseCamera&& other) noexcept : m_viewMatrix(std::move(other.m_viewMatrix)), m_projMatrix(std::move(other.m_projMatrix))
 	{
 		// Nothing to do here
 	}
@@ -42,19 +42,24 @@ namespace TANG
 			return *this;
 		}
 
-		matrix = other.matrix;
+		m_viewMatrix = other.m_viewMatrix;
 
 		return *this;
 	}
 
 	glm::mat4 BaseCamera::GetViewMatrix() const
 	{
-		return glm::inverse(matrix);
+		return glm::inverse(m_viewMatrix);
+	}
+
+	glm::mat4 BaseCamera::GetProjMatrix() const
+	{
+		return m_projMatrix;
 	}
 
 	glm::vec3 BaseCamera::GetPosition() const
 	{
-		return glm::vec3(matrix[3]);
+		return glm::vec3(m_viewMatrix[3]);
 	}
 
 }

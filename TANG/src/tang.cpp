@@ -88,7 +88,7 @@ namespace TANG
 		}
 
 		// Update the camera data that the renderer is holding with the most up-to-date info
-		renderer.UpdateCameraData(camera.GetPosition(), camera.GetViewMatrix());
+		renderer.UpdateCameraData(camera.GetPosition(), camera.GetViewMatrix(), camera.GetProjMatrix());
 
 		renderer.Update(deltaTime);
 	}

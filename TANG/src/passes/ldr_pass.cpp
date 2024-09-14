@@ -18,6 +18,8 @@
 #include "../render_passes/ldr_render_pass.h"
 #include "ldr_pass.h"
 
+#include "../tang.h"
+
 namespace TANG
 {
 	LDRPass::LDRPass()
@@ -48,7 +50,7 @@ namespace TANG
 		descSet.Update(writeDescSets);
 	}
 
-	void LDRPass::Create(const DescriptorPool* descriptorPool, const LDRRenderPass* ldrRenderPass, uint32_t swapChainWidth, uint32_t swapChainHeight)
+	void LDRPass::Create(const LDRRenderPass* ldrRenderPass, uint32_t swapChainWidth, uint32_t swapChainHeight)
 	{
 		if (wasCreated)
 		{
@@ -58,7 +60,7 @@ namespace TANG
 
 		CreateSetLayoutCaches();
 		CreateUniformBuffers();
-		CreateDescriptorSets(descriptorPool);
+		CreateDescriptorSets();
 		CreatePipelines(ldrRenderPass, swapChainWidth, swapChainHeight);
 
 		wasCreated = true;
@@ -104,7 +106,7 @@ namespace TANG
 		ldrSetLayoutCache.CreateSetLayout(layout, 0);
 	}
 
-	void LDRPass::CreateDescriptorSets(const DescriptorPool* descriptorPool)
+	void LDRPass::CreateDescriptorSets()
 	{
 		if (ldrSetLayoutCache.GetLayoutCount() != 1)
 		{
@@ -114,7 +116,7 @@ namespace TANG
 
 		for (uint32_t i = 0; i < CONFIG::MaxFramesInFlight; i++)
 		{
-			ldrDescriptorSet[i].Create(*descriptorPool, ldrSetLayoutCache.GetSetLayout(0).value());
+			ldrDescriptorSet[i] = TANG::AllocateDescriptorSet(ldrSetLayoutCache.GetSetLayout(0).value());
 		}
 	}
 

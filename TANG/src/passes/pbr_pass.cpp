@@ -19,6 +19,8 @@
 #include "../render_passes/hdr_render_pass.h"
 #include "pbr_pass.h"
 
+#include "../tang.h"
+
 namespace TANG
 {
 	PBRPass::PBRPass()
@@ -108,7 +110,7 @@ namespace TANG
 		}
 	}
 
-	void PBRPass::Create(const DescriptorPool* descriptorPool, const HDRRenderPass* hdrRenderPass, uint32_t swapChainWidth, uint32_t swapChainHeight)
+	void PBRPass::Create(const HDRRenderPass* hdrRenderPass, uint32_t swapChainWidth, uint32_t swapChainHeight)
 	{
 		if (wasCreated)
 		{
@@ -118,7 +120,7 @@ namespace TANG
 
 		CreateSetLayoutCaches();
 		CreateUniformBuffers();
-		CreateDescriptorSets(descriptorPool);
+		CreateDescriptorSets();
 		CreatePipelines(hdrRenderPass, swapChainWidth, swapChainHeight);
 
 		wasCreated = true;
@@ -197,7 +199,7 @@ namespace TANG
 		pbrSetLayoutCache.CreateSetLayout(volatileLayout, 0);
 	}
 
-	void PBRPass::CreateDescriptorSets(const DescriptorPool* descriptorPool)
+	void PBRPass::CreateDescriptorSets()
 	{
 		uint32_t pbrSetLayoutCount = pbrSetLayoutCache.GetLayoutCount();
 		if (pbrSetLayoutCount != 3)
@@ -217,7 +219,7 @@ namespace TANG
 					continue;
 				}
 
-				pbrDescriptorSets[i][j].Create(*descriptorPool, setLayoutOpt.value());
+				pbrDescriptorSets[i][j] = TANG::AllocateDescriptorSet(setLayoutOpt.value());
 			}
 		}
 	}

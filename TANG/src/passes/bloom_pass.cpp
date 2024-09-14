@@ -6,6 +6,7 @@
 #include "../utils/logger.h"
 #include "bloom_pass.h"
 
+#include "../tang.h"
 
 namespace TANG
 {
@@ -15,7 +16,7 @@ namespace TANG
 	BloomPass::~BloomPass()
 	{ }
 
-	void BloomPass::Create(const DescriptorPool* descriptorPool, uint32_t baseTextureWidth, uint32_t baseTextureHeight)
+	void BloomPass::Create(uint32_t baseTextureWidth, uint32_t baseTextureHeight)
 	{
 		if (wasCreated)
 		{
@@ -24,7 +25,7 @@ namespace TANG
 		}
 
 		CreateSetLayoutCaches();
-		CreateDescriptorSets(descriptorPool);
+		CreateDescriptorSets();
 		CreatePipelines();
 		CreateTextures(baseTextureWidth >> 1, baseTextureHeight >> 1); // We start the bloom pass at a quarter of the base resolution
 
@@ -297,7 +298,7 @@ namespace TANG
 		}
 	}
 
-	void BloomPass::CreateDescriptorSets(const DescriptorPool* descriptorPool)
+	void BloomPass::CreateDescriptorSets()
 	{
 		// Bloom downscaling
 		{
@@ -318,7 +319,7 @@ namespace TANG
 			{
 				for (uint32_t j = 0; j < CONFIG::BloomMaxMips; j++)
 				{
-					bloomDownscalingDescriptorSets[i][j].Create(*descriptorPool, bloomDownscalingSetLayout.value());
+					bloomDownscalingDescriptorSets[i][j] = TANG::AllocateDescriptorSet(bloomDownscalingSetLayout.value());
 				}
 			}
 		}
@@ -342,7 +343,7 @@ namespace TANG
 			{
 				for (uint32_t j = 0; j < CONFIG::BloomMaxMips; j++)
 				{
-					bloomUpscalingDescriptorSets[i][j].Create(*descriptorPool, bloomUpscalingSetLayout.value());
+					bloomUpscalingDescriptorSets[i][j] = TANG::AllocateDescriptorSet(bloomUpscalingSetLayout.value());
 				}
 			}
 		}
@@ -364,7 +365,7 @@ namespace TANG
 
 			for (uint32_t i = 0; i < CONFIG::MaxFramesInFlight; i++)
 			{
-				bloomCompositionDescriptorSets[i].Create(*descriptorPool, bloomCompositionSetLayout.value());
+				bloomCompositionDescriptorSets[i] = TANG::AllocateDescriptorSet(bloomCompositionSetLayout.value());
 			}
 		}
 	}

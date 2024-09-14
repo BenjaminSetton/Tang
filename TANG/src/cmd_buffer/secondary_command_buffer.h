@@ -11,9 +11,7 @@ namespace TANG
 
 		SecondaryCommandBuffer();
 		~SecondaryCommandBuffer();
-		SecondaryCommandBuffer(const SecondaryCommandBuffer& other);
 		SecondaryCommandBuffer(SecondaryCommandBuffer&& other) noexcept;
-		SecondaryCommandBuffer& operator=(const SecondaryCommandBuffer& other);
 
 		void Allocate(QUEUE_TYPE type) override;
 

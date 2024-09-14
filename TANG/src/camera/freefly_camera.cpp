@@ -12,9 +12,10 @@
 #include <functional>
 
 #include "freefly_camera.h"
+#include "../input_manager.h"
+#include "../main_window.h"
 #include "../utils/sanity_check.h"
 #include "../utils/logger.h"
-#include "../input_manager.h"
 
 namespace TANG
 {
@@ -116,7 +117,16 @@ namespace TANG
 		displacement = { 0.0f, 0.0f, 0.0f };
 
 		// Set the new matrix
-		matrix = newMatrix;
+		m_viewMatrix = newMatrix;
+
+		// Calculate projection matrix
+		auto& window = MainWindow::Get();
+		uint32_t windowWidth, windowHeight;
+		window.GetFramebufferSize(&windowWidth, &windowHeight);
+
+		float aspectRatio = windowWidth / static_cast<float>(windowHeight);
+		m_projMatrix = glm::perspective(glm::radians(45.0f), aspectRatio, 0.1f, 1000.0f);
+		m_projMatrix[1][1] *= -1; // NOTE - GLM was originally designed for OpenGL, where the Y coordinate of the clip coordinates is inverted
 	}
 
 	void FreeflyCamera::Shutdown()

@@ -8,8 +8,7 @@
 #include "../ubo_structs.h"
 #include "cubemap_preprocessing_pass.h"
 
-// TMEPO DEBUG
-#include "../device_cache.h"
+#include "../tang.h"
 
 static const glm::mat4 cubemapProjMatrix = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 10.0f);
 
@@ -39,7 +38,7 @@ namespace TANG
 		TNG_TODO();
 	}
 
-	void CubemapPreprocessingPass::Create(const DescriptorPool* descriptorPool)
+	void CubemapPreprocessingPass::Create()
 	{
 		if (wasCreated)
 		{
@@ -49,7 +48,7 @@ namespace TANG
 
 		CreateSetLayoutCaches();
 		CreateUniformBuffers();
-		CreateDescriptorSets(descriptorPool);
+		CreateDescriptorSets();
 		CreateSyncObjects();
 		CreateRenderPasses();
 		CreatePipelines();
@@ -441,7 +440,7 @@ namespace TANG
 		}
 	}
 
-	void CubemapPreprocessingPass::CreateDescriptorSets(const DescriptorPool* descriptorPool)
+	void CubemapPreprocessingPass::CreateDescriptorSets()
 	{
 		// Cubemap preprocessing + irradiance sampling
 		// NOTE - We're re-using the cubemap preprocessing descriptor set layout because they do have
@@ -462,8 +461,8 @@ namespace TANG
 
 		for (uint32_t i = 0; i < 6; i++)
 		{
-			cubemapPreprocessingDescriptorSets[i].Create(*descriptorPool, cubemapSetLayout.value());
-			irradianceSamplingDescriptorSets[i].Create(*descriptorPool, cubemapSetLayout.value());
+			cubemapPreprocessingDescriptorSets[i] = TANG::AllocateDescriptorSet(cubemapSetLayout.value());
+			irradianceSamplingDescriptorSets[i] = TANG::AllocateDescriptorSet(cubemapSetLayout.value());
 		}
 
 		// Prefilter map
@@ -494,8 +493,8 @@ namespace TANG
 
 		for (uint32_t i = 0; i < 6; i++)
 		{
-			prefilterMapCubemapDescriptorSets[i].Create(*descriptorPool, prefilterCubemapSetLayout.value());
-			prefilterMapRoughnessDescriptorSets[i].Create(*descriptorPool, prefilterRoughnessSetLayout.value());
+			prefilterMapCubemapDescriptorSets[i] = TANG::AllocateDescriptorSet(prefilterCubemapSetLayout.value());
+			prefilterMapRoughnessDescriptorSets[i] = TANG::AllocateDescriptorSet(prefilterRoughnessSetLayout.value());
 		}
 	}
 

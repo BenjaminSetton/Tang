@@ -22,16 +22,6 @@ namespace TANG
 		// Nothing to do here
 	}
 
-	PrimaryCommandBuffer::PrimaryCommandBuffer(const PrimaryCommandBuffer& other) : CommandBuffer(other)
-	{
-		if (other.renderPassState == PRIMARY_COMMAND_RENDER_PASS_STATE::BEGUN)
-		{
-			TNG_ASSERT_MSG(false, "Why are we copying a primary command buffer while recording a render pass?");
-		}
-
-		renderPassState = other.renderPassState;
-	}
-
 	PrimaryCommandBuffer::PrimaryCommandBuffer(PrimaryCommandBuffer&& other) noexcept : CommandBuffer(std::move(other))
 	{
 		if (other.renderPassState == PRIMARY_COMMAND_RENDER_PASS_STATE::BEGUN)
@@ -40,24 +30,6 @@ namespace TANG
 		}
 
 		renderPassState = other.renderPassState;
-	}
-
-	PrimaryCommandBuffer& PrimaryCommandBuffer::operator=(const PrimaryCommandBuffer& other)
-	{
-		if (other.renderPassState == PRIMARY_COMMAND_RENDER_PASS_STATE::BEGUN)
-		{
-			TNG_ASSERT_MSG(false, "Why are we copying a primary command buffer while recording a render pass?");
-		}
-
-		// Protect against self-assignment
-		if (this == &other)
-		{
-			return *this;
-		}
-
-		CommandBuffer::operator=(other);
-		renderPassState = other.renderPassState;
-		return *this;
 	}
 
 	void PrimaryCommandBuffer::Allocate(QUEUE_TYPE type)

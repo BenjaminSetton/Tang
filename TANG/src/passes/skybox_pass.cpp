@@ -8,6 +8,8 @@
 #include "../render_passes/base_render_pass.h"
 #include "../ubo_structs.h"
 
+#include "../tang.h"
+
 #include "skybox_pass.h"
 
 namespace TANG
@@ -59,7 +61,7 @@ namespace TANG
 		descSet.Update(writeSetVolatile);
 	}
 
-	void SkyboxPass::Create(const DescriptorPool* descriptorPool, const HDRRenderPass* hdrRenderPass, uint32_t swapChainWidth, uint32_t swapChainHeight)
+	void SkyboxPass::Create(const HDRRenderPass* hdrRenderPass, uint32_t swapChainWidth, uint32_t swapChainHeight)
 	{
 		if (wasCreated)
 		{
@@ -69,7 +71,7 @@ namespace TANG
 
 		CreateSetLayoutCaches();
 		CreateUniformBuffers();
-		CreateDescriptorSets(descriptorPool);
+		CreateDescriptorSets();
 		CreatePipelines(hdrRenderPass, swapChainWidth, swapChainHeight);
 
 		wasCreated = true;
@@ -131,7 +133,7 @@ namespace TANG
 		skyboxSetLayoutCache.CreateSetLayout(volatileLayout, 0);
 	}
 
-	void SkyboxPass::CreateDescriptorSets(const DescriptorPool* descriptorPool)
+	void SkyboxPass::CreateDescriptorSets()
 	{
 		uint32_t skyboxSetLayoutCount = skyboxSetLayoutCache.GetLayoutCount();
 		if (skyboxSetLayoutCount != 2)
@@ -151,7 +153,7 @@ namespace TANG
 					continue;
 				}
 
-				skyboxDescriptorSets[i][j].Create(*descriptorPool, setLayoutOpt.value());
+				skyboxDescriptorSets[i][j] = TANG::AllocateDescriptorSet(setLayoutOpt.value());
 			}
 		}
 	}

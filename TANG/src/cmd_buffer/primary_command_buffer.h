@@ -22,9 +22,7 @@ namespace TANG
 
 		PrimaryCommandBuffer();
 		~PrimaryCommandBuffer();
-		PrimaryCommandBuffer(const PrimaryCommandBuffer& other);
 		PrimaryCommandBuffer(PrimaryCommandBuffer&& other) noexcept;
-		PrimaryCommandBuffer& operator=(const PrimaryCommandBuffer& other);
 
 		void Allocate(QUEUE_TYPE type) override;
 

@@ -1,5 +1,6 @@
 
 #include "../asset_types.h" // AssetResources
+#include "../command_pool_registry.h" // GetCommandPool()
 #include "../data_buffer/index_buffer.h" // GetIndexType()
 #include "../device_cache.h"
 #include "../pipelines/base_pipeline.h" // BasePipeline
@@ -10,70 +11,47 @@
 namespace TANG
 {
 
-	CommandBuffer::CommandBuffer() : commandBuffer(VK_NULL_HANDLE), cmdBufferState(COMMAND_BUFFER_STATE::DEFAULT), isOneTimeSubmit(false), allocatedQueueType(QUEUE_TYPE::COUNT)
+	CommandBuffer::CommandBuffer() : commandBuffer(VK_NULL_HANDLE), cmdBufferState(COMMAND_BUFFER_STATE::DEFAULT), cmdBufferType(COMMAND_BUFFER_TYPE::PRIMARY),
+		isOneTimeSubmit(false), allocatedQueueType(QUEUE_TYPE::COUNT)
 	{
 	}
 
 	CommandBuffer::~CommandBuffer()
 	{
-		if (cmdBufferState == COMMAND_BUFFER_STATE::RECORDING)
+		if (IsAllocated())
+		{
+			LogWarning("Command buffer was allocated but never destroyed! Memory will be leaked unless the command pool is reset.");
+		}
+		else if (cmdBufferState == COMMAND_BUFFER_STATE::RECORDING)
 		{
 			LogWarning("The command buffer handle is being lost while the command buffer is in the recording state!");
 		}
-	}
-
-	CommandBuffer::CommandBuffer(const CommandBuffer& other)
-	{
-		if (IsRecording() || other.IsRecording())
-		{
-			TNG_ASSERT_MSG(false, "Cannot copy a command buffer while either one is recording!");
-		}
-
-		commandBuffer = other.commandBuffer;
-		cmdBufferState = other.cmdBufferState;
-		isOneTimeSubmit = other.isOneTimeSubmit;
 	}
 
 	CommandBuffer::CommandBuffer(CommandBuffer&& other) noexcept
 	{
 		commandBuffer = other.commandBuffer;
 		cmdBufferState = other.cmdBufferState;
+		cmdBufferType = other.cmdBufferType;
 		isOneTimeSubmit = other.isOneTimeSubmit;
+		allocatedQueueType = other.allocatedQueueType;
 
 		// Transfer ownership of the other command buffers' internal buffer to this object, and set it's handle to null
 		other.commandBuffer = VK_NULL_HANDLE;
+		other.cmdBufferState = COMMAND_BUFFER_STATE::DEFAULT;
 	}
 
-	CommandBuffer& CommandBuffer::operator=(const CommandBuffer& other)
-	{
-		if (IsRecording() || other.IsRecording())
-		{
-			TNG_ASSERT_MSG(false, "Cannot copy a command buffer while either one is recording!");
-		}
-
-		// Protect against self-assignment
-		if (this == &other)
-		{
-			return *this;
-		}
-
-		commandBuffer = other.commandBuffer;
-		cmdBufferState = other.cmdBufferState;
-		isOneTimeSubmit = other.isOneTimeSubmit;
-		return *this;
-	}
-
-	void CommandBuffer::Destroy(VkCommandPool commandPool)
+	void CommandBuffer::Destroy()
 	{
 		VkDevice logicalDevice = GetLogicalDevice();
 
-		if (!IsCommandBufferValid() || IsRecording())
+		if (!IsCommandBufferValid() || IsRecording() || !IsAllocated())
 		{
-			LogError("Can't destroy a command buffer because it's either still recording or the command buffer is null! Memory will be leaked");
+			LogError("Can't destroy a command buffer because it's either still recording or the command buffer is null! Potential memory leak!");
 			return;
 		}
 
-		vkFreeCommandBuffers(logicalDevice, commandPool, 1, &commandBuffer);
+		vkFreeCommandBuffers(logicalDevice, GetCommandPool(allocatedQueueType), 1, &commandBuffer);
 		commandBuffer = VK_NULL_HANDLE;
 
 		cmdBufferState = COMMAND_BUFFER_STATE::DESTROYED;
@@ -87,10 +65,10 @@ namespace TANG
 			return;
 		}
 
-		if (isOneTimeSubmit && cmdBufferState != COMMAND_BUFFER_STATE::RESET)
+		if (isOneTimeSubmit && !IsWritable())
 		{
-			LogWarning("One-time-submit command buffer has started recording, but has not been reset!");
-			//return; // Do we want to return here?
+			LogWarning("One-time-submit command buffer has started recording, but is not writable! Current state is %u", cmdBufferState);
+			return;
 		}
 
 		VkCommandBufferBeginInfo beginInfo{};
@@ -271,6 +249,16 @@ namespace TANG
 	bool CommandBuffer::IsReset() const
 	{
 		return cmdBufferState == COMMAND_BUFFER_STATE::RESET;
+	}
+
+	bool CommandBuffer::IsAllocated() const
+	{
+		return (cmdBufferState != COMMAND_BUFFER_STATE::DEFAULT) && (cmdBufferState != COMMAND_BUFFER_STATE::DESTROYED);
+	}
+
+	bool CommandBuffer::IsWritable() const
+	{
+		return (cmdBufferState == COMMAND_BUFFER_STATE::RESET) || (cmdBufferState == COMMAND_BUFFER_STATE::ALLOCATED);
 	}
 
 	bool CommandBuffer::IsCommandBufferValid() const

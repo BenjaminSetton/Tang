@@ -28,7 +28,7 @@ namespace TANG
 		CubemapPreprocessingPass(const CubemapPreprocessingPass& other) = delete;
 		CubemapPreprocessingPass& operator=(const CubemapPreprocessingPass& other) = delete;
 
-		void Create(const DescriptorPool* descriptorPool);
+		void Create();
 
 		void DestroyIntermediates();
 		void Destroy();
@@ -57,7 +57,7 @@ namespace TANG
 		void CreatePipelines();
 		void CreateRenderPasses();
 		void CreateSetLayoutCaches();
-		void CreateDescriptorSets(const DescriptorPool* descriptorPool);
+		void CreateDescriptorSets();
 		void CreateUniformBuffers();
 		void CreateSyncObjects();
 

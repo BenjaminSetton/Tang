@@ -27,7 +27,7 @@ namespace TANG
 
 		void UpdateDescriptorSets(uint32_t frameIndex);
 
-		void Create(const DescriptorPool* descriptorPool, const HDRRenderPass* hdrRenderPass, uint32_t swapChainWidth, uint32_t swapChainHeight);
+		void Create(const HDRRenderPass* hdrRenderPass, uint32_t swapChainWidth, uint32_t swapChainHeight);
 		void Destroy();
 
 		void Draw(uint32_t currentFrame, const DrawData& data);
@@ -36,7 +36,7 @@ namespace TANG
 
 		void CreatePipelines(const HDRRenderPass* hdrRenderPass, uint32_t swapChainWidth, uint32_t swapChainHeight);
 		void CreateSetLayoutCaches();
-		void CreateDescriptorSets(const DescriptorPool* descriptorPool);
+		void CreateDescriptorSets();
 		void CreateUniformBuffers();
 
 		SkyboxPipeline skyboxPipeline;

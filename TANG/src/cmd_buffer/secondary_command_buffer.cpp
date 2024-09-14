@@ -20,26 +20,9 @@ namespace TANG
 		// Nothing to do here
 	}
 
-	SecondaryCommandBuffer::SecondaryCommandBuffer(const SecondaryCommandBuffer& other) : CommandBuffer(other)
-	{
-		// All we need to do here is call the copy constructor of the parent
-	}
-
 	SecondaryCommandBuffer::SecondaryCommandBuffer(SecondaryCommandBuffer&& other) noexcept : CommandBuffer(std::move(other))
 	{
 		// All we need to do here is call the move constructor of the parent
-	}
-
-	SecondaryCommandBuffer& SecondaryCommandBuffer::operator=(const SecondaryCommandBuffer& other)
-	{
-		if (this == &other)
-		{
-			return *this;
-		}
-
-		// All we need to do here is call the assignment operator of the parent
-		CommandBuffer::operator=(other);
-		return *this;
 	}
 
 	void SecondaryCommandBuffer::Allocate(QUEUE_TYPE type)

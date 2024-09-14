@@ -23,6 +23,7 @@ namespace TANG
 
 		// Returns the inverted view matrix
 		glm::mat4 GetViewMatrix() const;
+		glm::mat4 GetProjMatrix() const;
 
 		glm::vec3 GetPosition() const;
 
@@ -35,7 +36,8 @@ namespace TANG
 		virtual void DeregisterMouseCallbacks() = 0;
 
 		// Stores a rotated and transformed view matrix, NOT YET INVERTED
-		glm::mat4 matrix;
+		glm::mat4 m_viewMatrix;
+		glm::mat4 m_projMatrix;
 
 	};
 }

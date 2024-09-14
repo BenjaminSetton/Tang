@@ -25,7 +25,7 @@ namespace TANG
 		void UpdateExposureUniformBuffer(uint32_t frameIndex, float exposure);
 		void UpdateDescriptorSets(uint32_t frameIndex, const TextureResource* hdrTexture);
 
-		void Create(const DescriptorPool* descriptorPool, const LDRRenderPass* ldrRenderPass, uint32_t swapChainWidth, uint32_t swapChainHeight);
+		void Create(const LDRRenderPass* ldrRenderPass, uint32_t swapChainWidth, uint32_t swapChainHeight);
 		void Destroy();
 
 		void Draw(uint32_t frameIndex, const DrawData& data);
@@ -34,7 +34,7 @@ namespace TANG
 
 		void CreatePipelines(const LDRRenderPass* ldrRenderPass, uint32_t swapChainWidth, uint32_t swapChainHeight);
 		void CreateSetLayoutCaches();
-		void CreateDescriptorSets(const DescriptorPool* descriptorPool);
+		void CreateDescriptorSets();
 		void CreateUniformBuffers();
 
 		LDRPipeline ldrPipeline;

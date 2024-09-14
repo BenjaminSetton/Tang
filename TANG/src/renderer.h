@@ -115,8 +115,8 @@ namespace TANG
 		// Sets the size that the next framebuffer should be. This function will only be called when the main window is resized
 		void SetNextFramebufferSize(uint32_t newWidth, uint32_t newHeight);
 
-		// Updates the view matrix using the provided position and inverted view matrix. The caller can get this data from any derived BaseCamera object
-		void UpdateCameraData(const glm::vec3& position, const glm::mat4& viewMatrix);
+		// Updates the view/proj matrix using the provided position and inverted view matrix. The caller can get this data from any derived BaseCamera object
+		void UpdateCameraData(const glm::vec3& position, const glm::mat4& viewMatrix, const glm::mat4& proj);
 
 	private:
 
@@ -202,6 +202,7 @@ namespace TANG
 		std::unordered_map<UUID, uint32_t> resourcesMap;
 		std::vector<AssetResources> assetResources;
 
+		// TODO - Move to it's own manager
 		DescriptorPool descriptorPool;
 
 		// Cached window sizes

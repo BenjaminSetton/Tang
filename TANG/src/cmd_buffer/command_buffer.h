@@ -40,12 +40,13 @@ namespace TANG
 
 		CommandBuffer();
 		~CommandBuffer();
-		CommandBuffer(const CommandBuffer& other);
 		CommandBuffer(CommandBuffer&& other) noexcept;
-		CommandBuffer& operator=(const CommandBuffer& other);
+
+		CommandBuffer(const CommandBuffer& other) = delete;
+		CommandBuffer& operator=(const CommandBuffer& other) = delete;
 
 		virtual void Allocate(QUEUE_TYPE type) = 0;
-		void Destroy(VkCommandPool commandPool);
+		void Destroy();
 
 		void BeginRecording(VkCommandBufferUsageFlags flags, VkCommandBufferInheritanceInfo* inheritanceInfo);
 		void EndRecording();
@@ -75,6 +76,8 @@ namespace TANG
 		bool IsRecording() const;
 
 		bool IsReset() const;
+		bool IsAllocated() const;
+		bool IsWritable() const;
 
 		// Performs a few checks that tell us whether we can write commands to this command buffer
 		bool IsCommandBufferValid() const;

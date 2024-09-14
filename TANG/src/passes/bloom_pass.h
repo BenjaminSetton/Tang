@@ -30,7 +30,7 @@ namespace TANG
 		BloomPass(const BloomPass& other) = delete;
 		BloomPass& operator=(const BloomPass& other) = delete;
 
-		void Create(const DescriptorPool* descriptorPool, uint32_t baseTextureWidth, uint32_t baseTextureHeight);
+		void Create(uint32_t baseTextureWidth, uint32_t baseTextureHeight);
 		void Destroy();
 
 		// Input texture cannot be const because we might have to transition it's layout to
@@ -47,7 +47,7 @@ namespace TANG
 
 		void CreatePipelines();
 		void CreateSetLayoutCaches();
-		void CreateDescriptorSets(const DescriptorPool* descriptorPool);
+		void CreateDescriptorSets();
 		void CreateTextures(uint32_t width, uint32_t height);
 
 		BloomDownscalingPipeline bloomDownscalingPipeline;
