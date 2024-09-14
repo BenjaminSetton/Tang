@@ -1,4 +1,5 @@
 
+#include "../command_pool_registry.h"
 #include "../device_cache.h"
 #include "../utils/sanity_check.h"
 #include "../utils/logger.h"
@@ -41,14 +42,14 @@ namespace TANG
 		return *this;
 	}
 
-	void SecondaryCommandBuffer::Create(VkCommandPool commandPool)
+	void SecondaryCommandBuffer::Allocate(QUEUE_TYPE type)
 	{
 		VkDevice logicalDevice = GetLogicalDevice();
 
 		VkCommandBufferAllocateInfo allocInfo = {};
 		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_SECONDARY;
-		allocInfo.commandPool = commandPool;
+		allocInfo.commandPool = GetCommandPool(type);
 		allocInfo.commandBufferCount = 1;
 
 		if (vkAllocateCommandBuffers(logicalDevice, &allocInfo, &commandBuffer) != VK_SUCCESS) {
@@ -56,6 +57,7 @@ namespace TANG
 		}
 
 		cmdBufferState = COMMAND_BUFFER_STATE::ALLOCATED;
+		allocatedQueueType = type;
 	}
 
 	COMMAND_BUFFER_TYPE SecondaryCommandBuffer::GetType()

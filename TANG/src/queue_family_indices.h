@@ -21,15 +21,15 @@ namespace TANG
 		QueueFamilyIndices(QueueFamilyIndices&& other) noexcept;
 		QueueFamilyIndices& operator=(const QueueFamilyIndices& other);
 
-		void SetIndex(QueueType type, QueueFamilyIndexType index);
-		QueueFamilyIndexType GetIndex(QueueType type) const;
+		void SetIndex(QUEUE_TYPE type, QueueFamilyIndexType index);
+		QueueFamilyIndexType GetIndex(QUEUE_TYPE type) const;
 
 		bool IsValid(QueueFamilyIndexType index) const;
 		bool IsComplete();
 
 	private:
 
-		std::unordered_map<QueueType, QueueFamilyIndexType> queueFamilies;
+		std::unordered_map<QUEUE_TYPE, QueueFamilyIndexType> queueFamilies;
 	};
 
 	// Global function

@@ -37,7 +37,6 @@
 
 #include "asset_loader.h"
 #include "cmd_buffer/disposable_command.h"
-#include "command_pool_registry.h"
 #include "config.h"
 #include "data_buffer/vertex_buffer.h"
 #include "data_buffer/index_buffer.h"
@@ -238,23 +237,27 @@ namespace TANG
 		return s;
 	}
 
-	PrimaryCommandBuffer Renderer::AllocatePrimaryCommandBuffer(QueueType type)
+	PrimaryCommandBuffer Renderer::AllocatePrimaryCommandBuffer(QUEUE_TYPE type)
 	{
 		PrimaryCommandBuffer cb;
-		cb.Create(GetCommandPool(type));
+		cb.Allocate(type);
 		return cb;
 	}
 
-	SecondaryCommandBuffer Renderer::AllocateSecondaryCommandBuffer(QueueType type)
+	SecondaryCommandBuffer Renderer::AllocateSecondaryCommandBuffer(QUEUE_TYPE type)
 	{
 		SecondaryCommandBuffer cb;
-		cb.Create(GetCommandPool(type));
+		cb.Allocate(type);
 		return cb;
 	}
 
-	void Renderer::QueuePass(BasePass* pass)
+	void Renderer::QueueCommandBuffer(PrimaryCommandBuffer* cmd)
 	{
-		m_passes.push_back(pass);
+		TNG_ASSERT_PTR(cmd, "Propvided command buffer is null!");
+		if (cmd)
+		{
+			m_cmdBuffers.push_back(cmd);
+		}
 	}
 
 	// Loads an asset which implies grabbing the vertices and indices from the asset container
@@ -331,7 +334,7 @@ namespace TANG
 		ib.Create(numIndexBytes);
 
 		{
-			DisposableCommand command(QueueType::TRANSFER, true);
+			DisposableCommand command(QUEUE_TYPE::TRANSFER, true);
 			vb.CopyIntoBuffer(command.GetBuffer(), currMesh->vertices.data(), numVertexBytes);
 			ib.CopyIntoBuffer(command.GetBuffer(), currMesh->indices.data(), numIndexBytes);
 		}
@@ -486,7 +489,7 @@ namespace TANG
 		IndexBuffer& ib = out_resources.indexBuffer;
 		ib.Create(numIndexBytes);
 		{
-			DisposableCommand command(QueueType::TRANSFER, true);
+			DisposableCommand command(QUEUE_TYPE::TRANSFER, true);
 			vb.CopyIntoBuffer(command.GetBuffer(), currMesh->vertices.data(), numVertexBytes);
 			ib.CopyIntoBuffer(command.GetBuffer(), currMesh->indices.data(), numIndexBytes);
 		}
@@ -510,7 +513,7 @@ namespace TANG
 
 		// Convert the HDR texture into a cubemap and calculate IBL components (irradiance + prefilter map + BRDF LUT)
 		PrimaryCommandBuffer cmdBuffer;
-		cmdBuffer.Create(GetCommandPool(QueueType::GRAPHICS));
+		cmdBuffer.Allocate(QUEUE_TYPE::GRAPHICS);
 		cmdBuffer.BeginRecording(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, nullptr);
 
 		cubemapPreprocessingPass.Draw(&cmdBuffer, &out_resources, GetAssetResourcesFromUUID(fullscreenQuadAssetUUID));
@@ -530,7 +533,7 @@ namespace TANG
 		VkFence cubemapPreprocessingFence = cubemapPreprocessingPass.GetFence();
 		vkResetFences(GetLogicalDevice(), 1, &cubemapPreprocessingFence);
 
-		if (SubmitQueue(QueueType::GRAPHICS, &submitInfo, 1, cubemapPreprocessingFence) != VK_SUCCESS)
+		if (SubmitQueue(QUEUE_TYPE::GRAPHICS, &submitInfo, 1, cubemapPreprocessingFence) != VK_SUCCESS)
 		{
 			LogError("Failed to execute commands for cubemap preprocessing!");
 			return;
@@ -572,7 +575,7 @@ namespace TANG
 		ib.Create(numIndexBytes);
 
 		{
-			DisposableCommand command(QueueType::TRANSFER, true);
+			DisposableCommand command(QUEUE_TYPE::TRANSFER, true);
 			vb.CopyIntoBuffer(command.GetBuffer(), currMesh->vertices.data(), numVertexBytes);
 			ib.CopyIntoBuffer(command.GetBuffer(), currMesh->indices.data(), numIndexBytes);
 		}
@@ -614,7 +617,7 @@ namespace TANG
 
 			secondaryCmdBufferMap->emplace(uuid, SecondaryCommandBuffer());
 			SecondaryCommandBuffer& commandBuffer = secondaryCmdBufferMap->at(uuid);
-			commandBuffer.Create(GetCommandPool(QueueType::GRAPHICS));
+			commandBuffer.Allocate(QUEUE_TYPE::GRAPHICS);
 		}
 	}
 
@@ -888,7 +891,7 @@ namespace TANG
 			presentInfo.pImageIndices = &imageIndex;
 			presentInfo.pResults = nullptr;
 
-			result = vkQueuePresentKHR(queues[QueueType::PRESENT], &presentInfo);
+			result = vkQueuePresentKHR(queues[QUEUE_TYPE::PRESENT], &presentInfo);
 		}
 
 		if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
@@ -1255,17 +1258,17 @@ namespace TANG
 			return;
 		}
 
-		LogInfo("Selected graphics queue from queue family at index %u"	, indices.GetIndex(QueueType::GRAPHICS));
-		LogInfo("Selected compute queue from queue family at index %u"	, indices.GetIndex(QueueType::COMPUTE));
-		LogInfo("Selected transfer queue from queue family at index %u"	, indices.GetIndex(QueueType::TRANSFER));
-		LogInfo("Selected present queue from queue family at index %u"	, indices.GetIndex(QueueType::PRESENT));
+		LogInfo("Selected graphics queue from queue family at index %u"	, indices.GetIndex(QUEUE_TYPE::GRAPHICS));
+		LogInfo("Selected compute queue from queue family at index %u"	, indices.GetIndex(QUEUE_TYPE::COMPUTE));
+		LogInfo("Selected transfer queue from queue family at index %u"	, indices.GetIndex(QUEUE_TYPE::TRANSFER));
+		LogInfo("Selected present queue from queue family at index %u"	, indices.GetIndex(QUEUE_TYPE::PRESENT));
 
 		std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
 		std::set<uint32_t> uniqueQueueFamilies = {
-			indices.GetIndex(QueueType::GRAPHICS),
-			indices.GetIndex(QueueType::COMPUTE),
-			indices.GetIndex(QueueType::PRESENT),
-			indices.GetIndex(QueueType::TRANSFER)
+			indices.GetIndex(QUEUE_TYPE::GRAPHICS),
+			indices.GetIndex(QUEUE_TYPE::COMPUTE),
+			indices.GetIndex(QUEUE_TYPE::PRESENT),
+			indices.GetIndex(QUEUE_TYPE::TRANSFER)
 		};
 
 		// TODO - Determine priority of the different queue types
@@ -1313,10 +1316,10 @@ namespace TANG
 		DeviceCache::Get().CacheLogicalDevice(device);
 
 		// Get the queues from the logical device
-		vkGetDeviceQueue(device, indices.GetIndex(QueueType::GRAPHICS)	, 0, &queues[QueueType::GRAPHICS]);
-		vkGetDeviceQueue(device, indices.GetIndex(QueueType::COMPUTE)	, 0, &queues[QueueType::COMPUTE	]);
-		vkGetDeviceQueue(device, indices.GetIndex(QueueType::TRANSFER)	, 0, &queues[QueueType::TRANSFER]);
-		vkGetDeviceQueue(device, indices.GetIndex(QueueType::PRESENT)	, 0, &queues[QueueType::PRESENT	]);
+		vkGetDeviceQueue(device, indices.GetIndex(QUEUE_TYPE::GRAPHICS)	, 0, &queues[QUEUE_TYPE::GRAPHICS]);
+		vkGetDeviceQueue(device, indices.GetIndex(QUEUE_TYPE::COMPUTE)	, 0, &queues[QUEUE_TYPE::COMPUTE	]);
+		vkGetDeviceQueue(device, indices.GetIndex(QUEUE_TYPE::TRANSFER)	, 0, &queues[QUEUE_TYPE::TRANSFER]);
+		vkGetDeviceQueue(device, indices.GetIndex(QUEUE_TYPE::PRESENT)	, 0, &queues[QUEUE_TYPE::PRESENT	]);
 	}
 
 	void Renderer::CreateSwapChain()
@@ -1346,7 +1349,7 @@ namespace TANG
 		createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
 		QueueFamilyIndices indices = FindQueueFamilies(physicalDevice, surface);
-		uint32_t queueFamilyIndices[2] = { indices.GetIndex(QueueType::GRAPHICS), indices.GetIndex(QueueType::PRESENT)};
+		uint32_t queueFamilyIndices[2] = { indices.GetIndex(QUEUE_TYPE::GRAPHICS), indices.GetIndex(QUEUE_TYPE::PRESENT)};
 
 		if (queueFamilyIndices[0] != queueFamilyIndices[1])
 		{
@@ -1497,9 +1500,9 @@ namespace TANG
 		{
 			auto frameData = GetFDDAtIndex(i);
 
-			frameData->hdrCommandBuffer.Create(GetCommandPool(QueueType::GRAPHICS));
-			frameData->postProcessingCommandBuffer.Create(GetCommandPool(QueueType::COMPUTE));
-			frameData->ldrCommandBuffer.Create(GetCommandPool(QueueType::GRAPHICS));
+			frameData->hdrCommandBuffer.Allocate(QUEUE_TYPE::GRAPHICS);
+			frameData->postProcessingCommandBuffer.Allocate(QUEUE_TYPE::COMPUTE);
+			frameData->ldrCommandBuffer.Allocate(QUEUE_TYPE::GRAPHICS);
 		}
 	}
 
@@ -1691,7 +1694,7 @@ namespace TANG
 				if (iter != frameData->assetCommandBuffers.end())
 				{
 					SecondaryCommandBuffer* commandBuffer = &iter->second;
-					commandBuffer->Create(GetCommandPool(QueueType::GRAPHICS));
+					commandBuffer->Allocate(QUEUE_TYPE::GRAPHICS);
 				}
 			}
 		}
@@ -1723,7 +1726,7 @@ namespace TANG
 		vkDestroySwapchainKHR(logicalDevice, swapChain, nullptr);
 	}
 
-	VkResult Renderer::SubmitQueue(QueueType type, VkSubmitInfo* info, uint32_t submitCount, VkFence fence, bool waitUntilIdle)
+	VkResult Renderer::SubmitQueue(QUEUE_TYPE type, VkSubmitInfo* info, uint32_t submitCount, VkFence fence, bool waitUntilIdle)
 	{
 		VkResult res;
 		VkQueue queue = queues[type];
@@ -1750,7 +1753,7 @@ namespace TANG
 		return res;
 	}
 
-	VkResult Renderer::SubmitCoreRenderingQueue(CommandBuffer* cmdBuffer, FrameDependentData* frameData)
+	VkResult Renderer::SubmitCoreRenderingQueue(PrimaryCommandBuffer* cmdBuffer, FrameDependentData* frameData)
 	{
 		std::array<VkCommandBuffer		, 1> commandBuffers		= { cmdBuffer->GetBuffer()							};
 		std::array<VkSemaphore			, 1> waitSemaphores		= { frameData->imageAvailableSemaphore				};
@@ -1768,10 +1771,10 @@ namespace TANG
 		submitInfo.pSignalSemaphores = signalSemaphores.data();
 
 		// Submit the HDR command buffer
-		return SubmitQueue(QueueType::GRAPHICS, &submitInfo, 1);
+		return SubmitQueue(cmdBuffer->GetAllocatedQueueType(), &submitInfo, 1);
 	}
 
-	VkResult Renderer::SubmitPostProcessingQueue(CommandBuffer* cmdBuffer, FrameDependentData* frameData)
+	VkResult Renderer::SubmitPostProcessingQueue(PrimaryCommandBuffer* cmdBuffer, FrameDependentData* frameData)
 	{
 		std::array<VkCommandBuffer			, 1> commandBuffers		= { cmdBuffer->GetBuffer()							};
 		std::array<VkSemaphore				, 1> waitSemaphores		= { frameData->coreRenderFinishedSemaphore			};
@@ -1789,10 +1792,10 @@ namespace TANG
 		submitInfo.pSignalSemaphores = signalSemaphores.data();
 
 		// Submit all compute post-processing effects
-		return SubmitQueue(QueueType::COMPUTE, &submitInfo, 1);
+		return SubmitQueue(cmdBuffer->GetAllocatedQueueType(), &submitInfo, 1);
 	}
 
-	VkResult Renderer::SubmitLDRConversionQueue(CommandBuffer* cmdBuffer, FrameDependentData* frameData)
+	VkResult Renderer::SubmitLDRConversionQueue(PrimaryCommandBuffer* cmdBuffer, FrameDependentData* frameData)
 	{
 		std::array<VkCommandBuffer			, 1> commandBuffers		= { cmdBuffer->GetBuffer()						};
 		std::array<VkSemaphore				, 1> waitSemaphores		= { frameData->postProcessingFinishedSemaphore	};
@@ -1811,7 +1814,7 @@ namespace TANG
 
 		// Submit LDR conversion command buffer. This is the last step in drawing 
 		// the current frame, so also signal the inFlight fence that the frame is done
-		return SubmitQueue(QueueType::GRAPHICS, &submitInfo, 1, frameData->inFlightFence);
+		return SubmitQueue(cmdBuffer->GetAllocatedQueueType(), &submitInfo, 1, frameData->inFlightFence);
 	}
 
 	AssetResources* Renderer::GetAssetResourcesFromUUID(UUID uuid)
@@ -1849,7 +1852,7 @@ namespace TANG
 
 	void Renderer::CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)
 	{
-		DisposableCommand command(QueueType::TRANSFER, true);
+		DisposableCommand command(QUEUE_TYPE::TRANSFER, true);
 
 		VkBufferImageCopy region{};
 		region.bufferOffset = 0;

@@ -7,7 +7,7 @@
 
 namespace TANG
 {
-	DisposableCommand::DisposableCommand(QueueType _type, bool _waitUntilQueueIdle) : type(_type), waitUntilQueueIdle(_waitUntilQueueIdle)
+	DisposableCommand::DisposableCommand(QUEUE_TYPE _type, bool _waitUntilQueueIdle) : type(_type), waitUntilQueueIdle(_waitUntilQueueIdle)
 	{
 		VkDevice logicalDevice = GetLogicalDevice();
 

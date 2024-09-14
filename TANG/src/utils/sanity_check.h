@@ -7,7 +7,8 @@ namespace TANG
 {
 	// Regular run-time assertions.
 	#define TNG_ASSERT(x) assert(x)
-	#define TNG_ASSERT_MSG(x, msg) assert(x && msg)														// Msg parameter _must_ be a const char*
+	#define TNG_ASSERT_MSG(x, msg) TNG_ASSERT(x && msg)														// Msg parameter _must_ be a const char*
+	#define TNG_ASSERT_PTR(x, msg) TNG_ASSERT_MSG(x != nullptr, msg)
 
 	// Compile-time assert
 	#define TNG_ASSERT_COMPILE(x) static_assert(x)

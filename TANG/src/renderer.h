@@ -70,15 +70,17 @@ namespace TANG
 		// Releases all internal handles to Vulkan objects
 		void Shutdown();
 
+		// TODO - Maybe move all allocation calls to a Device class (DeviceCache?)
 		// Allocates a descriptor set with the given description through one of the renderer's internal descriptor pools
 		[[nodiscard]] DescriptorSet AllocateDescriptorSet(const DescriptorSetLayout& setLayout);
 
+		// TODO - Maybe move all allocation calls to a Device class (DeviceCache?)
 		// Allocates a primary or secondary command buffer from the provided queue type (graphics, present, compute, etc queue)
-		[[nodiscard]] PrimaryCommandBuffer AllocatePrimaryCommandBuffer(QueueType type);
-		[[nodiscard]] SecondaryCommandBuffer AllocateSecondaryCommandBuffer(QueueType type);
+		[[nodiscard]] PrimaryCommandBuffer AllocatePrimaryCommandBuffer(QUEUE_TYPE type);
+		[[nodiscard]] SecondaryCommandBuffer AllocateSecondaryCommandBuffer(QUEUE_TYPE type);
 
-		// Submits a render pass. Submission order is preserved when drawing
-		void QueuePass(BasePass* pass);
+		// Appends the provided command buffer to the rendering queue, unless command buffer pointer is null. Queue order is preserved when drawing
+		void QueueCommandBuffer(PrimaryCommandBuffer* cmd);
 
 		// Sets the draw state of the given asset to TRUE.
 		// The asset draw state is cleared every frame, so SetAssetDrawState() must be called on a
@@ -123,7 +125,7 @@ namespace TANG
 
 		VkSurfaceKHR surface;
 
-		std::unordered_map<QueueType, VkQueue> queues;
+		std::unordered_map<QUEUE_TYPE, VkQueue> queues;
 
 		VkSwapchainKHR swapChain;
 		VkFormat swapChainImageFormat;
@@ -180,7 +182,7 @@ namespace TANG
 		PBRPass pbrPass;
 		LDRPass ldrPass;
 
-		std::vector<BasePass*> m_passes;
+		std::vector<PrimaryCommandBuffer*> m_cmdBuffers;
 
 		HDRRenderPass hdrRenderPass;
 		LDRRenderPass ldrRenderPass;
@@ -274,10 +276,10 @@ namespace TANG
 		void CleanupSwapChain();
 
 		// Submits the provided queue type, along with the provided command buffer. Return value should _not_ be ignored
-		[[nodiscard]] VkResult SubmitQueue(QueueType type, VkSubmitInfo* info, uint32_t submitCount, VkFence fence = VK_NULL_HANDLE, bool waitUntilIdle = false);
-		[[nodiscard]] VkResult SubmitCoreRenderingQueue(CommandBuffer* cmdBuffer, FrameDependentData* frameData);
-		[[nodiscard]] VkResult SubmitPostProcessingQueue(CommandBuffer* cmdBuffer, FrameDependentData* frameData);
-		[[nodiscard]] VkResult SubmitLDRConversionQueue(CommandBuffer* cmdBuffer, FrameDependentData* frameData);
+		[[nodiscard]] VkResult SubmitQueue(QUEUE_TYPE type, VkSubmitInfo* info, uint32_t submitCount, VkFence fence = VK_NULL_HANDLE, bool waitUntilIdle = false);
+		[[nodiscard]] VkResult SubmitCoreRenderingQueue(PrimaryCommandBuffer* cmdBuffer, FrameDependentData* frameData);
+		[[nodiscard]] VkResult SubmitPostProcessingQueue(PrimaryCommandBuffer* cmdBuffer, FrameDependentData* frameData);
+		[[nodiscard]] VkResult SubmitLDRConversionQueue(PrimaryCommandBuffer* cmdBuffer, FrameDependentData* frameData);
 
 		AssetResources* GetAssetResourcesFromUUID(UUID uuid);
 		SecondaryCommandBuffer* GetSecondaryCommandBufferFromUUID(UUID uuid);

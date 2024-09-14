@@ -15,7 +15,7 @@ namespace TANG
 		SecondaryCommandBuffer(SecondaryCommandBuffer&& other) noexcept;
 		SecondaryCommandBuffer& operator=(const SecondaryCommandBuffer& other);
 
-		void Create(VkCommandPool commandPool) override;
+		void Allocate(QUEUE_TYPE type) override;
 
 		COMMAND_BUFFER_TYPE GetType() override;
 

@@ -61,8 +61,8 @@ namespace TANG
 	//void (*DrawPassFunc)(PrimaryCommandBuffer* cmdBuffer /* TODO */);
 
 	DescriptorSet AllocateDescriptorSet(const DescriptorSetLayout& setLayout);
-	PrimaryCommandBuffer AllocatePrimaryCommandBuffer(QueueType type);
-	SecondaryCommandBuffer AllocateSecondaryCommandBuffer(QueueType type);
+	PrimaryCommandBuffer AllocatePrimaryCommandBuffer(QUEUE_TYPE type);
+	SecondaryCommandBuffer AllocateSecondaryCommandBuffer(QUEUE_TYPE type);
 	//void QueuePass(BasePass* pass);
 	void Submit();
 

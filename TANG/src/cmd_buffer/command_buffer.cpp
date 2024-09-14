@@ -10,7 +10,7 @@
 namespace TANG
 {
 
-	CommandBuffer::CommandBuffer() : commandBuffer(VK_NULL_HANDLE), cmdBufferState(COMMAND_BUFFER_STATE::DEFAULT), isOneTimeSubmit(false)
+	CommandBuffer::CommandBuffer() : commandBuffer(VK_NULL_HANDLE), cmdBufferState(COMMAND_BUFFER_STATE::DEFAULT), isOneTimeSubmit(false), allocatedQueueType(QUEUE_TYPE::COUNT)
 	{
 	}
 
@@ -276,6 +276,12 @@ namespace TANG
 	bool CommandBuffer::IsCommandBufferValid() const
 	{
 		return commandBuffer != VK_NULL_HANDLE && cmdBufferState != COMMAND_BUFFER_STATE::DESTROYED;
+	}
+
+	QUEUE_TYPE CommandBuffer::GetAllocatedQueueType() const
+	{
+		TNG_ASSERT(allocatedQueueType != QUEUE_TYPE::COUNT);
+		return allocatedQueueType;
 	}
 
 }

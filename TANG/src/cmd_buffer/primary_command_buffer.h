@@ -26,7 +26,7 @@ namespace TANG
 		PrimaryCommandBuffer(PrimaryCommandBuffer&& other) noexcept;
 		PrimaryCommandBuffer& operator=(const PrimaryCommandBuffer& other);
 
-		void Create(VkCommandPool commandPool) override;
+		void Allocate(QUEUE_TYPE type) override;
 
 		// Begin and end commands for a render pass
 		void CMD_BeginRenderPass(const BaseRenderPass* renderPass, Framebuffer* frameBuffer, VkExtent2D renderAreaExtent, bool usingSecondaryCmdBuffers, bool clearBuffers);

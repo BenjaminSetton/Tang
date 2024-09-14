@@ -1,6 +1,7 @@
 #ifndef COMMAND_BUFFER_H
 #define COMMAND_BUFFER_H
 
+#include "../queue_types.h" // QUEUE_TYPE
 #include <vulkan/vulkan.h>
 
 namespace TANG
@@ -43,7 +44,7 @@ namespace TANG
 		CommandBuffer(CommandBuffer&& other) noexcept;
 		CommandBuffer& operator=(const CommandBuffer& other);
 
-		virtual void Create(VkCommandPool commandPool) = 0;
+		virtual void Allocate(QUEUE_TYPE type) = 0;
 		void Destroy(VkCommandPool commandPool);
 
 		void BeginRecording(VkCommandBufferUsageFlags flags, VkCommandBufferInheritanceInfo* inheritanceInfo);
@@ -81,12 +82,15 @@ namespace TANG
 		// Returns the type of the command buffer (primary or secondary)
 		virtual COMMAND_BUFFER_TYPE GetType() = 0;
 
+		QUEUE_TYPE GetAllocatedQueueType() const;
+
 	protected:
 
 		VkCommandBuffer commandBuffer;
 		COMMAND_BUFFER_STATE cmdBufferState;
 		COMMAND_BUFFER_TYPE cmdBufferType;
 		bool isOneTimeSubmit;
+		QUEUE_TYPE allocatedQueueType;
 	};
 }
 

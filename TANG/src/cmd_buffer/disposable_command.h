@@ -15,7 +15,7 @@ namespace TANG
 	{
 	public:
 
-		explicit DisposableCommand(QueueType type, bool waitUntilQueueIdle);
+		explicit DisposableCommand(QUEUE_TYPE type, bool waitUntilQueueIdle);
 		~DisposableCommand();
 		DisposableCommand(const DisposableCommand& other) = delete;
 		DisposableCommand(DisposableCommand&& other) noexcept = delete;
@@ -26,7 +26,7 @@ namespace TANG
 	private:
 
 		VkDevice logicalDeviceHandle;  // It's probably safe to copy this handle because the lifetime of this object is intended to be super short
-		QueueType type;
+		QUEUE_TYPE type;
 		VkCommandBuffer allocatedBuffer;
 		bool waitUntilQueueIdle;
 	};

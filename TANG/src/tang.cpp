@@ -99,12 +99,12 @@ namespace TANG
 		return Renderer::GetInstance().AllocateDescriptorSet(setLayout);
 	}
 
-	PrimaryCommandBuffer AllocatePrimaryCommandBuffer(QueueType type)
+	PrimaryCommandBuffer AllocatePrimaryCommandBuffer(QUEUE_TYPE type)
 	{
 		return Renderer::GetInstance().AllocatePrimaryCommandBuffer(type);
 	}
 
-	SecondaryCommandBuffer AllocateSecondaryCommandBuffer(QueueType type)
+	SecondaryCommandBuffer AllocateSecondaryCommandBuffer(QUEUE_TYPE type)
 	{
 		return Renderer::GetInstance().AllocateSecondaryCommandBuffer(type);
 	}

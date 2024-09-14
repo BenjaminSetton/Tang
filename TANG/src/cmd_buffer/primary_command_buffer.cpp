@@ -1,6 +1,7 @@
 
 #include <array>
 
+#include "../command_pool_registry.h"
 #include "../device_cache.h"
 #include "../framebuffer.h"
 #include "../render_passes/base_render_pass.h"
@@ -59,12 +60,12 @@ namespace TANG
 		return *this;
 	}
 
-	void PrimaryCommandBuffer::Create(VkCommandPool commandPool)
+	void PrimaryCommandBuffer::Allocate(QUEUE_TYPE type)
 	{
 		VkCommandBufferAllocateInfo allocInfo = {};
 		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-		allocInfo.commandPool = commandPool;
+		allocInfo.commandPool = GetCommandPool(type);
 		allocInfo.commandBufferCount = 1;
 
 		if (vkAllocateCommandBuffers(GetLogicalDevice(), &allocInfo, &commandBuffer) != VK_SUCCESS) {
@@ -72,6 +73,7 @@ namespace TANG
 		}
 
 		cmdBufferState = COMMAND_BUFFER_STATE::ALLOCATED;
+		allocatedQueueType = type;
 	}
 
 	void PrimaryCommandBuffer::CMD_BeginRenderPass(const BaseRenderPass* _renderPass, Framebuffer* _frameBuffer, VkExtent2D renderAreaExtent, bool usingSecondaryCmdBuffers, bool clearBuffers)

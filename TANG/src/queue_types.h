@@ -3,7 +3,7 @@
 
 namespace TANG
 {
-	enum class QueueType
+	enum class QUEUE_TYPE
 	{
 		GRAPHICS,
 		PRESENT,

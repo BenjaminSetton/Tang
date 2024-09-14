@@ -28,17 +28,17 @@ namespace TANG
 		void CreatePools(VkSurfaceKHR surface);
 		void DestroyPools();
 
-		VkCommandPool GetCommandPool(QueueType type) const;
+		VkCommandPool GetCommandPool(QUEUE_TYPE type) const;
 
 	private:
 
-		void CreatePool_Helper(const QueueFamilyIndices& queueFamilyIndices, QueueType type, VkCommandPoolCreateFlags flags);
+		void CreatePool_Helper(const QueueFamilyIndices& queueFamilyIndices, QUEUE_TYPE type, VkCommandPoolCreateFlags flags);
 
-		std::unordered_map<QueueType, VkCommandPool> pools;
+		std::unordered_map<QUEUE_TYPE, VkCommandPool> pools;
 
 	};
 
-	inline VkCommandPool GetCommandPool(QueueType type)
+	inline VkCommandPool GetCommandPool(QUEUE_TYPE type)
 	{
 		return CommandPoolRegistry::Get().GetCommandPool(type);
 	}

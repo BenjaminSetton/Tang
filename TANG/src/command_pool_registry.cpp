@@ -13,15 +13,15 @@ namespace TANG
 	void CommandPoolRegistry::CreatePools(VkSurfaceKHR surface)
 	{
 		// Ensure a new pool is created after a new queue type is added!
-		TNG_ASSERT_COMPILE(static_cast<uint32_t>(QueueType::COUNT) == 4);
+		TNG_ASSERT_COMPILE(static_cast<uint32_t>(QUEUE_TYPE::COUNT) == 4);
 
 		VkPhysicalDevice physicalDevice = GetPhysicalDevice();
 
 		QueueFamilyIndices queueFamilyIndices = FindQueueFamilies(physicalDevice, surface);
 
-		CreatePool_Helper(queueFamilyIndices, QueueType::GRAPHICS, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
-		CreatePool_Helper(queueFamilyIndices, QueueType::COMPUTE, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
-		CreatePool_Helper(queueFamilyIndices, QueueType::TRANSFER, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT);
+		CreatePool_Helper(queueFamilyIndices, QUEUE_TYPE::GRAPHICS, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+		CreatePool_Helper(queueFamilyIndices, QUEUE_TYPE::COMPUTE, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+		CreatePool_Helper(queueFamilyIndices, QUEUE_TYPE::TRANSFER, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT);
 	}
 
 	void CommandPoolRegistry::DestroyPools()
@@ -35,9 +35,9 @@ namespace TANG
 		pools.clear();
 	}
 
-	VkCommandPool CommandPoolRegistry::GetCommandPool(QueueType type) const
+	VkCommandPool CommandPoolRegistry::GetCommandPool(QUEUE_TYPE type) const
 	{
-		if (type == QueueType::COUNT) return VK_NULL_HANDLE;
+		if (type == QUEUE_TYPE::COUNT) return VK_NULL_HANDLE;
 
 		auto iter = pools.find(type);
 		if (iter == pools.end()) return VK_NULL_HANDLE;
@@ -45,7 +45,7 @@ namespace TANG
 		return iter->second;
 	}
 
-	void CommandPoolRegistry::CreatePool_Helper(const QueueFamilyIndices& queueFamilyIndices, QueueType type, VkCommandPoolCreateFlags flags)
+	void CommandPoolRegistry::CreatePool_Helper(const QueueFamilyIndices& queueFamilyIndices, QUEUE_TYPE type, VkCommandPoolCreateFlags flags)
 	{
 		if (queueFamilyIndices.IsValid(static_cast<QueueFamilyIndices::QueueFamilyIndexType>(type)))
 		{

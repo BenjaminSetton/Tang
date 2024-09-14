@@ -151,7 +151,7 @@ namespace TANG
 			VkImageLayout destinationLayout,
 			VkPipelineStageFlags& out_sourceStage,
 			VkPipelineStageFlags& out_destinationStage,
-			QueueType& out_queueType);
+			QUEUE_TYPE& out_queueType);
 
 		void InsertPipelineBarrier_Helper(VkCommandBuffer cmdBuffer,
 			VkAccessFlags srcAccessFlags,

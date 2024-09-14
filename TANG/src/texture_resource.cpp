@@ -148,7 +148,7 @@ namespace TANG
 
 	void TextureResource::TransitionLayout_Immediate(VkImageLayout sourceLayout, VkImageLayout destinationLayout)
 	{
-		DisposableCommand command(QueueType::GRAPHICS, true);
+		DisposableCommand command(QUEUE_TYPE::GRAPHICS, true);
 		TransitionLayout_Internal(command.GetBuffer(), this, sourceLayout, destinationLayout);
 	}
 
@@ -186,7 +186,7 @@ namespace TANG
 
 	void TextureResource::GenerateMipmaps_Immediate(uint32_t mipCount)
 	{
-		DisposableCommand cmdBuffer(QueueType::GRAPHICS, true);
+		DisposableCommand cmdBuffer(QUEUE_TYPE::GRAPHICS, true);
 		GenerateMipmaps_Helper(cmdBuffer.GetBuffer(), mipCount);
 	}
 
@@ -789,7 +789,7 @@ namespace TANG
 		}
 
 		{
-			DisposableCommand command(QueueType::TRANSFER, true);
+			DisposableCommand command(QUEUE_TYPE::TRANSFER, true);
 
 			VkBufferImageCopy region{};
 			region.bufferOffset = 0;
@@ -812,7 +812,7 @@ namespace TANG
 	{
 		VkPipelineStageFlags sourceStage = 0;
 		VkPipelineStageFlags destinationStage = 0;
-		QueueType queueType = QueueType::GRAPHICS;
+		QUEUE_TYPE queueType = QUEUE_TYPE::GRAPHICS;
 
 		auto barrier = TransitionLayout_Helper(baseTexture, sourceLayout, destinationLayout, sourceStage, destinationStage, queueType);
 		if (!barrier.has_value())
@@ -831,7 +831,7 @@ namespace TANG
 		VkImageLayout destinationLayout,
 		VkPipelineStageFlags& out_sourceStage,
 		VkPipelineStageFlags& out_destinationStage,
-		QueueType& out_queueType)
+		QUEUE_TYPE& out_queueType)
 	{
 		if (baseTexture && baseTexture->IsInvalid())
 		{
@@ -856,7 +856,7 @@ namespace TANG
 
 		VkPipelineStageFlags sourceStage = VK_PIPELINE_STAGE_NONE;
 		VkPipelineStageFlags destinationStage = VK_PIPELINE_STAGE_NONE;
-		QueueType commandQueueType = QueueType::GRAPHICS;
+		QUEUE_TYPE commandQueueType = QUEUE_TYPE::GRAPHICS;
 
 		if (destinationLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
 		{
@@ -880,7 +880,7 @@ namespace TANG
 			sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 			destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
 
-			commandQueueType = QueueType::TRANSFER;
+			commandQueueType = QUEUE_TYPE::TRANSFER;
 		}
 		else if (sourceLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && destinationLayout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
 		{
@@ -890,7 +890,7 @@ namespace TANG
 			sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
 			destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
 
-			commandQueueType = QueueType::TRANSFER;
+			commandQueueType = QUEUE_TYPE::TRANSFER;
 		}
 		else if (sourceLayout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL && destinationLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
 		{
@@ -900,7 +900,7 @@ namespace TANG
 			sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
 			destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
 
-			commandQueueType = QueueType::TRANSFER;
+			commandQueueType = QUEUE_TYPE::TRANSFER;
 		}
 		else if (sourceLayout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL && destinationLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
 		{
@@ -910,7 +910,7 @@ namespace TANG
 			sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
 			destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 
-			commandQueueType = QueueType::GRAPHICS;
+			commandQueueType = QUEUE_TYPE::GRAPHICS;
 		}
 		else if (sourceLayout == VK_IMAGE_LAYOUT_UNDEFINED && destinationLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
 		{
@@ -920,7 +920,7 @@ namespace TANG
 			sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 			destinationStage = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT; // Let's block on the vertex shader for now...
 
-			commandQueueType = QueueType::GRAPHICS;
+			commandQueueType = QUEUE_TYPE::GRAPHICS;
 		}
 		else if (sourceLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && destinationLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
 		{
@@ -930,7 +930,7 @@ namespace TANG
 			sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
 			destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT; // I guess this depends on whether we're using the texture in the vertex or pixel shader?
 
-			commandQueueType = QueueType::GRAPHICS;
+			commandQueueType = QUEUE_TYPE::GRAPHICS;
 		}
 		else if (sourceLayout == VK_IMAGE_LAYOUT_UNDEFINED && destinationLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
 		{
@@ -940,7 +940,7 @@ namespace TANG
 			sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 			destinationStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
 
-			commandQueueType = QueueType::GRAPHICS;
+			commandQueueType = QUEUE_TYPE::GRAPHICS;
 		}
 		else if (sourceLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL && destinationLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
 		{
@@ -952,7 +952,7 @@ namespace TANG
 			sourceStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 			destinationStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
-			commandQueueType = QueueType::GRAPHICS;
+			commandQueueType = QUEUE_TYPE::GRAPHICS;
 		}
 		else if (sourceLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL && destinationLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
 		{
@@ -962,7 +962,7 @@ namespace TANG
 			sourceStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 			destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
 
-			commandQueueType = QueueType::GRAPHICS;
+			commandQueueType = QUEUE_TYPE::GRAPHICS;
 		}
 		else if (sourceLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL && destinationLayout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
 		{
@@ -972,7 +972,7 @@ namespace TANG
 			sourceStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 			destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
 
-			commandQueueType = QueueType::GRAPHICS;
+			commandQueueType = QUEUE_TYPE::GRAPHICS;
 		}
 		else if (sourceLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL && destinationLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
 		{
@@ -984,7 +984,7 @@ namespace TANG
 			sourceStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 			destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 
-			commandQueueType = QueueType::GRAPHICS;
+			commandQueueType = QUEUE_TYPE::GRAPHICS;
 		}
 		else if (sourceLayout == VK_IMAGE_LAYOUT_UNDEFINED && destinationLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
 		{
@@ -994,7 +994,7 @@ namespace TANG
 			sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 			destinationStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
-			commandQueueType = QueueType::GRAPHICS;
+			commandQueueType = QUEUE_TYPE::GRAPHICS;
 		}
 		else if (sourceLayout == VK_IMAGE_LAYOUT_UNDEFINED && destinationLayout == VK_IMAGE_LAYOUT_GENERAL)
 		{
@@ -1006,7 +1006,7 @@ namespace TANG
 			sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 			destinationStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 
-			commandQueueType = QueueType::GRAPHICS;
+			commandQueueType = QUEUE_TYPE::GRAPHICS;
 		}
 		else if (sourceLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && destinationLayout == VK_IMAGE_LAYOUT_GENERAL)
 		{
@@ -1016,7 +1016,7 @@ namespace TANG
 			sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
 			destinationStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 
-			commandQueueType = QueueType::GRAPHICS;
+			commandQueueType = QUEUE_TYPE::GRAPHICS;
 		}
 		else if (sourceLayout == VK_IMAGE_LAYOUT_GENERAL && destinationLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
 		{
@@ -1026,7 +1026,7 @@ namespace TANG
 			sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 			destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
 
-			commandQueueType = QueueType::GRAPHICS;
+			commandQueueType = QUEUE_TYPE::GRAPHICS;
 		}
 		else if (sourceLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL && destinationLayout == VK_IMAGE_LAYOUT_GENERAL)
 		{
@@ -1036,7 +1036,7 @@ namespace TANG
 			sourceStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 			destinationStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
 
-			commandQueueType = QueueType::GRAPHICS;
+			commandQueueType = QUEUE_TYPE::GRAPHICS;
 		}
 		else if (sourceLayout == VK_IMAGE_LAYOUT_GENERAL && destinationLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
 		{
@@ -1046,7 +1046,7 @@ namespace TANG
 			sourceStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
 			destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 
-			commandQueueType = QueueType::GRAPHICS;
+			commandQueueType = QUEUE_TYPE::GRAPHICS;
 		}
 		else if (sourceLayout == VK_IMAGE_LAYOUT_GENERAL && destinationLayout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
 		{
@@ -1056,7 +1056,7 @@ namespace TANG
 			sourceStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
 			destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
 
-			commandQueueType = QueueType::GRAPHICS;
+			commandQueueType = QUEUE_TYPE::GRAPHICS;
 		}
 		else if (sourceLayout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL && destinationLayout == VK_IMAGE_LAYOUT_GENERAL)
 		{
@@ -1066,7 +1066,7 @@ namespace TANG
 			sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
 			destinationStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
 
-			commandQueueType = QueueType::GRAPHICS;
+			commandQueueType = QUEUE_TYPE::GRAPHICS;
 		}
 		else
 		{

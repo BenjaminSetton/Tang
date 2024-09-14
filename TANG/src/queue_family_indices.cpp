@@ -9,15 +9,15 @@
 namespace TANG
 {
 	// If anything changes with the QueueType enum, make sure to change every reference to queueFamilies below!
-	TNG_ASSERT_COMPILE(static_cast<uint32_t>(QueueType::COUNT) == 4);
+	TNG_ASSERT_COMPILE(static_cast<uint32_t>(QUEUE_TYPE::COUNT) == 4);
 
 	QueueFamilyIndices::QueueFamilyIndices()
 	{
-		queueFamilies[QueueType::GRAPHICS] = INVALID_INDEX;
-		queueFamilies[QueueType::PRESENT]  = INVALID_INDEX;
-		queueFamilies[QueueType::TRANSFER] = INVALID_INDEX;
-		queueFamilies[QueueType::COMPUTE]  = INVALID_INDEX;
-		queueFamilies[QueueType::COUNT]    = INVALID_INDEX;
+		queueFamilies[QUEUE_TYPE::GRAPHICS] = INVALID_INDEX;
+		queueFamilies[QUEUE_TYPE::PRESENT]  = INVALID_INDEX;
+		queueFamilies[QUEUE_TYPE::TRANSFER] = INVALID_INDEX;
+		queueFamilies[QUEUE_TYPE::COMPUTE]  = INVALID_INDEX;
+		queueFamilies[QUEUE_TYPE::COUNT]    = INVALID_INDEX;
 	}
 
 	QueueFamilyIndices::~QueueFamilyIndices()
@@ -37,25 +37,25 @@ namespace TANG
 	{
 		if (this == &other) return *this;
 
-		queueFamilies[QueueType::GRAPHICS] = other.queueFamilies.at(QueueType::GRAPHICS);
-		queueFamilies[QueueType::PRESENT]  = other.queueFamilies.at(QueueType::PRESENT);
-		queueFamilies[QueueType::TRANSFER] = other.queueFamilies.at(QueueType::TRANSFER);
-		queueFamilies[QueueType::COMPUTE]  = other.queueFamilies.at(QueueType::COMPUTE);
-		queueFamilies[QueueType::COUNT]    = other.queueFamilies.at(QueueType::COUNT);
+		queueFamilies[QUEUE_TYPE::GRAPHICS] = other.queueFamilies.at(QUEUE_TYPE::GRAPHICS);
+		queueFamilies[QUEUE_TYPE::PRESENT]  = other.queueFamilies.at(QUEUE_TYPE::PRESENT);
+		queueFamilies[QUEUE_TYPE::TRANSFER] = other.queueFamilies.at(QUEUE_TYPE::TRANSFER);
+		queueFamilies[QUEUE_TYPE::COMPUTE]  = other.queueFamilies.at(QUEUE_TYPE::COMPUTE);
+		queueFamilies[QUEUE_TYPE::COUNT]    = other.queueFamilies.at(QUEUE_TYPE::COUNT);
 
 		return *this;
 	}
 
-	void QueueFamilyIndices::SetIndex(QueueType type, QueueFamilyIndexType index)
+	void QueueFamilyIndices::SetIndex(QUEUE_TYPE type, QueueFamilyIndexType index)
 	{
-		if (type == QueueType::COUNT) return;
+		if (type == QUEUE_TYPE::COUNT) return;
 
 		queueFamilies[type] = index;
 	}
 
-	QueueFamilyIndices::QueueFamilyIndexType QueueFamilyIndices::GetIndex(QueueType type) const
+	QueueFamilyIndices::QueueFamilyIndexType QueueFamilyIndices::GetIndex(QUEUE_TYPE type) const
 	{
-		if (type == QueueType::COUNT) return INVALID_INDEX;
+		if (type == QUEUE_TYPE::COUNT) return INVALID_INDEX;
 
 		return queueFamilies.at(type);
 	} 
@@ -67,10 +67,10 @@ namespace TANG
 
 	bool QueueFamilyIndices::IsComplete()
 	{
-		return	IsValid(queueFamilies[QueueType::GRAPHICS]) &&
-				IsValid(queueFamilies[QueueType::PRESENT]) &&
-				IsValid(queueFamilies[QueueType::COMPUTE]) &&
-				IsValid(queueFamilies[QueueType::TRANSFER]);
+		return	IsValid(queueFamilies[QUEUE_TYPE::GRAPHICS]) &&
+				IsValid(queueFamilies[QUEUE_TYPE::PRESENT]) &&
+				IsValid(queueFamilies[QUEUE_TYPE::COMPUTE]) &&
+				IsValid(queueFamilies[QUEUE_TYPE::TRANSFER]);
 	}
 
 	// Global function
@@ -92,8 +92,8 @@ namespace TANG
 			//        compute, but let's keep it simple for now
 			if ((queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) && (queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT))
 			{
-				indices.SetIndex(QueueType::GRAPHICS, i);
-				indices.SetIndex(QueueType::COMPUTE, i);
+				indices.SetIndex(QUEUE_TYPE::GRAPHICS, i);
+				indices.SetIndex(QUEUE_TYPE::COMPUTE, i);
 			}
 
 			// Check that the device supports present queues
@@ -102,20 +102,20 @@ namespace TANG
 
 			if (presentSupport)
 			{
-				indices.SetIndex(QueueType::PRESENT, i);
+				indices.SetIndex(QUEUE_TYPE::PRESENT, i);
 			}
 
 			// Check that the device supports a transfer queue
 			if (queueFamily.queueFlags & VK_QUEUE_TRANSFER_BIT)
 			{
 				// Choose a different queue from the graphics queue, if possible
-				if (indices.GetIndex(QueueType::GRAPHICS) == i)
+				if (indices.GetIndex(QUEUE_TYPE::GRAPHICS) == i)
 				{
 					graphicsTransferQueue = i;
 				}
 				else
 				{
-					indices.SetIndex(QueueType::TRANSFER, i);
+					indices.SetIndex(QUEUE_TYPE::TRANSFER, i);
 				}
 			}
 
@@ -126,9 +126,9 @@ namespace TANG
 
 		// If we couldn't find a different queue for the TRANSFER and GRAPHICS operations, then simply
 		// use the same queue for both (if it supports TRANSFER operations)
-		if (!indices.IsValid(static_cast<QueueFamilyIndices::QueueFamilyIndexType>(QueueType::TRANSFER)) && graphicsTransferQueue != QueueFamilyIndices::INVALID_INDEX)
+		if (!indices.IsValid(static_cast<QueueFamilyIndices::QueueFamilyIndexType>(QUEUE_TYPE::TRANSFER)) && graphicsTransferQueue != QueueFamilyIndices::INVALID_INDEX)
 		{
-			indices.SetIndex(QueueType::TRANSFER, graphicsTransferQueue);
+			indices.SetIndex(QUEUE_TYPE::TRANSFER, graphicsTransferQueue);
 		}
 
 		// Check that we filled in all of our queue families, otherwise log a warning
