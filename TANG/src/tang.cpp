@@ -1,12 +1,12 @@
 
 #include <cstdarg>
 
+#include "tang.h"
+
 #include "asset_loader.h"
-#include "camera/freefly_camera.h"
-#include "config.h"
+#include "asset_manager.h"
 #include "renderer.h"
 #include "main_window.h"
-#include "tang.h"
 #include "utils/sanity_check.h"
 
 static TANG::CorePipeline GetCorePipelineFromFilePath(const std::string& filePath)
@@ -31,8 +31,6 @@ namespace TANG
 	// works exactly as expected
 	TNG_ASSERT_COMPILE(sizeof(glm::vec3) == 3 * sizeof(float));
 
-	static FreeflyCamera camera;
-
 	///////////////////////////////////////////////////////////
 	//
 	//		CORE
@@ -48,11 +46,6 @@ namespace TANG
 
 		InputManager::GetInstance().Initialize(window.GetHandle());
 		renderer.Initialize(window.GetHandle(), CONFIG::WindowWidth, CONFIG::WindowHeight);
-		camera.Initialize({ 0.0f, 5.0f, 15.0f }, { 0.0f, 0.0f, 0.0f }); // Start the camera facing towards negative Z
-
-		// Load core assets
-		LoadAsset(CONFIG::FullscreenQuadMeshFilePath.c_str());
-		LoadAsset(CONFIG::SkyboxCubeMeshFilePath.c_str());
 	}
 
 	void Update(float deltaTime)
@@ -67,11 +60,7 @@ namespace TANG
 
 		// Only move the camera if the window is focused, otherwise the 
 		// mouse cursor can freely move around
-		if (window.IsInFocus())
-		{
-			camera.Update(deltaTime);
-		}
-		else
+		if (!window.IsInFocus())
 		{
 			// Reset the internal mouse delta of the input manager to prevent snapping
 			inputManager.ResetMouseDeltaCache();
@@ -88,7 +77,7 @@ namespace TANG
 		}
 
 		// Update the camera data that the renderer is holding with the most up-to-date info
-		renderer.UpdateCameraData(camera.GetPosition(), camera.GetViewMatrix(), camera.GetProjMatrix());
+		//renderer.UpdateCameraData(camera.GetPosition(), camera.GetViewMatrix(), camera.GetProjMatrix());
 
 		renderer.Update(deltaTime);
 	}
@@ -109,25 +98,94 @@ namespace TANG
 		return Renderer::GetInstance().AllocateSecondaryCommandBuffer(type);
 	}
 
-	//void QueuePass(BasePass* pass)
-	//{
-	//	Renderer::GetInstance().QueuePass(pass);
-	//}
+	bool CreateSemaphore(VkSemaphore* semaphore, const VkSemaphoreCreateInfo& info)
+	{
+		return Renderer::GetInstance().CreateSemaphore(semaphore, info);
+	}
+
+	void DestroySemaphore(VkSemaphore* semaphore)
+	{
+		Renderer::GetInstance().DestroySemaphore(semaphore);
+	}
+
+	bool CreateFence(VkFence* fence, const VkFenceCreateInfo& info)
+	{
+		return Renderer::GetInstance().CreateFence(fence, info);
+	}
+
+	void DestroyFence(VkFence* fence)
+	{
+		Renderer::GetInstance().DestroyFence(fence);
+	}
+
+	VkFormat FindDepthFormat()
+	{
+		return Renderer::GetInstance().FindDepthFormat();
+	}
+
+	bool HasStencilComponent(VkFormat format)
+	{
+		return Renderer::GetInstance().HasStencilComponent(format);
+	}
+
+	void QueueCommandBuffer(const PrimaryCommandBuffer& cmdBuffer, const QueueSubmitInfo& info)
+	{
+		Renderer::GetInstance().QueueCommandBuffer(cmdBuffer, info);
+	}
 
 	void Submit()
 	{
 		//Renderer::GetInstance().Submit();
 	}
+
+	void WaitForFence(VkFence fence, uint64_t timeout)
+	{
+		Renderer::GetInstance().WaitForFence(fence, timeout);
+	}
+
+	uint32_t GetCurrentFrameIndex()
+	{
+		return Renderer::GetInstance().GetCurrentFrameIndex();
+	}
+
+	VkSemaphore GetCurrentImageAvailableSemaphore()
+	{
+		return Renderer::GetInstance().GetCurrentImageAvailableSemaphore();
+	}
+
+	VkSemaphore GetCurrentRenderFinishedSemaphore()
+	{
+		return Renderer::GetInstance().GetCurrentRenderFinishedSemaphore();
+	}
+
+	VkFence GetCurrentFrameFence()
+	{
+		return Renderer::GetInstance().GetCurrentFrameFence();
+	}
+
+	Framebuffer* GetCurrentSwapChainFramebuffer()
+	{
+		return Renderer::GetInstance().GetCurrentSwapChainFramebuffer();
+	}
 	// TEMP TEMP TEMP
+
+	void BeginFrame()
+	{
+		Renderer::GetInstance().BeginFrame();
+	}
 
 	void Draw()
 	{
 		Renderer::GetInstance().Draw();
 	}
 
+	void EndFrame()
+	{
+		Renderer::GetInstance().EndFrame();
+	}
+
 	void Shutdown()
 	{
-		camera.Shutdown();
 		LoaderUtils::UnloadAll();
 		Renderer::GetInstance().Shutdown();
 		MainWindow::Get().Destroy();
@@ -144,6 +202,11 @@ namespace TANG
 		return MainWindow::Get().ShouldClose();
 	}
 
+	bool WindowInFocus()
+	{
+		return MainWindow::Get().IsInFocus();
+	}
+
 	void SetWindowTitle(const char* format, ...)
 	{
 		char buffer[100];
@@ -157,8 +220,6 @@ namespace TANG
 
 	UUID LoadAsset(const char* filepath)
 	{
-		Renderer& renderer = Renderer::GetInstance();
-
 		AssetDisk* asset = LoaderUtils::Load(filepath);
 		// If Load() returns nullptr, we know it didn't allocate memory on the heap, so no need to de-allocate anything here
 		if (asset == nullptr)
@@ -170,8 +231,8 @@ namespace TANG
 		// TODO - Find a better way to determine which pipeline type to use
 		CorePipeline corePipeline = GetCorePipelineFromFilePath(std::string(filepath));
 
-		AssetResources* resources = renderer.CreateAssetResources(asset, corePipeline);
-		if (resources == nullptr)
+		bool succeeded = AssetManager::Get().CreateAssetResources(asset, corePipeline);
+		if (!succeeded)
 		{
 			LogError("Failed to create asset resources for asset '%s'", filepath);
 			return INVALID_UUID;
@@ -180,14 +241,9 @@ namespace TANG
 		return asset->uuid;
 	}
 
-	void SetCameraSpeed(float speed)
+	AssetResources* GetAssetResources(UUID uuid)
 	{
-		camera.SetSpeed(speed);
-	}
-
-	void SetCameraSensitivity(float sensitivity)
-	{
-		camera.SetSensitivity(sensitivity);
+		return AssetManager::Get().GetAssetResourcesFromUUID(uuid);
 	}
 
 	///////////////////////////////////////////////////////////
@@ -195,50 +251,50 @@ namespace TANG
 	//		UPDATE
 	// 
 	///////////////////////////////////////////////////////////
-	void ShowAsset(UUID uuid)
-	{
-		Renderer::GetInstance().SetAssetDrawState(uuid);
-	}
+	//void ShowAsset(UUID uuid)
+	//{
+	//	Renderer::GetInstance().SetAssetDrawState(uuid);
+	//}
 
-	void UpdateAssetTransform(UUID uuid, float* position, float* rotation, float* scale)
-	{
-		TNG_ASSERT_MSG(position != nullptr, "Position cannot be null!");
-		TNG_ASSERT_MSG(rotation != nullptr, "Rotation cannot be null!");
-		TNG_ASSERT_MSG(scale != nullptr, "Scale cannot be null!");
+	//void UpdateAssetTransform(UUID uuid, float* position, float* rotation, float* scale)
+	//{
+	//	TNG_ASSERT_MSG(position != nullptr, "Position cannot be null!");
+	//	TNG_ASSERT_MSG(rotation != nullptr, "Rotation cannot be null!");
+	//	TNG_ASSERT_MSG(scale != nullptr, "Scale cannot be null!");
 
-		Transform transform(
-			*(reinterpret_cast<glm::vec3*>(position)),
-			*(reinterpret_cast<glm::vec3*>(rotation)),
-			*(reinterpret_cast<glm::vec3*>(scale)));
-		Renderer::GetInstance().SetAssetTransform(uuid, transform);
-	}
+	//	Transform transform(
+	//		*(reinterpret_cast<glm::vec3*>(position)),
+	//		*(reinterpret_cast<glm::vec3*>(rotation)),
+	//		*(reinterpret_cast<glm::vec3*>(scale)));
+	//	Renderer::GetInstance().SetAssetTransform(uuid, transform);
+	//}
 
-	void UpdateAssetPosition(UUID uuid, float* position)
-	{
-		TNG_ASSERT_MSG(position != nullptr, "Position cannot be null!");
-		Renderer::GetInstance().SetAssetPosition(uuid, *(reinterpret_cast<glm::vec3*>(position)));
-	}
+	//void UpdateAssetPosition(UUID uuid, float* position)
+	//{
+	//	TNG_ASSERT_MSG(position != nullptr, "Position cannot be null!");
+	//	Renderer::GetInstance().SetAssetPosition(uuid, *(reinterpret_cast<glm::vec3*>(position)));
+	//}
 
-	void UpdateAssetRotation(UUID uuid, float* rotation, bool isDegrees)
-	{
-		TNG_ASSERT_MSG(rotation != nullptr, "Rotation cannot be null!");
-		glm::vec3 rotVector = *(reinterpret_cast<glm::vec3*>(rotation));
+	//void UpdateAssetRotation(UUID uuid, float* rotation, bool isDegrees)
+	//{
+	//	TNG_ASSERT_MSG(rotation != nullptr, "Rotation cannot be null!");
+	//	glm::vec3 rotVector = *(reinterpret_cast<glm::vec3*>(rotation));
 
-		// If the rotation was given in degrees, we must convert it to radians
-		// since that's what glm uses
-		if (isDegrees)
-		{
-			rotVector = glm::radians(rotVector);
-		}
+	//	// If the rotation was given in degrees, we must convert it to radians
+	//	// since that's what glm uses
+	//	if (isDegrees)
+	//	{
+	//		rotVector = glm::radians(rotVector);
+	//	}
 
-		Renderer::GetInstance().SetAssetRotation(uuid, rotVector);
-	}
+	//	Renderer::GetInstance().SetAssetRotation(uuid, rotVector);
+	//}
 
-	void UpdateAssetScale(UUID uuid, float* scale)
-	{
-		TNG_ASSERT_MSG(scale != nullptr, "Scale cannot be null!");
-		Renderer::GetInstance().SetAssetScale(uuid, *(reinterpret_cast<glm::vec3*>(scale)));
-	}
+	//void UpdateAssetScale(UUID uuid, float* scale)
+	//{
+	//	TNG_ASSERT_MSG(scale != nullptr, "Scale cannot be null!");
+	//	Renderer::GetInstance().SetAssetScale(uuid, *(reinterpret_cast<glm::vec3*>(scale)));
+	//}
 
 	bool IsKeyPressed(int key)
 	{

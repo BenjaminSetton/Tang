@@ -11,29 +11,40 @@
 namespace TANG
 {
 
-	CommandBuffer::CommandBuffer() : commandBuffer(VK_NULL_HANDLE), cmdBufferState(COMMAND_BUFFER_STATE::DEFAULT), cmdBufferType(COMMAND_BUFFER_TYPE::PRIMARY),
-		isOneTimeSubmit(false), allocatedQueueType(QUEUE_TYPE::COUNT)
+	CommandBuffer::CommandBuffer() : commandBuffer(VK_NULL_HANDLE), cmdBufferState(COMMAND_BUFFER_STATE::DEFAULT), allocatedQueueType(QUEUE_TYPE::COUNT)
 	{
 	}
 
 	CommandBuffer::~CommandBuffer()
 	{
-		if (IsAllocated())
-		{
-			LogWarning("Command buffer was allocated but never destroyed! Memory will be leaked unless the command pool is reset.");
-		}
-		else if (cmdBufferState == COMMAND_BUFFER_STATE::RECORDING)
+		if (cmdBufferState == COMMAND_BUFFER_STATE::RECORDING)
 		{
 			LogWarning("The command buffer handle is being lost while the command buffer is in the recording state!");
 		}
+	}
+
+	CommandBuffer::CommandBuffer(const CommandBuffer& other) : commandBuffer(other.commandBuffer), 
+		cmdBufferState(other.cmdBufferState), allocatedQueueType(other.allocatedQueueType)
+	{
+	}
+
+	CommandBuffer& CommandBuffer::operator=(const CommandBuffer& other)
+	{
+		if (this == &other)
+		{
+			return *this;
+		}
+
+		commandBuffer = other.commandBuffer;
+		cmdBufferState = other.cmdBufferState;
+		allocatedQueueType = other.allocatedQueueType;
+		return *this;
 	}
 
 	CommandBuffer::CommandBuffer(CommandBuffer&& other) noexcept
 	{
 		commandBuffer = other.commandBuffer;
 		cmdBufferState = other.cmdBufferState;
-		cmdBufferType = other.cmdBufferType;
-		isOneTimeSubmit = other.isOneTimeSubmit;
 		allocatedQueueType = other.allocatedQueueType;
 
 		// Transfer ownership of the other command buffers' internal buffer to this object, and set it's handle to null
@@ -41,31 +52,15 @@ namespace TANG
 		other.cmdBufferState = COMMAND_BUFFER_STATE::DEFAULT;
 	}
 
-	void CommandBuffer::Destroy()
-	{
-		VkDevice logicalDevice = GetLogicalDevice();
-
-		if (!IsCommandBufferValid() || IsRecording() || !IsAllocated())
-		{
-			LogError("Can't destroy a command buffer because it's either still recording or the command buffer is null! Potential memory leak!");
-			return;
-		}
-
-		vkFreeCommandBuffers(logicalDevice, GetCommandPool(allocatedQueueType), 1, &commandBuffer);
-		commandBuffer = VK_NULL_HANDLE;
-
-		cmdBufferState = COMMAND_BUFFER_STATE::DESTROYED;
-	}
-
 	void CommandBuffer::BeginRecording(VkCommandBufferUsageFlags flags, VkCommandBufferInheritanceInfo* inheritanceInfo)
 	{
-		if (!IsCommandBufferValid() || IsRecording())
+		if (!IsValid() || IsRecording())
 		{
 			LogWarning("Failed to begin recording. Cannot write commands to this command buffer");
 			return;
 		}
 
-		if (isOneTimeSubmit && !IsWritable())
+		if (IsOneTimeSubmit(flags) && !IsWritable())
 		{
 			LogWarning("One-time-submit command buffer has started recording, but is not writable! Current state is %u", cmdBufferState);
 			return;
@@ -83,7 +78,6 @@ namespace TANG
 		}
 
 		cmdBufferState = COMMAND_BUFFER_STATE::RECORDING;
-		isOneTimeSubmit = (flags & VkCommandBufferUsageFlagBits::VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) != 0;
 	}
 
 	void CommandBuffer::EndRecording()
@@ -101,7 +95,7 @@ namespace TANG
 
 	void CommandBuffer::CMD_BindMesh(const AssetResources* resources)
 	{
-		if (!IsCommandBufferValid() || !IsRecording() || (resources == nullptr))
+		if (!IsValid() || !IsRecording() || (resources == nullptr))
 		{
 			LogWarning("Failed to bind mesh! Command buffer is not recording");
 			return;
@@ -116,7 +110,7 @@ namespace TANG
 
 	void CommandBuffer::CMD_BindDescriptorSets(const BasePipeline* pipeline, uint32_t descriptorSetCount, DescriptorSet* descriptorSets)
 	{
-		if (!IsCommandBufferValid() || !IsRecording())
+		if (!IsValid() || !IsRecording())
 		{
 			LogWarning("Failed to bind descriptor sets! Command buffer is not recording");
 			return;
@@ -128,7 +122,7 @@ namespace TANG
 
 	void CommandBuffer::CMD_PushConstants(const BasePipeline* pipeline, void* constantData, uint32_t size, VkShaderStageFlags stageFlags)
 	{
-		if (!IsCommandBufferValid() || !IsRecording())
+		if (!IsValid() || !IsRecording())
 		{
 			LogWarning("Failed to bind descriptor sets! Command buffer is not recording");
 			return;
@@ -139,7 +133,7 @@ namespace TANG
 
 	void CommandBuffer::CMD_BindPipeline(const BasePipeline* pipeline)
 	{
-		if (!IsCommandBufferValid() || !IsRecording())
+		if (!IsValid() || !IsRecording())
 		{
 			LogWarning("Failed to bind pipeline command! Command buffer is not recording or command buffer is null");
 			return;
@@ -150,7 +144,7 @@ namespace TANG
 
 	void CommandBuffer::CMD_SetViewport(float width, float height)
 	{
-		if (!IsCommandBufferValid() || !IsRecording())
+		if (!IsValid() || !IsRecording())
 		{
 			LogWarning("Failed to bind set-viewport command! Command buffer is not recording or command buffer is null");
 			return;
@@ -168,7 +162,7 @@ namespace TANG
 
 	void CommandBuffer::CMD_SetScissor(VkOffset2D scissorOffset, VkExtent2D scissorExtent)
 	{
-		if (!IsCommandBufferValid() || !IsRecording())
+		if (!IsValid() || !IsRecording())
 		{
 			LogWarning("Failed to bind set-scissor command! Command buffer is not recording or command buffer is null");
 			return;
@@ -182,7 +176,7 @@ namespace TANG
 
 	void CommandBuffer::CMD_Draw(uint32_t vertexCount)
 	{
-		if (!IsCommandBufferValid() || !IsRecording())
+		if (!IsValid() || !IsRecording())
 		{
 			LogWarning("Failed to bind draw command! Command buffer is not recording");
 			return;
@@ -193,7 +187,7 @@ namespace TANG
 
 	void CommandBuffer::CMD_DrawIndexed(uint64_t indexCount)
 	{
-		if (!IsCommandBufferValid() || !IsRecording())
+		if (!IsValid() || !IsRecording())
 		{
 			LogWarning("Failed to bind draw indexed command! Command buffer is not recording");
 			return;
@@ -209,7 +203,7 @@ namespace TANG
 
 	void CommandBuffer::CMD_DrawIndexedInstanced(uint32_t indexCount, uint32_t instanceCount)
 	{
-		if (!IsCommandBufferValid() || !IsRecording())
+		if (!IsValid() || !IsRecording())
 		{
 			LogWarning("Failed to bind draw indexed instanced command! Command buffer is not recording");
 			return;
@@ -220,7 +214,7 @@ namespace TANG
 
 	void CommandBuffer::CMD_Dispatch(uint32_t x, uint32_t y, uint32_t z)
 	{
-		if (!IsCommandBufferValid() || !IsRecording())
+		if (!IsValid() || !IsRecording())
 		{
 			LogWarning("Failed to bind dispatch command! Command buffer is not recording");
 			return;
@@ -261,7 +255,7 @@ namespace TANG
 		return (cmdBufferState == COMMAND_BUFFER_STATE::RESET) || (cmdBufferState == COMMAND_BUFFER_STATE::ALLOCATED);
 	}
 
-	bool CommandBuffer::IsCommandBufferValid() const
+	bool CommandBuffer::IsValid() const
 	{
 		return commandBuffer != VK_NULL_HANDLE && cmdBufferState != COMMAND_BUFFER_STATE::DESTROYED;
 	}
@@ -272,4 +266,24 @@ namespace TANG
 		return allocatedQueueType;
 	}
 
+	void CommandBuffer::Destroy()
+	{
+		VkDevice logicalDevice = GetLogicalDevice();
+
+		if (!IsValid() || IsRecording() || !IsAllocated())
+		{
+			LogError("Can't destroy a command buffer because it's either still recording or the command buffer is null! Potential memory leak!");
+			return;
+		}
+
+		vkFreeCommandBuffers(logicalDevice, GetCommandPool(allocatedQueueType), 1, &commandBuffer);
+		commandBuffer = VK_NULL_HANDLE;
+
+		cmdBufferState = COMMAND_BUFFER_STATE::DESTROYED;
+	}
+
+	bool CommandBuffer::IsOneTimeSubmit(VkCommandBufferUsageFlags usageFlags) const
+	{
+		return (usageFlags & VkCommandBufferUsageFlagBits::VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) != 0;
+	}
 }

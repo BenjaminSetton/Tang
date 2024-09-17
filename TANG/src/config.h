@@ -7,9 +7,23 @@ namespace TANG
 {
 	namespace CONFIG
 	{
+		/////////////////////////////////////////////////////
+		// 
+		//		RENDERER
+		// 
+		/////////////////////////////////////////////////////
 		static const uint32_t WindowWidth = 1920;
 		static const uint32_t WindowHeight = 1080;
 
+		static const uint32_t MaxFramesInFlight = 2;
+
+		static const bool EnableVSync = true;
+
+		/////////////////////////////////////////////////////
+		// 
+		//		APPLICATION
+		// 
+		/////////////////////////////////////////////////////
 		static const std::string SkyboxCubeMeshFilePath = "../src/data/assets/cube.fbx";
 		static const std::string SkyboxTextureFilePath = "../src/data/textures/cubemaps/skybox_sunny.hdr";
 		static const uint32_t SkyboxCubemapSize = 512;
@@ -23,14 +37,13 @@ namespace TANG
 		static const float BloomCompositionWeight = 0.04f;
 		static const float BloomFilterRadius = 0.005f;
 
-		static const uint32_t MaxFramesInFlight = 2;
-		static const uint32_t MaxAssetCount = 100;
-
 		static const std::string MaterialTexturesFilePath = "../src/data/textures/";
 
 		static const std::string FullscreenQuadMeshFilePath = "../src/data/assets/fullscreen_quad.fbx";
 
 		static const std::string CompiledShaderOutputPath = "./shaders";
+
+		static const uint32_t MaxAssetCount = 100;
 	}
 }
 

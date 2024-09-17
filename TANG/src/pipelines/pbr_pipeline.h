@@ -3,11 +3,11 @@
 
 #include "base_pipeline.h"
 
+// Forward declarations
+class HDRRenderPass;
+
 namespace TANG
 {
-	// Forward declarations
-	class HDRRenderPass;
-
 	class PBRPipeline : public BasePipeline
 	{
 	public:

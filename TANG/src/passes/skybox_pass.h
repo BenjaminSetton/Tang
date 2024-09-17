@@ -9,44 +9,41 @@
 #include "base_pass.h" // DrawData
 #include "../config.h"
 
-namespace TANG
+class SkyboxPass
 {
-	class SkyboxPass
-	{
-	public:
+public:
 
-		SkyboxPass();
-		~SkyboxPass();
-		SkyboxPass(SkyboxPass&& other) noexcept;
+	SkyboxPass();
+	~SkyboxPass();
+	SkyboxPass(SkyboxPass&& other) noexcept;
 
-		SkyboxPass(const SkyboxPass& other) = delete;
-		SkyboxPass& operator=(const SkyboxPass& other) = delete;
+	SkyboxPass(const SkyboxPass& other) = delete;
+	SkyboxPass& operator=(const SkyboxPass& other) = delete;
 
-		void UpdateSkyboxCubemap(const TextureResource* skyboxCubemap);
-		void UpdateViewProjUniformBuffers(uint32_t frameIndex, const glm::mat4& view, const glm::mat4 proj);
+	void UpdateSkyboxCubemap(const TANG::TextureResource* skyboxCubemap);
+	void UpdateViewProjUniformBuffers(uint32_t frameIndex, const glm::mat4& view, const glm::mat4 proj);
 
-		void UpdateDescriptorSets(uint32_t frameIndex);
+	void UpdateDescriptorSets(uint32_t frameIndex);
 
-		void Create(const HDRRenderPass* hdrRenderPass, uint32_t swapChainWidth, uint32_t swapChainHeight);
-		void Destroy();
+	void Create(const HDRRenderPass* hdrRenderPass, uint32_t swapChainWidth, uint32_t swapChainHeight);
+	void Destroy();
 
-		void Draw(uint32_t currentFrame, const DrawData& data);
+	void Draw(uint32_t currentFrame, const TANG::DrawData& data);
 
-	private:
+private:
 
-		void CreatePipelines(const HDRRenderPass* hdrRenderPass, uint32_t swapChainWidth, uint32_t swapChainHeight);
-		void CreateSetLayoutCaches();
-		void CreateDescriptorSets();
-		void CreateUniformBuffers();
+	void CreatePipelines(const HDRRenderPass* hdrRenderPass, uint32_t swapChainWidth, uint32_t swapChainHeight);
+	void CreateSetLayoutCaches();
+	void CreateDescriptorSets();
+	void CreateUniformBuffers();
 
-		SkyboxPipeline skyboxPipeline;
-		SetLayoutCache skyboxSetLayoutCache;
-		std::array<UniformBuffer, CONFIG::MaxFramesInFlight> viewUBO;
-		std::array<UniformBuffer, CONFIG::MaxFramesInFlight> projUBO;
-		std::array<std::array<DescriptorSet, 2>, CONFIG::MaxFramesInFlight> skyboxDescriptorSets;
+	TANG::SkyboxPipeline skyboxPipeline;
+	TANG::SetLayoutCache skyboxSetLayoutCache;
+	std::array<TANG::UniformBuffer, TANG::CONFIG::MaxFramesInFlight> viewUBO;
+	std::array<TANG::UniformBuffer, TANG::CONFIG::MaxFramesInFlight> projUBO;
+	std::array<std::array<TANG::DescriptorSet, 2>, TANG::CONFIG::MaxFramesInFlight> skyboxDescriptorSets;
 
-		bool wasCreated;
-	};
-}
+	bool wasCreated;
+};
 
 #endif

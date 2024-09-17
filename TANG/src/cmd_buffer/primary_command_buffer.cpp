@@ -19,7 +19,22 @@ namespace TANG
 
 	PrimaryCommandBuffer::~PrimaryCommandBuffer()
 	{
-		// Nothing to do here
+	}
+
+	PrimaryCommandBuffer::PrimaryCommandBuffer(const PrimaryCommandBuffer& other) : CommandBuffer(other), renderPassState(other.renderPassState)
+	{
+	}
+
+	PrimaryCommandBuffer& PrimaryCommandBuffer::operator=(const PrimaryCommandBuffer& other)
+	{
+		if (this == &other)
+		{
+			return *this;
+		}
+
+		// Call operator= on parent?
+		renderPassState = other.renderPassState;
+		return *this;
 	}
 
 	PrimaryCommandBuffer::PrimaryCommandBuffer(PrimaryCommandBuffer&& other) noexcept : CommandBuffer(std::move(other))
@@ -32,45 +47,29 @@ namespace TANG
 		renderPassState = other.renderPassState;
 	}
 
-	void PrimaryCommandBuffer::Allocate(QUEUE_TYPE type)
-	{
-		VkCommandBufferAllocateInfo allocInfo = {};
-		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-		allocInfo.commandPool = GetCommandPool(type);
-		allocInfo.commandBufferCount = 1;
-
-		if (vkAllocateCommandBuffers(GetLogicalDevice(), &allocInfo, &commandBuffer) != VK_SUCCESS) {
-			TNG_ASSERT_MSG(false, "Failed to allocate primary command buffer!");
-		}
-
-		cmdBufferState = COMMAND_BUFFER_STATE::ALLOCATED;
-		allocatedQueueType = type;
-	}
-
-	void PrimaryCommandBuffer::CMD_BeginRenderPass(const BaseRenderPass* _renderPass, Framebuffer* _frameBuffer, VkExtent2D renderAreaExtent, bool usingSecondaryCmdBuffers, bool clearBuffers)
+	void PrimaryCommandBuffer::CMD_BeginRenderPass(const BaseRenderPass* renderPass, const Framebuffer* framebuffer, VkExtent2D renderAreaExtent, bool usingSecondaryCmdBuffers, bool clearBuffers)
 	{
 		if (renderPassState == PRIMARY_COMMAND_RENDER_PASS_STATE::BEGUN)
 		{
-			LogWarning("Mismatched BeginRenderPass/EndRenderPass calls!");
+			LogError("Mismatched BeginRenderPass/EndRenderPass calls!");
 			return;
 		}
 
-		if (!IsCommandBufferValid() || !IsRecording())
+		if (!IsValid() || !IsRecording())
 		{
-			LogWarning("Failed to begin render pass! Primary command buffer is not recording or command buffer is null");
+			LogError("Failed to begin render pass! Primary command buffer is not recording or command buffer is null");
 			return;
 		}
 
-		if (_renderPass == nullptr)
+		if (renderPass == nullptr)
 		{
-			LogWarning("Attempting to begin render pass with an invalid render pass pointer!");
+			LogError("Attempting to begin render pass with an invalid render pass pointer!");
 			return;
 		}
 
-		if (_frameBuffer == nullptr)
+		if (framebuffer == nullptr)
 		{
-			LogWarning("Attempting to begin render pass with an invalid framebuffer pointer!");
+			LogError("Attempting to begin render pass with an invalid framebuffer pointer!");
 			return;
 		}
 
@@ -85,8 +84,8 @@ namespace TANG
 
 		VkRenderPassBeginInfo renderPassInfo{};
 		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-		renderPassInfo.renderPass = _renderPass->GetRenderPass();
-		renderPassInfo.framebuffer = _frameBuffer->GetFramebuffer();
+		renderPassInfo.renderPass = renderPass->GetRenderPass();
+		renderPassInfo.framebuffer = framebuffer->GetFramebuffer();
 		renderPassInfo.renderArea.offset = { 0, 0 };
 		renderPassInfo.renderArea.extent = renderAreaExtent;
 
@@ -105,23 +104,31 @@ namespace TANG
 		vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, subpassContents);
 
 		renderPassState = PRIMARY_COMMAND_RENDER_PASS_STATE::BEGUN;
-
-		// Cache the framebuffer so we can transition the layout of the framebuffer attachments once the render pass ends
-		renderPass = _renderPass;
-		framebuffer = _frameBuffer;
 	}
 
-	void PrimaryCommandBuffer::CMD_EndRenderPass()
+	void PrimaryCommandBuffer::CMD_EndRenderPass(const BaseRenderPass* renderPass, Framebuffer* framebuffer)
 	{
 		if (renderPassState == PRIMARY_COMMAND_RENDER_PASS_STATE::ENDED)
 		{
-			LogWarning("Mismatched BeginRenderPass/EndRenderPass calls!");
+			LogError("Mismatched BeginRenderPass/EndRenderPass calls!");
 			return;
 		}
 
-		if (!IsCommandBufferValid() || !IsRecording())
+		if (!IsValid() || !IsRecording())
 		{
-			LogWarning("Failed to end render pass! Primary command buffer is not recording or command buffer is null");
+			LogError("Failed to end render pass! Primary command buffer is not recording or command buffer is null");
+			return;
+		}
+
+		if (renderPass == nullptr)
+		{
+			LogError("Attempting to begin render pass with an invalid render pass pointer!");
+			return;
+		}
+
+		if (framebuffer == nullptr)
+		{
+			LogError("Attempting to begin render pass with an invalid framebuffer pointer!");
 			return;
 		}
 
@@ -140,7 +147,7 @@ namespace TANG
 
 	void PrimaryCommandBuffer::CMD_NextSubpass(bool usingSecondaryCmdBuffers)
 	{
-		if (!IsCommandBufferValid() || !IsRecording())
+		if (!IsValid() || !IsRecording())
 		{
 			LogWarning("Failed to start next subpass! Primary command buffer is not recording or command buffer is null");
 			return;
@@ -152,7 +159,7 @@ namespace TANG
 
 	void PrimaryCommandBuffer::CMD_ExecuteSecondaryCommands(VkCommandBuffer* cmdBuffers, uint32_t cmdBufferCount)
 	{
-		if (!IsCommandBufferValid() || !IsRecording())
+		if (!IsValid() || !IsRecording())
 		{
 			LogWarning("Failed to bind execute command! Primary command buffer is not recording or command buffer is null");
 			return;
@@ -164,5 +171,21 @@ namespace TANG
 	COMMAND_BUFFER_TYPE PrimaryCommandBuffer::GetType()
 	{
 		return COMMAND_BUFFER_TYPE::PRIMARY;
+	}
+
+	void PrimaryCommandBuffer::Allocate(QUEUE_TYPE type)
+	{
+		VkCommandBufferAllocateInfo allocInfo = {};
+		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+		allocInfo.commandPool = GetCommandPool(type);
+		allocInfo.commandBufferCount = 1;
+
+		if (vkAllocateCommandBuffers(GetLogicalDevice(), &allocInfo, &commandBuffer) != VK_SUCCESS) {
+			TNG_ASSERT_MSG(false, "Failed to allocate primary command buffer!");
+		}
+
+		cmdBufferState = COMMAND_BUFFER_STATE::ALLOCATED;
+		allocatedQueueType = type;
 	}
 }

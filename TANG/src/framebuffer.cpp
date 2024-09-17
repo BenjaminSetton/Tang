@@ -10,7 +10,7 @@
 namespace TANG
 {
 
-	Framebuffer::Framebuffer() : framebuffer(VK_NULL_HANDLE)
+	Framebuffer::Framebuffer() : framebuffer(VK_NULL_HANDLE), width(0), height(0)
 	{
 	}
 
@@ -25,7 +25,7 @@ namespace TANG
 		attachmentsCache.clear();
 	}
 
-	Framebuffer::Framebuffer(Framebuffer&& other) : framebuffer(std::move(other.framebuffer))
+	Framebuffer::Framebuffer(Framebuffer&& other) : framebuffer(std::move(other.framebuffer)), width(other.width), height(other.height)
 	{
 	}
 
@@ -51,7 +51,7 @@ namespace TANG
 
 		if (createInfo.renderPass == nullptr)
 		{
-			LogError("Attempting to create framebuffer with an invalid render pass. Pointer is null");
+			LogError("Attempting to create framebuffer with an invalid render pass. Render pass is null");
 			return;
 		}
 
@@ -95,6 +95,8 @@ namespace TANG
 
 		// Cache the attachments
 		attachmentsCache = createInfo.attachments;
+		width = createInfo.width;
+		height = createInfo.height;
 	}
 
 	void Framebuffer::Destroy()
@@ -118,5 +120,15 @@ namespace TANG
 	std::vector<TextureResource*> Framebuffer::GetAttachmentImages()
 	{
 		return attachmentsCache;
+	}
+
+	uint32_t Framebuffer::GetWidth() const
+	{
+		return width;
+	}
+
+	uint32_t Framebuffer::GetHeight() const
+	{
+		return height;
 	}
 }

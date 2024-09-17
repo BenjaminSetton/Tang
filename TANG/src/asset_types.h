@@ -288,7 +288,7 @@ namespace TANG
 		//        to data somewhere else which will probably be very slow
 		Transform transform;
 
-		bool shouldDraw;							// Determines whether the asset should be drawn on the current frame. This value is reset every frame
+		bool shouldDraw;							// Determines whether the asset should be drawn on the current frame
 	};
 }
 

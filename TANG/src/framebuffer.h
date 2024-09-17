@@ -28,6 +28,7 @@ namespace TANG
 		Framebuffer();
 		~Framebuffer();
 		Framebuffer(Framebuffer&& other);
+
 		Framebuffer(const Framebuffer& other) = delete;
 		Framebuffer& operator=(const Framebuffer& other) = delete;
 
@@ -39,6 +40,9 @@ namespace TANG
 
 		std::vector<TextureResource*> GetAttachmentImages();
 
+		uint32_t GetWidth() const;
+		uint32_t GetHeight() const;
+
 	private:
 		VkFramebuffer framebuffer;
 
@@ -46,6 +50,8 @@ namespace TANG
 		// In theory this should be fine, since if the images become invalid at any point the
 		// framebuffer should be re-created.
 		std::vector<TextureResource*> attachmentsCache;
+
+		uint32_t width, height;
 	};
 }
 

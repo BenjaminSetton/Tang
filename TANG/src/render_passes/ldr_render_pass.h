@@ -3,27 +3,17 @@
 
 #include "base_render_pass.h"
 
-namespace TANG
+class LDRRenderPass : public TANG::BaseRenderPass
 {
-	class LDRRenderPass : public BaseRenderPass
-	{
-	public:
+public:
 
-		LDRRenderPass();
-		~LDRRenderPass();
-		LDRRenderPass(LDRRenderPass&& other) noexcept;
-		// Copying this object is not allowed
+	LDRRenderPass();
+	~LDRRenderPass();
 
-		void SetData(VkFormat colorAttachmentFormat);
+private:
 
-	private:
-
-		bool Build(RenderPassBuilder& out_builder) override;
-		void FlushData() override;
-
-		// This data is copied from the renderer
-		VkFormat colorAttachmentFormat;
-	};
-}
+	bool Build(TANG::RenderPassBuilder& out_builder) override;
+	void FlushData() override;
+};
 
 #endif

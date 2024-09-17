@@ -192,6 +192,11 @@ namespace TANG
 		glfwSetWindowTitle(glfwWinHandle, windowTitle);
 	}
 
+	void GetWindowSize(uint32_t& outWidth, uint32_t& outHeight)
+	{
+		MainWindow::Get().GetFramebufferSize(&outWidth, &outHeight);
+	}
+
 	bool MainWindow::WasWindowResized()
 	{
 		bool res = WindowData.resized;

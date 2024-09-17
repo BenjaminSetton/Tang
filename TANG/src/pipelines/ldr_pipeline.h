@@ -3,10 +3,11 @@
 
 #include "base_pipeline.h"
 
+// Forward declarations
+class LDRRenderPass;
+
 namespace TANG
 {
-	// Forward declarations
-	class LDRRenderPass;
 
 	class LDRPipeline : public BasePipeline
 	{

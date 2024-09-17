@@ -30,6 +30,7 @@
 #include "input_manager.h" // TANG::KeyState
 
 // TEMP TEMP TEMP
+#include "config.h"
 #include "queue_types.h"
 #include "descriptors/descriptor_set.h"
 #include "cmd_buffer/primary_command_buffer.h"
@@ -38,7 +39,6 @@
 
 namespace TANG
 {
-
 	///////////////////////////////////////////////////////////
 	//
 	//		CORE
@@ -57,20 +57,41 @@ namespace TANG
 
 	////////////////////////////////////////////////////////////////////////
 	// TEMP TEMP TEMP
-	
-	//void (*DrawPassFunc)(PrimaryCommandBuffer* cmdBuffer /* TODO */);
-
 	DescriptorSet AllocateDescriptorSet(const DescriptorSetLayout& setLayout);
 	PrimaryCommandBuffer AllocatePrimaryCommandBuffer(QUEUE_TYPE type);
 	SecondaryCommandBuffer AllocateSecondaryCommandBuffer(QUEUE_TYPE type);
-	//void QueuePass(BasePass* pass);
+
+	bool CreateSemaphore(VkSemaphore* semaphore, const VkSemaphoreCreateInfo& info);
+	void DestroySemaphore(VkSemaphore* semaphore);
+
+	bool CreateFence(VkFence* fence, const VkFenceCreateInfo& info);
+	void DestroyFence(VkFence* fence);
+
+	VkFormat FindDepthFormat();
+	bool HasStencilComponent(VkFormat format);
+	void QueueCommandBuffer(const PrimaryCommandBuffer& cmdBuffer, const QueueSubmitInfo& info);
 	void Submit();
+
+	void WaitForFence(VkFence fence, uint64_t timeout = std::numeric_limits<uint64_t>::max());
+
+	uint32_t GetCurrentFrameIndex();
+	constexpr uint32_t GetMaxFramesInFlight() { return CONFIG::MaxFramesInFlight; }
+
+	VkSemaphore GetCurrentImageAvailableSemaphore();
+	VkSemaphore GetCurrentRenderFinishedSemaphore();
+	VkFence GetCurrentFrameFence();
+
+	Framebuffer* GetCurrentSwapChainFramebuffer();
 
 	// TEMP TEMP TEMP
 	////////////////////////////////////////////////////////////////////////
 
+	void BeginFrame();
+
 	// Core API draw loop. Simply calls the renderer system Draw() call
 	void Draw();
+
+	void EndFrame();
 
 	// Shuts down the TANG renderer and cleans up internal objects
 	// NOTE - This must be the LAST API function call. All other API calls
@@ -87,8 +108,13 @@ namespace TANG
 	// this is because the user clicked the close (X) button on the window
 	bool WindowShouldClose();
 
+	bool WindowInFocus();
+
 	// Sets the title of the window using a format buffer. This may only be called after TANG::Initialize()
 	void SetWindowTitle(const char* format, ...);
+
+	// Returns the size of the main window
+	void GetWindowSize(uint32_t& outWidth, uint32_t& outHeight);
 
 	// Loads an asset given the filepath to the asset file on disk. If the asset has not been
 	// imported before, this function will import any of the supported asset types: FBX and OBJ. 
@@ -96,12 +122,7 @@ namespace TANG
 	// the loaded asset, and all subsequent attempts to load the same asset by name will instead
 	// load the TASSET file directly
 	UUID LoadAsset(const char* filepath);
-
-	// Sets the speed of the primary camera
-	void SetCameraSpeed(float speed);
-
-	// Sets the sensitivity of the primary camera
-	void SetCameraSensitivity(float sensitivity);
+	AssetResources* GetAssetResources(UUID uuid);
 
 	///////////////////////////////////////////////////////////
 	//
@@ -113,25 +134,25 @@ namespace TANG
 	// cases:
 	// 1. The UUID points to an asset internally that does not exist
 	// 2. The UUID is invalid (refer to INVALID_UUID inside uuid.h)
-	void ShowAsset(UUID uuid);
+	//void ShowAsset(UUID uuid);
 
 	// Update the transform of the asset represented by the provided UUID. 
 	// NOTE - The position, rotation and scale parameters MUST be vectors with exactly three components
-	void UpdateAssetTransform(UUID uuid, float* position, float* rotation, float* scale);
+	//void UpdateAssetTransform(UUID uuid, float* position, float* rotation, float* scale);
 
 	// Update the position of the asset represented by the provided UUID.
 	// NOTE - The position parameter MUST be a vector with exactly three components
-	void UpdateAssetPosition(UUID uuid, float* position);
+	//void UpdateAssetPosition(UUID uuid, float* position);
 
 	// Update the rotation of the asset represented by the provided UUID.
 	// If the given rotation is in degrees it must be specified using the "isDegrees" parameter,
 	// a value of false is interpreted as a rotation in radians instead.
 	// NOTE - The rotation parameter MUST be a vector with exactly three components
-	void UpdateAssetRotation(UUID uuid, float* rotation, bool isDegrees);
+	//void UpdateAssetRotation(UUID uuid, float* rotation, bool isDegrees);
 
 	// Update the scale of the asset represented by the provided UUID.
 	// NOTE - The scale parameter MUST be a vector with exactly three components
-	void UpdateAssetScale(UUID uuid, float* scale);
+	//void UpdateAssetScale(UUID uuid, float* scale);
 
 	// Returns whether the provided key is pressed. Note that this function will return true as long as the key is held down
 	bool IsKeyPressed(int key);

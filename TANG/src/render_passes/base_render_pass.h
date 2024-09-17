@@ -19,6 +19,7 @@ namespace TANG
 		~BaseRenderPass();
 		BaseRenderPass(BaseRenderPass&& other) noexcept;
 
+		// Disable copying
 		BaseRenderPass(const BaseRenderPass& other) = delete;
 		BaseRenderPass& operator=(const BaseRenderPass& other) = delete;
 

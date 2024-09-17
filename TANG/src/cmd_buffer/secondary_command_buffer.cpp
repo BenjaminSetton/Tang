@@ -9,20 +9,9 @@
 
 namespace TANG
 {
-
-	SecondaryCommandBuffer::SecondaryCommandBuffer()
+	COMMAND_BUFFER_TYPE SecondaryCommandBuffer::GetType()
 	{
-		// Nothing to do here
-	}
-
-	SecondaryCommandBuffer::~SecondaryCommandBuffer()
-	{
-		// Nothing to do here
-	}
-
-	SecondaryCommandBuffer::SecondaryCommandBuffer(SecondaryCommandBuffer&& other) noexcept : CommandBuffer(std::move(other))
-	{
-		// All we need to do here is call the move constructor of the parent
+		return COMMAND_BUFFER_TYPE::SECONDARY;
 	}
 
 	void SecondaryCommandBuffer::Allocate(QUEUE_TYPE type)
@@ -41,10 +30,5 @@ namespace TANG
 
 		cmdBufferState = COMMAND_BUFFER_STATE::ALLOCATED;
 		allocatedQueueType = type;
-	}
-
-	COMMAND_BUFFER_TYPE SecondaryCommandBuffer::GetType()
-	{
-		return COMMAND_BUFFER_TYPE::SECONDARY;
 	}
 }

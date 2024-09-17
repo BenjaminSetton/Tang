@@ -38,15 +38,13 @@ namespace TANG
 	{
 	public:
 
+		friend class Renderer;
+
 		CommandBuffer();
 		~CommandBuffer();
+		CommandBuffer(const CommandBuffer& other);
+		CommandBuffer& operator=(const CommandBuffer& other);
 		CommandBuffer(CommandBuffer&& other) noexcept;
-
-		CommandBuffer(const CommandBuffer& other) = delete;
-		CommandBuffer& operator=(const CommandBuffer& other) = delete;
-
-		virtual void Allocate(QUEUE_TYPE type) = 0;
-		void Destroy();
 
 		void BeginRecording(VkCommandBufferUsageFlags flags, VkCommandBufferInheritanceInfo* inheritanceInfo);
 		void EndRecording();
@@ -78,9 +76,7 @@ namespace TANG
 		bool IsReset() const;
 		bool IsAllocated() const;
 		bool IsWritable() const;
-
-		// Performs a few checks that tell us whether we can write commands to this command buffer
-		bool IsCommandBufferValid() const;
+		bool IsValid() const;
 
 		// Returns the type of the command buffer (primary or secondary)
 		virtual COMMAND_BUFFER_TYPE GetType() = 0;
@@ -89,10 +85,15 @@ namespace TANG
 
 	protected:
 
+		virtual void Allocate(QUEUE_TYPE type) = 0;
+		void Destroy();
+
+		bool IsOneTimeSubmit(VkCommandBufferUsageFlags usageFlags) const;
+
+	protected:
+
 		VkCommandBuffer commandBuffer;
 		COMMAND_BUFFER_STATE cmdBufferState;
-		COMMAND_BUFFER_TYPE cmdBufferType;
-		bool isOneTimeSubmit;
 		QUEUE_TYPE allocatedQueueType;
 	};
 }

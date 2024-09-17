@@ -9,42 +9,39 @@
 #include "base_pass.h" // DrawData
 #include "../config.h"
 
-namespace TANG
+class LDRPass
 {
-	class LDRPass
-	{
-	public:
+public:
 
-		LDRPass();
-		~LDRPass();
-		LDRPass(LDRPass&& other) noexcept;
+	LDRPass();
+	~LDRPass();
+	LDRPass(LDRPass&& other) noexcept;
 
-		LDRPass(const LDRPass& other) = delete;
-		LDRPass& operator=(const LDRPass& other) = delete;
+	LDRPass(const LDRPass& other) = delete;
+	LDRPass& operator=(const LDRPass& other) = delete;
 
-		void UpdateExposureUniformBuffer(uint32_t frameIndex, float exposure);
-		void UpdateDescriptorSets(uint32_t frameIndex, const TextureResource* hdrTexture);
+	void UpdateExposureUniformBuffer(uint32_t frameIndex, float exposure);
+	void UpdateDescriptorSets(uint32_t frameIndex, const TANG::TextureResource* hdrTexture);
 
-		void Create(const LDRRenderPass* ldrRenderPass, uint32_t swapChainWidth, uint32_t swapChainHeight);
-		void Destroy();
+	void Create(const LDRRenderPass* ldrRenderPass, uint32_t swapChainWidth, uint32_t swapChainHeight);
+	void Destroy();
 
-		void Draw(uint32_t frameIndex, const DrawData& data);
+	void Draw(uint32_t frameIndex, const TANG::DrawData& data);
 
-	private:
+private:
 
-		void CreatePipelines(const LDRRenderPass* ldrRenderPass, uint32_t swapChainWidth, uint32_t swapChainHeight);
-		void CreateSetLayoutCaches();
-		void CreateDescriptorSets();
-		void CreateUniformBuffers();
+	void CreatePipelines(const LDRRenderPass* ldrRenderPass, uint32_t swapChainWidth, uint32_t swapChainHeight);
+	void CreateSetLayoutCaches();
+	void CreateDescriptorSets();
+	void CreateUniformBuffers();
 
-		LDRPipeline ldrPipeline;
-		SetLayoutCache ldrSetLayoutCache;
-		std::array<UniformBuffer, CONFIG::MaxFramesInFlight> ldrExposureUBO;
-		std::array<DescriptorSet, CONFIG::MaxFramesInFlight> ldrDescriptorSet;
+	TANG::LDRPipeline ldrPipeline;
+	TANG::SetLayoutCache ldrSetLayoutCache;
+	std::array<TANG::UniformBuffer, TANG::CONFIG::MaxFramesInFlight> ldrExposureUBO;
+	std::array<TANG::DescriptorSet, TANG::CONFIG::MaxFramesInFlight> ldrDescriptorSet;
 
-		bool wasCreated;
+	bool wasCreated;
 
-	};
-}
+};
 
 #endif

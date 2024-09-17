@@ -9,14 +9,6 @@
 
 namespace TANG
 {
-	enum class CorePipeline
-	{
-		PBR,
-		CUBEMAP_PREPROCESSING,
-		SKYBOX,
-		FULLSCREEN_QUAD
-	};
-
 	enum class PipelineType
 	{
 		GRAPHICS,
