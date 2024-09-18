@@ -130,10 +130,6 @@ namespace TANG
 		CreateColorAttachmentTextures();
 		CreateFramebuffers();
 		CreateSyncObjects();
-
-		// Setup all the passes
-		//cubemapPreprocessingPass.LoadTextureResources();
-		//bloomPass.Create(swapChainExtent.width, swapChainExtent.height);
 	}
 
 	void Renderer::Update(float deltaTime)
@@ -214,23 +210,11 @@ namespace TANG
 		}
 
 		// Finally, incremement the currentFrame index
-		// TODO - Replace this with a RenderContext and do this in EndFrame() instead
 		currentFrame = (currentFrame + 1) % CONFIG::MaxFramesInFlight;
 	}
 
 	void Renderer::Draw()
 	{
-		//DrawFrame();
-
-		// Clear the asset draw states after drawing the current frame
-		// TODO - This is pretty slow to do per-frame, so I need to find a better way to
-		//        clear the asset draw states. Maybe a sorted pool would work better but
-		//        I want to avoid premature optimization so this'll do for now
-		//for (auto& resources : assetResources)
-		//{
-		//	resources.shouldDraw = false;
-		//}
-
 		// Submit all command queues containing valid command buffers (and their respective submit infos)
 		while(m_cmdQueuesToSubmit.size() != 0)
 		{
@@ -273,27 +257,12 @@ namespace TANG
 
 		vkDeviceWaitIdle(logicalDevice);
 
-		//DestroyAllAssetResources();
-
 		if (m_rendererShutdownCallback)
 		{
 			m_rendererShutdownCallback();
 		}
 
 		CleanupSwapChain();
-
-		//ldrPass.Destroy();
-		//pbrPass.Destroy();
-		//cubemapPreprocessingPass.Destroy();
-		//skyboxPass.Destroy();
-		//bloomPass.Destroy();
-
-		//for (uint32_t i = 0; i < CONFIG::MaxFramesInFlight; i++)
-		//{
-		//	auto frameData = GetFrameData(i);
-
-		//	frameData->hdrFramebuffer.Destroy();
-		//}
 
 		descriptorPool.Destroy();
 
@@ -308,7 +277,6 @@ namespace TANG
 		CommandPoolRegistry::Get().DestroyPools();
 
 		renderPass.Destroy();
-		//hdrRenderPass.Destroy();
 
 		vkDestroyDevice(logicalDevice, nullptr);
 		DeviceCache::Get().InvalidateCache();
@@ -399,26 +367,6 @@ namespace TANG
 			m_cmdQueuesToSubmit.push(std::make_pair<>(cmd, info));
 		}
 	}
-
-	//void Renderer::CreateAssetCommandBuffer(AssetResources* resources)
-	//{
-	//	UUID uuid = resources->uuid;
-
-	//	for (uint32_t i = 0; i < CONFIG::MaxFramesInFlight(); i++)
-	//	{
-	//		auto* secondaryCmdBufferMap = &(GetFDDAtIndex(i)->assetCommandBuffers);
-	//		// Ensure that there's not already an entry in the secondaryCommandBuffers map. We bail in case of a collision
-	//		if (secondaryCmdBufferMap->find(uuid) != secondaryCmdBufferMap->end())
-	//		{
-	//			LogError("Attempted to create a secondary command buffer for an asset, but a secondary command buffer was already found for asset uuid %ull", uuid);
-	//			return;
-	//		}
-
-	//		secondaryCmdBufferMap->emplace(uuid, SecondaryCommandBuffer());
-	//		SecondaryCommandBuffer& commandBuffer = secondaryCmdBufferMap->at(uuid);
-	//		commandBuffer.Allocate(QUEUE_TYPE::GRAPHICS);
-	//	}
-	//}
 
 	VkFramebuffer Renderer::GetFramebufferAtIndex(uint32_t frameBufferIndex)
 	{
@@ -513,271 +461,6 @@ namespace TANG
 			m_swapChainRecreatedCallback(framebufferWidth, framebufferHeight);
 		}
 	}
-
-	//void Renderer::SetAssetDrawState(UUID uuid)
-	//{
-	//	AssetResources* resources = GetAssetResourcesFromUUID(uuid);
-	//	if (resources == nullptr)
-	//	{
-	//		// Maybe the asset resources were deleted but we somehow forgot to remove it from the assetDrawStates map?
-	//		LogError(false, "Attempted to set asset draw state, but asset does not exist or UUID is invalid!");
-	//		return;
-	//	}
-
-	//	resources->shouldDraw = true;
-	//}
-
-	//void Renderer::SetAssetTransform(UUID uuid, const Transform& transform)
-	//{
-	//	AssetResources* asset = GetAssetResourcesFromUUID(uuid);
-	//	if (asset == nullptr)
-	//	{
-	//		return;
-	//	}
-
-	//	asset->transform = transform;
-	//}
-
-	//void Renderer::SetAssetPosition(UUID uuid, const glm::vec3& position)
-	//{
-	//	AssetResources* asset = GetAssetResourcesFromUUID(uuid);
-	//	if (asset == nullptr)
-	//	{
-	//		return;
-	//	}
-
-	//	Transform& transform = asset->transform;
-	//	transform.position = position;
-	//}
-
-	//void Renderer::SetAssetRotation(UUID uuid, const glm::vec3& rotation)
-	//{
-	//	AssetResources* asset = GetAssetResourcesFromUUID(uuid);
-	//	if (asset == nullptr)
-	//	{
-	//		return;
-	//	}
-
-	//	Transform& transform = asset->transform;
-	//	transform.rotation = rotation;
-	//}
-
-	//void Renderer::SetAssetScale(UUID uuid, const glm::vec3& scale)
-	//{
-	//	AssetResources* asset = GetAssetResourcesFromUUID(uuid);
-	//	if (asset == nullptr)
-	//	{
-	//		return;
-	//	}
-
-	//	Transform& transform = asset->transform;
-	//	transform.scale = scale;
-	//}
-
-	//void Renderer::DrawFrame()
-	//{
-	//	VkDevice logicalDevice = GetLogicalDevice();
-	//	VkResult result = VK_SUCCESS;
-
-	//	FrameDependentData* frameData = GetCurrentFDD();
-
-	//	vkWaitForFences(logicalDevice, 1, &frameData->inFlightFence, VK_TRUE, UINT64_MAX);
-
-	//	uint32_t imageIndex;
-	//	result = vkAcquireNextImageKHR(logicalDevice, swapChain, UINT64_MAX,
-	//		frameData->imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
-
-	//	if (result == VK_ERROR_OUT_OF_DATE_KHR)
-	//	{
-	//		RecreateSwapChain();
-	//		return;
-	//	}
-	//	else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
-	//	{
-	//		LogError("Failed to acquire swap chain image! Vulkan result: %u", static_cast<uint32_t>(result));
-	//	}
-
-	//	// Only reset the fence if we're submitting work, otherwise we might deadlock
-	//	vkResetFences(logicalDevice, 1, &(frameData->inFlightFence));
-
-	//	// Delete commands from previous frame index
-	//	//frameData->hdrCommandBuffer.Destroy();
-	//	//frameData->ldrCommandBuffer.Destroy();
-	//	//frameData->postProcessingCommandBuffer.Destroy();
-
-	//	///////////////////////////////////////
-	//	// 
-	//	// CORE RENDERING
-	//	//
-	//	///////////////////////////////////////
-
-	//	//auto& hdrCmdBuffer = frameData->hdrCommandBuffer;
-	//	//hdrCmdBuffer.Allocate(QUEUE_TYPE::GRAPHICS);
-	//	//hdrCmdBuffer.BeginRecording(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, nullptr);
-	//	//hdrCmdBuffer.CMD_BeginRenderPass(&hdrRenderPass, &(frameData->hdrFramebuffer), swapChainExtent, true, true);
-
-	//	//// Record skybox commands
-	//	//DrawSkybox(&hdrCmdBuffer);
-
-	//	//// Record PBR asset commands
-	//	//DrawAssets(&hdrCmdBuffer);
-
-	//	//hdrCmdBuffer.CMD_EndRenderPass();
-	//	//hdrCmdBuffer.EndRecording();
-
-	//	///////////////////////////////////////
-	//	// 
-	//	// POST-PROCESSING
-	//	//
-	//	///////////////////////////////////////
-
-	//	//auto& postProcessingCmdBuffer = frameData->postProcessingCommandBuffer;
-	//	//postProcessingCmdBuffer.Allocate(QUEUE_TYPE::COMPUTE);
-	//	//postProcessingCmdBuffer.BeginRecording(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, nullptr);
-	//	//
-	//	//bloomPass.Draw(currentFrame, &postProcessingCmdBuffer, &frameData->hdrAttachment);
-
-	//	//postProcessingCmdBuffer.EndRecording();
-
-	//	//// Submit the LDR conversion commands separately, since they use a different render pass
-	//	//Framebuffer& swapChainFramebuffer = GetSWIDDAtIndex(imageIndex)->swapChainFramebuffer;
-	//	//auto& ldrCmdBuffer = frameData->ldrCommandBuffer;
-	//	//ldrCmdBuffer.Allocate(QUEUE_TYPE::GRAPHICS);
-	//	//ldrCmdBuffer.BeginRecording(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, nullptr);
-	//	//ldrCmdBuffer.CMD_BeginRenderPass(&ldrRenderPass, &swapChainFramebuffer, swapChainExtent, false, true);
-
-	//	//PerformLDRConversion(&ldrCmdBuffer);
-
-	//	//ldrCmdBuffer.CMD_EndRenderPass();
-	//	//ldrCmdBuffer.EndRecording();
-
-	//	///////////////////////////////////////
-	//	// 
-	//	// QUEUE SUBMISSION
-	//	//
-	//	///////////////////////////////////////
-
-	//	//result = SubmitCoreRenderingQueue(&hdrCmdBuffer, frameData);
-	//	//result = SubmitPostProcessingQueue(&postProcessingCmdBuffer, frameData);
-	//	//result = SubmitLDRConversionQueue(&ldrCmdBuffer, frameData);
-
-	//	///////////////////////////////////////
-	//	// 
-	//	// SWAP CHAIN PRESENT
-	//	//
-	//	///////////////////////////////////////
-
-	//	{
-	//		std::array<VkSemaphore, 1> waitSemaphores = { frameData->renderFinishedSemaphore };
-
-	//		VkPresentInfoKHR presentInfo{};
-	//		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-	//		presentInfo.waitSemaphoreCount = static_cast<uint32_t>(waitSemaphores.size());
-	//		presentInfo.pWaitSemaphores = waitSemaphores.data();
-
-	//		std::array<VkSwapchainKHR, 1> swapChains = { swapChain };
-	//		presentInfo.swapchainCount = static_cast<uint32_t>(swapChains.size());
-	//		presentInfo.pSwapchains = swapChains.data();
-	//		presentInfo.pImageIndices = &imageIndex;
-	//		presentInfo.pResults = nullptr;
-
-	//		result = vkQueuePresentKHR(queues[QUEUE_TYPE::PRESENT], &presentInfo);
-	//	}
-
-	//	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
-	//	{
-	//		RecreateSwapChain();
-	//	}
-	//	else if (result != VK_SUCCESS)
-	//	{
-	//		LogError("Failed to present swap chain image!");
-	//	}
-	//}
-
-	//void Renderer::DrawAssets(PrimaryCommandBuffer* cmdBuffer)
-	//{
-	//	std::vector<VkCommandBuffer> secondaryCmdBuffers;
-	//	secondaryCmdBuffers.resize(assetResources.size()); // At most we can have the same number of cmd buffers as there are asset resources
-	//	uint32_t secondaryCmdBufferCount = 0;
-
-	//	for (AssetResources& resources : assetResources)
-	//	{
-	//		UUID& uuid = resources.uuid;
-
-	//		if (resources.shouldDraw)
-	//		{
-	//			SecondaryCommandBuffer* secondaryCmdBuffer = GetSecondaryCommandBufferFromUUID(uuid);
-	//			if (secondaryCmdBuffer == nullptr)
-	//			{
-	//				continue;
-	//			}
-
-	//			// Update the transform for the asset
-	//			pbrPass.UpdateTransformUniformBuffer(currentFrame, resources.transform);
-
-	//			// TODO - This is super hard-coded, but it'll do for now
-	//			std::array<const TextureResource*, 8> textures;
-	//			textures[0] = &resources.material[static_cast<uint32_t>(Material::TEXTURE_TYPE::DIFFUSE)];
-	//			textures[1] = &resources.material[static_cast<uint32_t>(Material::TEXTURE_TYPE::NORMAL)];
-	//			textures[2] = &resources.material[static_cast<uint32_t>(Material::TEXTURE_TYPE::METALLIC)];
-	//			textures[3] = &resources.material[static_cast<uint32_t>(Material::TEXTURE_TYPE::ROUGHNESS)];
-	//			textures[4] = &resources.material[static_cast<uint32_t>(Material::TEXTURE_TYPE::LIGHTMAP)];
-	//			textures[5] = cubemapPreprocessingPass.GetIrradianceMap();
-	//			textures[6] = cubemapPreprocessingPass.GetPrefilterMap();
-	//			textures[7] = cubemapPreprocessingPass.GetBRDFConvolutionMap();
-	//			pbrPass.UpdateDescriptorSets(currentFrame, textures);
-
-	//			DrawData drawData{};
-	//			drawData.asset = &resources;
-	//			drawData.cmdBuffer = secondaryCmdBuffer;
-	//			drawData.framebuffer = &(GetCurrentFDD()->hdrFramebuffer);
-	//			drawData.renderPass = &hdrRenderPass;
-	//			drawData.framebufferWidth = framebufferWidth;
-	//			drawData.framebufferHeight = framebufferHeight;
-	//			pbrPass.Draw(currentFrame, drawData);
-
-	//			secondaryCmdBuffers[secondaryCmdBufferCount++] = secondaryCmdBuffer->GetBuffer();
-	//		}
-	//	}
-
-	//	// Don't attempt to execute 0 command buffers
-	//	if (secondaryCmdBufferCount > 0)
-	//	{
-	//		cmdBuffer->CMD_ExecuteSecondaryCommands(secondaryCmdBuffers.data(), secondaryCmdBufferCount);
-	//	}
-	//}
-
-	//void Renderer::DrawSkybox(PrimaryCommandBuffer* cmdBuffer)
-	//{
-	//	auto frameData = GetCurrentFDD();
-
-	//	AssetResources* skyboxAsset = GetAssetResourcesFromUUID(skyboxAssetUUID);
-	//	if (skyboxAsset == nullptr)
-	//	{
-	//		LogError("Skybox asset is not loaded! Failed to draw skybox");
-	//		return;
-	//	}
-
-	//	SecondaryCommandBuffer* secondaryCmdBuffer = GetSecondaryCommandBufferFromUUID(skyboxAssetUUID);
-	//	if (secondaryCmdBuffer == nullptr)
-	//	{
-	//		return;
-	//	}
-
-	//	skyboxPass.UpdateDescriptorSets(currentFrame);
-
-	//	DrawData drawData{};
-	//	drawData.asset = skyboxAsset;
-	//	drawData.cmdBuffer = secondaryCmdBuffer;
-	//	drawData.framebuffer = &frameData->hdrFramebuffer;
-	//	drawData.renderPass = &hdrRenderPass;
-	//	drawData.framebufferWidth = framebufferWidth;
-	//	drawData.framebufferHeight = framebufferHeight;
-	//	skyboxPass.Draw(currentFrame, drawData);
-
-	//	VkCommandBuffer vkCmdBuffer = secondaryCmdBuffer->GetBuffer();
-	//	cmdBuffer->CMD_ExecuteSecondaryCommands(&vkCmdBuffer, 1);
-	//}
 
 	void Renderer::CreateInstance()
 	{
@@ -1234,12 +917,6 @@ namespace TANG
 		// Attachments which hold information about Multisampling are called Resolve Attachments.
 		// 
 		// Attachments with RGB/Depth/Stencil information are called Color/Depth/Stencil Attachments respectively.
-		//VkFormat depthAttachmentFormat = FindDepthFormat();
-
-		//hdrRenderPass.SetData(VK_FORMAT_R32G32B32A32_SFLOAT, depthAttachmentFormat);
-		//hdrRenderPass.Create();
-
-		//ldrRenderPass.SetData(VK_FORMAT_B8G8R8A8_SRGB);
 		renderPass.Create();
 	}
 
@@ -1272,48 +949,6 @@ namespace TANG
 			swidd[i].swapChainFramebuffer.Create(framebufferInfo);
 		}
 	}
-
-	//void Renderer::CreateHDRFramebuffers()
-	//{
-	//	for (uint32_t i = 0; i < CONFIG::MaxFramesInFlight; i++)
-	//	{
-	//		auto frameData = GetFrameData(i);
-
-	//		std::vector<TextureResource*> attachments =
-	//		{
-	//			&(frameData->hdrAttachment),
-	//			&(frameData->hdrDepthBuffer)
-	//		};
-
-	//		std::vector<uint32_t> imageViewIndices =
-	//		{
-	//			0,
-	//			0
-	//		};
-
-	//		FramebufferCreateInfo framebufferInfo{};
-	//		framebufferInfo.renderPass = nullptr /*&hdrRenderPass*/;
-	//		framebufferInfo.attachments = attachments;
-	//		framebufferInfo.imageViewIndices = imageViewIndices;
-	//		framebufferInfo.width = swapChainExtent.width;
-	//		framebufferInfo.height = swapChainExtent.height;
-	//		framebufferInfo.layers = 1;
-
-	//		frameData->hdrFramebuffer.Create(framebufferInfo);
-	//	}
-	//}
-
-	//void Renderer::CreatePrimaryCommandBuffers()
-	//{
-	//	for (uint32_t i = 0; i < CONFIG::MaxFramesInFlight(); i++)
-	//	{
-	//		auto frameData = GetFDDAtIndex(i);
-
-	//		frameData->hdrCommandBuffer.Allocate(QUEUE_TYPE::GRAPHICS);
-	//		frameData->postProcessingCommandBuffer.Allocate(QUEUE_TYPE::COMPUTE);
-	//		frameData->ldrCommandBuffer.Allocate(QUEUE_TYPE::GRAPHICS);
-	//	}
-	//}
 
 	void Renderer::CreateSyncObjects()
 	{
@@ -1367,39 +1002,6 @@ namespace TANG
 		descriptorPool.Create(poolSizes.data(), static_cast<uint32_t>(poolSizes.size()), static_cast<uint32_t>(poolSizes.size()) * fddSize * CONFIG::MaxAssetCount, 0);
 	}
 
-	//void Renderer::CreateDepthTextures()
-	//{
-	//	VkFormat depthFormat = FindDepthFormat();
-
-	//	// HDR depth buffer
-	//	BaseImageCreateInfo imageInfo{};
-	//	imageInfo.width = framebufferWidth;
-	//	imageInfo.height = framebufferHeight;
-	//	imageInfo.format = depthFormat;
-	//	imageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-	//	imageInfo.mipLevels = 1;
-	//	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-	//	imageInfo.arrayLayers = 1;
-	//	imageInfo.flags = 0;
-
-	//	ImageViewCreateInfo imageViewInfo{};
-	//	imageViewInfo.aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
-	//	imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-
-	//	SamplerCreateInfo samplerInfo{};
-	//	samplerInfo.addressModeUVW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-	//	samplerInfo.magnificationFilter = VK_FILTER_LINEAR;
-	//	samplerInfo.minificationFilter = VK_FILTER_LINEAR;
-	//	samplerInfo.enableAnisotropicFiltering = false;
-	//	samplerInfo.maxAnisotropy = 1.0f;
-
-	//	for (uint32_t i = 0; i < CONFIG::MaxFramesInFlight; i++)
-	//	{
-	//		auto frameData = GetFrameData(i);
-	//		frameData->hdrDepthBuffer.Create(&imageInfo, &imageViewInfo, &samplerInfo);
-	//	}
-	//}
-
 	void Renderer::CreateColorAttachmentTextures()
 	{
 		// Swap chain color attachment resolve (LDR attachment)
@@ -1430,83 +1032,10 @@ namespace TANG
 			auto swidd = GetSWIDDAtIndex(i);
 			swidd->ldrAttachment.Create(&imageInfo, &imageViewInfo, &samplerInfo);
 		}
-
-		// HDR attachment
-		//imageInfo.width = swapChainExtent.width;
-		//imageInfo.height = swapChainExtent.height;
-		//imageInfo.format = VK_FORMAT_R32G32B32A32_SFLOAT;
-		//imageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
-		//imageInfo.mipLevels = 1;
-		//imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-		//imageInfo.arrayLayers = 1;
-		//imageInfo.flags = 0;
-
-		//samplerInfo.addressModeUVW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-		//samplerInfo.magnificationFilter = VK_FILTER_LINEAR;
-		//samplerInfo.minificationFilter = VK_FILTER_LINEAR;
-		//samplerInfo.maxAnisotropy = 1.0f;
-
-		//for (uint32_t i = 0; i < CONFIG::MaxFramesInFlight; i++)
-		//{
-		//	auto frameData = GetFrameData(i);
-		//	frameData->hdrAttachment.Create(&imageInfo, &imageViewInfo, &samplerInfo);
-		//}
 	}
-
-	//void Renderer::PerformLDRConversion(PrimaryCommandBuffer* cmdBuffer)
-	//{
-	//	AssetResources* fullscreenQuadAsset = GetAssetResourcesFromUUID(fullscreenQuadAssetUUID);
-	//	if (fullscreenQuadAsset == nullptr)
-	//	{
-	//		LogError("Fullscreen quad asset is not loaded! Failed to perform LDR conversion");
-	//		return;
-	//	}
-
-	//	ldrPass.UpdateExposureUniformBuffer(currentFrame, 1.0f);
-	//	ldrPass.UpdateDescriptorSets(currentFrame, bloomPass.GetOutputTexture());
-
-	//	DrawData drawData{};
-	//	drawData.asset = fullscreenQuadAsset;
-	//	drawData.cmdBuffer = cmdBuffer;
-	//	drawData.framebuffer = &GetCurrentFDD()->hdrFramebuffer;
-	//	drawData.renderPass = &hdrRenderPass;
-	//	drawData.framebufferWidth = framebufferWidth;
-	//	drawData.framebufferHeight = framebufferHeight;
-	//	ldrPass.Draw(currentFrame, drawData);
-
-	//	// NOTE - color attachment is cleared at the beginning of the frame, so transitioning the layout to something
-	//	//        else won't make a difference
-	//}
-
-	//void Renderer::RecreateAllSecondaryCommandBuffers()
-	//{
-	//	for (uint32_t i = 0; i < CONFIG::MaxFramesInFlight(); i++)
-	//	{
-	//		auto frameData = GetFDDAtIndex(i);
-	//		for (auto& resources : assetResources)
-	//		{
-	//			auto iter = frameData->assetCommandBuffers.find(resources.uuid);
-	//			if (iter != frameData->assetCommandBuffers.end())
-	//			{
-	//				SecondaryCommandBuffer* commandBuffer = &iter->second;
-	//				commandBuffer->Allocate(QUEUE_TYPE::GRAPHICS);
-	//			}
-	//		}
-	//	}
-	//}
 
 	void Renderer::CleanupSwapChain()
 	{
-		// These are tied to the swapchain only because their size matches the backbuffer
-		//for (uint32_t i = 0; i < CONFIG::MaxFramesInFlight; i++)
-		//{
-		//	auto frameData = GetFrameData(i);
-
-		//	frameData->hdrAttachment.Destroy();
-		//	frameData->hdrDepthBuffer.Destroy();
-		//	frameData->hdrFramebuffer.Destroy();
-		//}
-
 		for (uint32_t i = 0; i < GetSWIDDSize(); i++)
 		{
 			auto swidd = GetSWIDDAtIndex(i);
@@ -1545,86 +1074,6 @@ namespace TANG
 
 		return res;
 	}
-
-	//VkResult Renderer::SubmitCoreRenderingQueue(PrimaryCommandBuffer* cmdBuffer, FrameDependentData* frameData)
-	//{
-	//	std::array<VkCommandBuffer		, 1> commandBuffers		= { cmdBuffer->GetBuffer()							};
-	//	std::array<VkSemaphore			, 1> waitSemaphores		= { frameData->imageAvailableSemaphore				};
-	//	std::array<VkSemaphore			, 1> signalSemaphores	= { frameData->coreRenderFinishedSemaphore			};
-	//	std::array<VkPipelineStageFlags	, 1> waitStages			= { VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT				};
-
-	//	VkSubmitInfo submitInfo{};
-	//	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	//	submitInfo.waitSemaphoreCount = static_cast<uint32_t>(waitSemaphores.size());
-	//	submitInfo.pWaitSemaphores = waitSemaphores.data();
-	//	submitInfo.pWaitDstStageMask = waitStages.data();
-	//	submitInfo.commandBufferCount = static_cast<uint32_t>(commandBuffers.size());
-	//	submitInfo.pCommandBuffers = commandBuffers.data();
-	//	submitInfo.signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size());
-	//	submitInfo.pSignalSemaphores = signalSemaphores.data();
-
-	//	// Submit the HDR command buffer
-	//	return SubmitQueue(cmdBuffer->GetAllocatedQueueType(), &submitInfo, 1);
-	//}
-
-	//VkResult Renderer::SubmitPostProcessingQueue(PrimaryCommandBuffer* cmdBuffer, FrameDependentData* frameData)
-	//{
-	//	std::array<VkCommandBuffer			, 1> commandBuffers		= { cmdBuffer->GetBuffer()							};
-	//	std::array<VkSemaphore				, 1> waitSemaphores		= { frameData->coreRenderFinishedSemaphore			};
-	//	std::array<VkSemaphore				, 1> signalSemaphores	= { frameData->postProcessingFinishedSemaphore		};
-	//	std::array<VkPipelineStageFlags		, 1> waitStages			= { VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT				};
-
-	//	VkSubmitInfo submitInfo{};
-	//	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	//	submitInfo.waitSemaphoreCount = static_cast<uint32_t>(waitSemaphores.size());
-	//	submitInfo.pWaitSemaphores = waitSemaphores.data();
-	//	submitInfo.pWaitDstStageMask = waitStages.data();
-	//	submitInfo.commandBufferCount = static_cast<uint32_t>(commandBuffers.size());
-	//	submitInfo.pCommandBuffers = commandBuffers.data();
-	//	submitInfo.signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size());
-	//	submitInfo.pSignalSemaphores = signalSemaphores.data();
-
-	//	// Submit all compute post-processing effects
-	//	return SubmitQueue(cmdBuffer->GetAllocatedQueueType(), &submitInfo, 1);
-	//}
-
-	//VkResult Renderer::SubmitLDRConversionQueue(PrimaryCommandBuffer* cmdBuffer, FrameDependentData* frameData)
-	//{
-	//	std::array<VkCommandBuffer			, 1> commandBuffers		= { cmdBuffer->GetBuffer()						};
-	//	std::array<VkSemaphore				, 1> waitSemaphores		= { frameData->postProcessingFinishedSemaphore	};
-	//	std::array<VkSemaphore				, 1> signalSemaphores	= { frameData->renderFinishedSemaphore			};
-	//	std::array<VkPipelineStageFlags		, 1> waitStages			= { VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT			};
-
-	//	VkSubmitInfo submitInfo{};
-	//	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	//	submitInfo.waitSemaphoreCount = static_cast<uint32_t>(waitSemaphores.size());
-	//	submitInfo.pWaitSemaphores = waitSemaphores.data();
-	//	submitInfo.pWaitDstStageMask = waitStages.data();
-	//	submitInfo.commandBufferCount = static_cast<uint32_t>(commandBuffers.size());
-	//	submitInfo.pCommandBuffers = commandBuffers.data();
-	//	submitInfo.signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size());
-	//	submitInfo.pSignalSemaphores = signalSemaphores.data();
-
-	//	// Submit LDR conversion command buffer. This is the last step in drawing 
-	//	// the current frame, so also signal the inFlight fence that the frame is done
-	//	return SubmitQueue(cmdBuffer->GetAllocatedQueueType(), &submitInfo, 1, frameData->inFlightFence);
-	//}
-
-	//SecondaryCommandBuffer* Renderer::GetSecondaryCommandBufferFromUUID(UUID uuid)
-	//{
-	//	auto frameData = GetCurrentFDD();
-
-	//	auto secondaryCmdBufferIter = frameData->assetCommandBuffers.find(uuid);
-	//	if (secondaryCmdBufferIter == frameData->assetCommandBuffers.end())
-	//	{
-	//		LogWarning("Asset with UUID '%ull' doesn't have a secondary command buffer?", uuid);
-	//		// Should we create a secondary command buffer here?
-
-	//		return nullptr;
-	//	}
-
-	//	return &(secondaryCmdBufferIter->second);
-	//}
 
 	void Renderer::CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)
 	{

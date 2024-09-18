@@ -295,28 +295,6 @@ void PreprocessSkyboxCubemap(TANG::UUID cubemap, TANG::UUID quad)
     TANG::Draw();
     TANG::WaitForFence(info.fence);
 
-    //VkCommandBuffer commandBuffers[1] = { cmdBuffer.GetBuffer() };
-
-    //VkSubmitInfo submitInfo{};
-    //submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    //submitInfo.waitSemaphoreCount = 0;
-    //submitInfo.pWaitSemaphores = nullptr;
-    //submitInfo.pWaitDstStageMask = 0;
-    //submitInfo.commandBufferCount = 1;
-    //submitInfo.pCommandBuffers = commandBuffers;
-
-    //VkFence cubemapPreprocessingFence = cubemapPreprocessingPass.GetFence();
-    //vkResetFences(GetLogicalDevice(), 1, &cubemapPreprocessingFence);
-
-    //if (SubmitQueue(QUEUE_TYPE::GRAPHICS, &submitInfo, 1, cubemapPreprocessingFence) != VK_SUCCESS)
-    //{
-	   // TANG::LogError("Failed to execute commands for cubemap preprocessing!");
-	   // return;
-    //}
-
-    //// Wait for the GPU to finish preprocessing the cubemap
-    //vkWaitForFences(GetLogicalDevice(), 1, &cubemapPreprocessingFence, VK_TRUE, UINT64_MAX);
-
     cubemapPreprocessingPass.UpdatePrefilterMapViewScope();
     cubemapPreprocessingPass.DestroyIntermediates();
 
@@ -530,18 +508,7 @@ int main(uint32_t argc, const char** argv)
         TANG::UUID id = TANG::LoadAsset(assetName.c_str());
         if (id != TANG::INVALID_UUID)
         {
-            MyAsset asset(assetName, id);
-
-			////float scale = 0.005f;
-   //         float scale = 15.0f;
-   //         //float scale = 1.0f;
-			//asset.scale[0] = scale;
-			//asset.scale[1] = scale;
-			//asset.scale[2] = scale;
-
-   //         TANG::UpdateAssetTransform(id, asset.pos, asset.rot, asset.scale);
-
-            assets.push_back(asset);
+            assets.push_back(MyAsset(assetName, id));
         }
     }
 
