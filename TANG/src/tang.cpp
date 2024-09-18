@@ -167,6 +167,17 @@ namespace TANG
 	{
 		return Renderer::GetInstance().GetCurrentSwapChainFramebuffer();
 	}
+
+	void RegisterSwapChainRecreatedCallback(SwapChainRecreatedCallback callback)
+	{
+		Renderer::GetInstance().RegisterSwapChainRecreatedCallback(callback);
+	}
+
+	void RegisterRendererShutdownCallback(RendererShutdownCallback callback)
+	{
+		Renderer::GetInstance().RegisterRendererShutdownCallback(callback);
+	}
+
 	// TEMP TEMP TEMP
 
 	void BeginFrame()
@@ -239,6 +250,16 @@ namespace TANG
 		}
 
 		return asset->uuid;
+	}
+
+	void DestroyAsset(UUID uuid)
+	{
+		AssetManager::Get().DestroyAssetResources(uuid);
+	}
+
+	void DestroyAllAssets()
+	{
+		AssetManager::Get().DestroyAllAssetResources();
 	}
 
 	AssetResources* GetAssetResources(UUID uuid)

@@ -144,14 +144,14 @@ void SkyboxPass::CreateDescriptorSets()
 	{
 		for (uint32_t j = 0; j < skyboxSetLayoutCount; j++)
 		{
-			std::optional<TANG::DescriptorSetLayout> setLayoutOpt = skyboxSetLayoutCache.GetSetLayout(j);
-			if (!setLayoutOpt.has_value())
+			const TANG::DescriptorSetLayout* setLayoutOpt = skyboxSetLayoutCache.GetSetLayout(j);
+			if (setLayoutOpt == nullptr)
 			{
 				TANG::LogWarning("Failed to create skybox descriptor set! Set layout at %u was null", j);
 				continue;
 			}
 
-			skyboxDescriptorSets[i][j] = TANG::AllocateDescriptorSet(setLayoutOpt.value());
+			skyboxDescriptorSets[i][j] = TANG::AllocateDescriptorSet(*setLayoutOpt);
 		}
 	}
 }

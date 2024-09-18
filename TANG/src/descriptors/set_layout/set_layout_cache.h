@@ -2,7 +2,6 @@
 #define SET_LAYOUT_CACHE_H
 
 #include <unordered_map>
-#include <optional>
 #include <vector>
 
 #include "set_layout_summary.h"
@@ -33,11 +32,11 @@ namespace TANG
 		SetLayoutCache(SetLayoutCache&& other) noexcept;
 		SetLayoutCache& operator=(const SetLayoutCache& other) = delete;
 
-		VkDescriptorSetLayout CreateSetLayout(SetLayoutSummary& layoutSummary, VkDescriptorSetLayoutCreateFlags flags);
+		void CreateSetLayout(SetLayoutSummary& layoutSummary, VkDescriptorSetLayoutCreateFlags flags);
 		void DestroyLayouts();
 
-		std::optional<DescriptorSetLayout> GetSetLayout(uint32_t setNumber) const;
-		std::optional<DescriptorSetLayout> GetSetLayout(const SetLayoutSummary& summary) const;
+		const DescriptorSetLayout* GetSetLayout(uint32_t setNumber) const;
+		const DescriptorSetLayout* GetSetLayout(const SetLayoutSummary& summary) const;
 		uint32_t GetLayoutCount() const;
 
 		void FlattenCache(std::vector<VkDescriptorSetLayout>& out_setLayoutArray) const;

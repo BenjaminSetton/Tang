@@ -306,8 +306,8 @@ void BloomPass::CreateDescriptorSets()
 			return;
 		}
 
-		std::optional<TANG::DescriptorSetLayout> bloomDownscalingSetLayout = bloomDownscalingSetLayoutCache.GetSetLayout(0);
-		if (!bloomDownscalingSetLayout.has_value())
+		const TANG::DescriptorSetLayout* bloomDownscalingSetLayout = bloomDownscalingSetLayoutCache.GetSetLayout(0);
+		if (bloomDownscalingSetLayout == nullptr)
 		{
 			TANG::LogError("Failed to create bloom downscaling descriptor sets! Descriptor set layout is null");
 			return;
@@ -317,7 +317,7 @@ void BloomPass::CreateDescriptorSets()
 		{
 			for (uint32_t j = 0; j < TANG::CONFIG::BloomMaxMips; j++)
 			{
-				bloomDownscalingDescriptorSets[i][j] = TANG::AllocateDescriptorSet(bloomDownscalingSetLayout.value());
+				bloomDownscalingDescriptorSets[i][j] = TANG::AllocateDescriptorSet(*bloomDownscalingSetLayout);
 			}
 		}
 	}
@@ -330,8 +330,8 @@ void BloomPass::CreateDescriptorSets()
 			return;
 		}
 
-		std::optional<TANG::DescriptorSetLayout> bloomUpscalingSetLayout = bloomUpscalingSetLayoutCache.GetSetLayout(0);
-		if (!bloomUpscalingSetLayout.has_value())
+		const TANG::DescriptorSetLayout* bloomUpscalingSetLayout = bloomUpscalingSetLayoutCache.GetSetLayout(0);
+		if (bloomUpscalingSetLayout == nullptr)
 		{
 			TANG::LogError("Failed to create bloom upscaling descriptor sets! Descriptor set layout is null");
 			return;
@@ -341,7 +341,7 @@ void BloomPass::CreateDescriptorSets()
 		{
 			for (uint32_t j = 0; j < TANG::CONFIG::BloomMaxMips; j++)
 			{
-				bloomUpscalingDescriptorSets[i][j] = TANG::AllocateDescriptorSet(bloomUpscalingSetLayout.value());
+				bloomUpscalingDescriptorSets[i][j] = TANG::AllocateDescriptorSet(*bloomUpscalingSetLayout);
 			}
 		}
 	}
@@ -354,8 +354,8 @@ void BloomPass::CreateDescriptorSets()
 			return;
 		}
 
-		std::optional<TANG::DescriptorSetLayout> bloomCompositionSetLayout = bloomCompositionSetLayoutCache.GetSetLayout(0);
-		if (!bloomCompositionSetLayout.has_value())
+		const TANG::DescriptorSetLayout* bloomCompositionSetLayout = bloomCompositionSetLayoutCache.GetSetLayout(0);
+		if (bloomCompositionSetLayout == nullptr)
 		{
 			TANG::LogError("Failed to create bloom composition descriptor sets! Descriptor set layout is null");
 			return;
@@ -363,7 +363,7 @@ void BloomPass::CreateDescriptorSets()
 
 		for (uint32_t i = 0; i < TANG::CONFIG::MaxFramesInFlight; i++)
 		{
-			bloomCompositionDescriptorSets[i] = TANG::AllocateDescriptorSet(bloomCompositionSetLayout.value());
+			bloomCompositionDescriptorSets[i] = TANG::AllocateDescriptorSet(*bloomCompositionSetLayout);
 		}
 	}
 }

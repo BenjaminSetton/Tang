@@ -114,7 +114,7 @@ void LDRPass::CreateDescriptorSets()
 
 	for (uint32_t i = 0; i < TANG::CONFIG::MaxFramesInFlight; i++)
 	{
-		ldrDescriptorSet[i] = TANG::AllocateDescriptorSet(ldrSetLayoutCache.GetSetLayout(0).value());
+		ldrDescriptorSet[i] = TANG::AllocateDescriptorSet(*(ldrSetLayoutCache.GetSetLayout(0)));
 	}
 }
 

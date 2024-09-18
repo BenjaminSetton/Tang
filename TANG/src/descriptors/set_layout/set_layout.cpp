@@ -76,6 +76,11 @@ namespace TANG
 		setLayout = VK_NULL_HANDLE;
 	}
 
+	bool DescriptorSetLayout::IsValid() const
+	{
+		return setLayout != VK_NULL_HANDLE;
+	}
+
 	VkDescriptorSetLayout DescriptorSetLayout::GetLayout() const
 	{
 		return setLayout;

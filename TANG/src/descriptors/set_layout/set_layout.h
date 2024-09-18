@@ -20,6 +20,8 @@ namespace TANG
 		void Create(VkDescriptorSetLayoutCreateInfo& createInfo);
 		void Destroy();
 
+		bool IsValid() const;
+
 		VkDescriptorSetLayout GetLayout() const;
 
 	private:

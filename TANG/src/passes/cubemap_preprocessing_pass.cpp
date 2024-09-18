@@ -338,8 +338,8 @@ void CubemapPreprocessingPass::CreateDescriptorSets()
 		return;
 	}
 
-	std::optional<TANG::DescriptorSetLayout> cubemapSetLayout = cubemapPreprocessingSetLayoutCache.GetSetLayout(0);
-	if (!cubemapSetLayout.has_value())
+	const TANG::DescriptorSetLayout* cubemapSetLayout = cubemapPreprocessingSetLayoutCache.GetSetLayout(0);
+	if (cubemapSetLayout == nullptr)
 	{
 		TANG::LogError("Failed to create cubemap preprocessing descriptor sets! Descriptor set layout is null");
 		return;
@@ -347,8 +347,8 @@ void CubemapPreprocessingPass::CreateDescriptorSets()
 
 	for (uint32_t i = 0; i < 6; i++)
 	{
-		cubemapPreprocessingDescriptorSets[i] = TANG::AllocateDescriptorSet(cubemapSetLayout.value());
-		irradianceSamplingDescriptorSets[i] = TANG::AllocateDescriptorSet(cubemapSetLayout.value());
+		cubemapPreprocessingDescriptorSets[i] = TANG::AllocateDescriptorSet(*cubemapSetLayout);
+		irradianceSamplingDescriptorSets[i] = TANG::AllocateDescriptorSet(*cubemapSetLayout);
 	}
 
 	// Prefilter map
@@ -363,15 +363,15 @@ void CubemapPreprocessingPass::CreateDescriptorSets()
 		return;
 	}
 
-	std::optional<TANG::DescriptorSetLayout> prefilterCubemapSetLayout = prefilterMapCubemapSetLayoutCache.GetSetLayout(0);
-	if (!prefilterCubemapSetLayout.has_value())
+	const TANG::DescriptorSetLayout* prefilterCubemapSetLayout = prefilterMapCubemapSetLayoutCache.GetSetLayout(0);
+	if (prefilterCubemapSetLayout == nullptr)
 	{
 		TANG::LogError("Failed to create prefilter cubemap descriptor sets! Descriptor set layout is null");
 		return;
 	}
 
-	std::optional<TANG::DescriptorSetLayout> prefilterRoughnessSetLayout = prefilterMapRoughnessSetLayoutCache.GetSetLayout(0);
-	if (!prefilterRoughnessSetLayout.has_value())
+	const TANG::DescriptorSetLayout* prefilterRoughnessSetLayout = prefilterMapRoughnessSetLayoutCache.GetSetLayout(0);
+	if (prefilterRoughnessSetLayout == nullptr)
 	{
 		TANG::LogError("Failed to create prefilter roughness descriptor sets! Descriptor set layout is null");
 		return;
@@ -379,8 +379,8 @@ void CubemapPreprocessingPass::CreateDescriptorSets()
 
 	for (uint32_t i = 0; i < 6; i++)
 	{
-		prefilterMapCubemapDescriptorSets[i] = TANG::AllocateDescriptorSet(prefilterCubemapSetLayout.value());
-		prefilterMapRoughnessDescriptorSets[i] = TANG::AllocateDescriptorSet(prefilterRoughnessSetLayout.value());
+		prefilterMapCubemapDescriptorSets[i] = TANG::AllocateDescriptorSet(*prefilterCubemapSetLayout);
+		prefilterMapRoughnessDescriptorSets[i] = TANG::AllocateDescriptorSet(*prefilterRoughnessSetLayout);
 	}
 }
 

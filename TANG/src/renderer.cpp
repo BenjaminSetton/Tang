@@ -232,60 +232,36 @@ namespace TANG
 		//}
 
 		// Submit all command queues containing valid command buffers (and their respective submit infos)
-		for (uint32_t i = 0; i < static_cast<uint32_t>(m_cmdBufferQueues.size()); i++)
+		while(m_cmdQueuesToSubmit.size() != 0)
 		{
-			QUEUE_TYPE queueType = static_cast<QUEUE_TYPE>(i);
-			auto& cmdSubmitVec = m_cmdBufferQueues[i];
+			auto& [cmdBuffer, submitInfo] = m_cmdQueuesToSubmit.front();
+			TNG_ASSERT_MSG(cmdBuffer.IsValid(), "Attempting to queue an invalid command buffer?");
 
-			// Found command buffers to submit in this queue
-			uint32_t numPairs = static_cast<uint32_t>(cmdSubmitVec.size());
-			if (numPairs > 0)
+			if (cmdBuffer.IsValid())
 			{
-				std::vector<VkCommandBuffer> commandBuffers;
-				commandBuffers.reserve(numPairs);
-				std::vector<VkSemaphore> waitSemaphores;
-				waitSemaphores.reserve(numPairs);
-				std::vector<VkSemaphore> signalSemaphores;
-				signalSemaphores.reserve(numPairs);
-				std::vector<VkPipelineStageFlags> waitStages;
-				waitStages.reserve(numPairs);
-
-				VkFence fence = VK_NULL_HANDLE;
-
-				for (const auto& [cmdBuffer, submitInfo] : cmdSubmitVec)
-				{
-					if (cmdBuffer.IsValid()) commandBuffers.push_back(cmdBuffer.GetBuffer());
-					if(submitInfo.waitSemaphore != VK_NULL_HANDLE) waitSemaphores.push_back(submitInfo.waitSemaphore);
-					if(submitInfo.signalSemaphore != VK_NULL_HANDLE) signalSemaphores.push_back(submitInfo.signalSemaphore);
-					waitStages.push_back(submitInfo.waitStages); // Unconditionally push this back?
-
-					if (submitInfo.fence != VK_NULL_HANDLE)
-					{
-						TNG_ASSERT_MSG(fence == VK_NULL_HANDLE, "Submitted more than once command buffer to the same queue type that has a fence. This is not currently supported!");
-						fence = submitInfo.fence;
-					}
-				}
+				QUEUE_TYPE queueType = cmdBuffer.GetAllocatedQueueType();
+				VkCommandBuffer vkCmdBuffer = cmdBuffer.GetBuffer();
 
 				// Build submit struct and submit the queue type
-				VkSubmitInfo submitInfo{};
-				submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-				submitInfo.waitSemaphoreCount = static_cast<uint32_t>(waitSemaphores.size());
-				submitInfo.pWaitSemaphores = waitSemaphores.data();
-				submitInfo.pWaitDstStageMask = waitStages.data();
-				submitInfo.commandBufferCount = static_cast<uint32_t>(commandBuffers.size());
-				submitInfo.pCommandBuffers = commandBuffers.data();
-				submitInfo.signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size());
-				submitInfo.pSignalSemaphores = signalSemaphores.data();
+				VkSubmitInfo vkSubmitInfo{};
+				vkSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+				vkSubmitInfo.waitSemaphoreCount = (submitInfo.waitSemaphore != VK_NULL_HANDLE ? 1 : 0);
+				vkSubmitInfo.pWaitSemaphores = &submitInfo.waitSemaphore;
+				vkSubmitInfo.pWaitDstStageMask = &submitInfo.waitStages;
+				vkSubmitInfo.commandBufferCount = 1;
+				vkSubmitInfo.pCommandBuffers = &vkCmdBuffer;
+				vkSubmitInfo.signalSemaphoreCount = (submitInfo.signalSemaphore != VK_NULL_HANDLE ? 1 : 0);
+				vkSubmitInfo.pSignalSemaphores = &submitInfo.signalSemaphore;
 
-				VkResult result = SubmitQueue(queueType, &submitInfo, 1, fence);
+				VkResult result = SubmitQueue(queueType, &vkSubmitInfo, 1, submitInfo.fence);
 				if (result != VK_SUCCESS)
 				{
-					LogError("Failed to submit command queue! Queue type: %u", i);
+					LogError("Failed to submit command queue! Queue type: %u", static_cast<uint32_t>(queueType));
 					continue;
 				}
 
-				// Clear the submitted command buffers. They have all been consumed
-				cmdSubmitVec.clear();
+				// Proceed to the next command queue
+				m_cmdQueuesToSubmit.pop();
 			}
 		}
 
@@ -298,6 +274,11 @@ namespace TANG
 		vkDeviceWaitIdle(logicalDevice);
 
 		//DestroyAllAssetResources();
+
+		if (m_rendererShutdownCallback)
+		{
+			m_rendererShutdownCallback();
+		}
 
 		CleanupSwapChain();
 
@@ -415,20 +396,7 @@ namespace TANG
 	{
 		if (cmd.IsValid())
 		{
-			QUEUE_TYPE queueType = cmd.GetAllocatedQueueType();
-			if (queueType == QUEUE_TYPE::PRESENT || queueType == QUEUE_TYPE::COUNT)
-			{
-				LogError("Attempting to queue a command buffer allocated by an invalid queue type! Queue type: %u", static_cast<uint32_t>(queueType));
-				return;
-			}
-
-			CommandSubmitPair pair = std::make_pair(cmd, info);
-			size_t index = static_cast<size_t>(queueType);
-			TNG_ASSERT_MSG(index < m_cmdBufferQueues.size(), "How did we get an index for a queue type that does not exist?");
-
-			// Push new valid cmd buffer/submit info pair into the vector
-			auto& queueVec = m_cmdBufferQueues[index];
-			queueVec.push_back(pair);
+			m_cmdQueuesToSubmit.push(std::make_pair<>(cmd, info));
 		}
 	}
 
@@ -517,21 +485,15 @@ namespace TANG
 		return m_frameData[currentFrame].inFlightFence;
 	}
 
-	//void Renderer::UpdateCameraData(const glm::vec3& position, const glm::mat4& viewMatrix, const glm::mat4& projMatrix)
-	//{
-	//	// Update uniforms
-	//	pbrPass.UpdateCameraUniformBuffer(currentFrame, position);
-	//	pbrPass.UpdateViewUniformBuffer(currentFrame, viewMatrix);
-	//	pbrPass.UpdateProjUniformBuffer(currentFrame, projMatrix);
+	void Renderer::RegisterSwapChainRecreatedCallback(SwapChainRecreatedCallback callback)
+	{
+		m_swapChainRecreatedCallback = callback;
+	}
 
-	//	skyboxPass.UpdateViewProjUniformBuffers(currentFrame, viewMatrix, projMatrix);
-
-	//	// Wait for the frame to finish using the camera buffer before updating it
-	//	vkWaitForFences(GetLogicalDevice(), 1, &GetCurrentFDD()->inFlightFence, VK_TRUE, UINT64_MAX);
-
-	//	// Update skybox descriptors - pbr descriptors are updated at once before drawing
-	//	skyboxPass.UpdateDescriptorSets(currentFrame);
-	//}
+	void Renderer::RegisterRendererShutdownCallback(RendererShutdownCallback callback)
+	{
+		m_rendererShutdownCallback = callback;
+	}
 
 	void Renderer::RecreateSwapChain()
 	{
@@ -544,6 +506,12 @@ namespace TANG
 		CreateSwapChain();
 		CreateColorAttachmentTextures();
 		CreateFramebuffers();
+
+		// Let the application know that the swap chain was resized
+		if (m_swapChainRecreatedCallback != nullptr)
+		{
+			m_swapChainRecreatedCallback(framebufferWidth, framebufferHeight);
+		}
 	}
 
 	//void Renderer::SetAssetDrawState(UUID uuid)

@@ -30,6 +30,7 @@
 #include "input_manager.h" // TANG::KeyState
 
 // TEMP TEMP TEMP
+#include "callback_types.h"
 #include "config.h"
 #include "queue_types.h"
 #include "descriptors/descriptor_set.h"
@@ -83,6 +84,9 @@ namespace TANG
 
 	Framebuffer* GetCurrentSwapChainFramebuffer();
 
+	void RegisterSwapChainRecreatedCallback(SwapChainRecreatedCallback callback);
+	void RegisterRendererShutdownCallback(RendererShutdownCallback callback);
+
 	// TEMP TEMP TEMP
 	////////////////////////////////////////////////////////////////////////
 
@@ -122,6 +126,9 @@ namespace TANG
 	// the loaded asset, and all subsequent attempts to load the same asset by name will instead
 	// load the TASSET file directly
 	UUID LoadAsset(const char* filepath);
+	void DestroyAsset(UUID uuid);
+	void DestroyAllAssets(); // Convenient for application shutdown
+
 	AssetResources* GetAssetResources(UUID uuid);
 
 	///////////////////////////////////////////////////////////

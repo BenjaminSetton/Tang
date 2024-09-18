@@ -208,14 +208,14 @@ void PBRPass::CreateDescriptorSets()
 	{
 		for (uint32_t j = 0; j < pbrSetLayoutCount; j++)
 		{
-			std::optional<TANG::DescriptorSetLayout> setLayoutOpt = pbrSetLayoutCache.GetSetLayout(j);
-			if (!setLayoutOpt.has_value())
+			const TANG::DescriptorSetLayout* setLayout = pbrSetLayoutCache.GetSetLayout(j);
+			if (setLayout == nullptr)
 			{
 				TANG::LogWarning("Failed to create pbr descriptor set! Set layout at %u was null", j);
 				continue;
 			}
 
-			pbrDescriptorSets[i][j] = TANG::AllocateDescriptorSet(setLayoutOpt.value());
+			pbrDescriptorSets[i][j] = TANG::AllocateDescriptorSet(*setLayout);
 		}
 	}
 }

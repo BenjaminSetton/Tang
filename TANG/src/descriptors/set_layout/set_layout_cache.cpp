@@ -29,19 +29,19 @@ namespace TANG
 		// Nothing to do here
 	}
 
-	VkDescriptorSetLayout SetLayoutCache::CreateSetLayout(SetLayoutSummary& layoutSummary, VkDescriptorSetLayoutCreateFlags flags)
+	void SetLayoutCache::CreateSetLayout(SetLayoutSummary& layoutSummary, VkDescriptorSetLayoutCreateFlags flags)
 	{
 		if (!layoutSummary.IsValid())
 		{
 			LogError("Cannot create set layout with an invalid builder!");
-			return VK_NULL_HANDLE;
+			return;
 		}
 
 		// Attempt to grab the layout from the cache
 		auto iter = layoutCache.find(layoutSummary);
 		if (iter != layoutCache.end())
 		{
-			return iter->second.GetLayout();
+			return;
 		}
 
 		// We didn't find a descriptor set layout matching the description, so let's make a new one
@@ -55,13 +55,11 @@ namespace TANG
 
 		DescriptorSetLayout& layout = layoutCache.at(layoutSummary);
 		layout.Create(createInfo);
-
-		return layout.GetLayout();
 	}
 
 	void SetLayoutCache::DestroyLayouts()
 	{
-		for (auto iter : layoutCache)
+		for (auto& iter : layoutCache)
 		{
 			iter.second.Destroy();
 		}
@@ -69,7 +67,7 @@ namespace TANG
 		layoutCache.clear();
 	}
 
-	std::optional<DescriptorSetLayout> SetLayoutCache::GetSetLayout(uint32_t setNumber) const
+	const DescriptorSetLayout* SetLayoutCache::GetSetLayout(uint32_t setNumber) const
 	{
 		// This is not really efficient, but it does the trick for now
 		// TODO - Optimize
@@ -77,25 +75,25 @@ namespace TANG
 		{
 			if (iter.first.GetSet() == setNumber)
 			{
-				return iter.second;
+				return &(iter.second);
 			}
 		}
 
-		return {};
+		LogError("Failed to find descriptor set layout with set number %u", setNumber);
+		return nullptr;
 	}
 
-	std::optional<DescriptorSetLayout> SetLayoutCache::GetSetLayout(const SetLayoutSummary& summary) const
+	const DescriptorSetLayout* SetLayoutCache::GetSetLayout(const SetLayoutSummary& summary) const
 	{
 		auto result = layoutCache.find(summary);
 
 		if (result == layoutCache.end())
 		{
-			return {};
+			LogError("Failed to find descriptor set layout with summary");
+			return nullptr;
 		}
-		else
-		{
-			return result->second;
-		}
+
+		return &(result->second);
 	}
 
 	uint32_t SetLayoutCache::GetLayoutCount() const
@@ -107,7 +105,7 @@ namespace TANG
 	{
 		for (uint32_t i = 0; i < GetLayoutCount(); i++)
 		{
-			out_setLayoutArray.push_back(GetSetLayout(i).value().GetLayout());
+			out_setLayoutArray.push_back(GetSetLayout(i)->GetLayout());
 		}
 	}
 }

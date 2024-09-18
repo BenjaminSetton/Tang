@@ -3,6 +3,7 @@
 
 #include <array>
 #include <optional>
+#include <queue>
 #include <unordered_map>
 #include <vector>
 
@@ -19,6 +20,7 @@
 #include "render_passes/hdr_render_pass.h"
 #include "render_passes/ldr_render_pass.h"
 
+#include "callback_types.h"
 #include "config.h"
 #include "frame_data.h"
 #include "framebuffer.h"
@@ -123,6 +125,9 @@ namespace TANG
 		VkSemaphore GetCurrentRenderFinishedSemaphore() const;
 		VkFence GetCurrentFrameFence() const;
 
+		void RegisterSwapChainRecreatedCallback(SwapChainRecreatedCallback callback);
+		void RegisterRendererShutdownCallback(RendererShutdownCallback callback);
+
 	private:
 
 		VkInstance vkInstance;
@@ -136,6 +141,8 @@ namespace TANG
 		VkFormat swapChainImageFormat;
 		VkExtent2D swapChainExtent;
 
+		SwapChainRecreatedCallback m_swapChainRecreatedCallback;
+		RendererShutdownCallback m_rendererShutdownCallback;
 
 		////////////////////////////////////////////////////////////////////
 		// 
@@ -187,11 +194,8 @@ namespace TANG
 		//PBRPass pbrPass;
 		//LDRPass ldrPass;
 
-		// Maps a queue type to a list of command buffers along with their submission information.
-		// Once a command buffer is queued up, we add it and it's submit info to the vector.
-		// This is done so every command queue can be submitted all at once
-		using CommandSubmitPair = std::pair<PrimaryCommandBuffer, QueueSubmitInfo>;
-		std::array<std::vector<CommandSubmitPair>, static_cast<size_t>(QUEUE_TYPE::COUNT)> m_cmdBufferQueues;
+		// Holds a queue of all the command queues that are to be submitted this frame. Queue is consumed in Draw()
+		std::queue<std::pair<PrimaryCommandBuffer, QueueSubmitInfo>> m_cmdQueuesToSubmit;
 
 		std::array<FrameData, CONFIG::MaxFramesInFlight> m_frameData;
 		uint32_t currentFrame;

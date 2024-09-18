@@ -136,7 +136,7 @@ void CreateRenderPasses()
 
 void DestroyRenderPasses()
 {
-
+    ldrRenderPass.Destroy();
     hdrRenderPass.Destroy();
 }
 
@@ -164,6 +164,7 @@ void CreateFramebuffer(uint32_t windowWidth, uint32_t windowHeight)
         samplerInfo.minificationFilter = VK_FILTER_LINEAR;
         samplerInfo.enableAnisotropicFiltering = false;
         samplerInfo.maxAnisotropy = 1.0f;
+        samplerInfo.enableAnisotropicFiltering = false;
 
         for (uint32_t i = 0; i < TANG::GetMaxFramesInFlight(); i++)
         {
@@ -193,6 +194,7 @@ void CreateFramebuffer(uint32_t windowWidth, uint32_t windowHeight)
         samplerInfo.magnificationFilter = VK_FILTER_LINEAR;
         samplerInfo.minificationFilter = VK_FILTER_LINEAR;
         samplerInfo.maxAnisotropy = 1.0f;
+        samplerInfo.enableAnisotropicFiltering = false;
 
         for (uint32_t i = 0; i < TANG::GetMaxFramesInFlight(); i++)
         {
@@ -233,6 +235,8 @@ void DestroyFramebuffer()
 {
     for (uint32_t i = 0; i < TANG::GetMaxFramesInFlight(); i++)
     {
+        hdrColorAttachments[i].Destroy();
+        depthAttachments[i].Destroy();
         hdrFramebuffers[i].Destroy();
     }
 }
@@ -352,8 +356,6 @@ TANG::SecondaryCommandBuffer DrawSkybox(TANG::UUID skyboxUUID)
     drawData.framebufferHeight = hdrFramebuffer->GetHeight();
 	skyboxPass.Draw(currentFrame, drawData);
 
-	//VkCommandBuffer vkCmdBuffer = secondaryCmdBuffer->GetBuffer();
-	//cmdBuffer->CMD_ExecuteSecondaryCommands(&vkCmdBuffer, 1);
     return secondaryCmdBuffer;
 }
 
@@ -436,25 +438,9 @@ void PerformLDRConversion(TANG::PrimaryCommandBuffer& cmdBuffer, TANG::UUID quad
 	//        else won't make a difference
 }
 
-void QueueCommandBuffers(const TANG::PrimaryCommandBuffer& assetCmdBuffer, const TANG::PrimaryCommandBuffer& postProcessingCmdBuffer, const TANG::PrimaryCommandBuffer& ldrCmdBuffer)
+static void QueueCommandBuffers(const TANG::PrimaryCommandBuffer& assetCmdBuffer, const TANG::PrimaryCommandBuffer& postProcessingCmdBuffer, const TANG::PrimaryCommandBuffer& ldrCmdBuffer)
 {
     uint32_t currentFrame = TANG::GetCurrentFrameIndex();
-
-	// core rendering queue
-	//std::array<VkCommandBuffer		, 1> commandBuffers		= { assetCmdBuffer->GetBuffer()						};
-	//std::array<VkSemaphore			, 1> waitSemaphores		= { frameData->imageAvailableSemaphore				};
-	//std::array<VkSemaphore			, 1> signalSemaphores	= { coreRenderFinishedSemaphore[currentFrame]       };
-	//VkPipelineStageFlags waitStages = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-
-	//VkSubmitInfo submitInfo{};
-	//submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	//submitInfo.waitSemaphoreCount = static_cast<uint32_t>(waitSemaphores.size());
-	//submitInfo.pWaitSemaphores = waitSemaphores.data();
-	//submitInfo.pWaitDstStageMask = &waitStages;
-	//submitInfo.commandBufferCount = static_cast<uint32_t>(commandBuffers.size());
-	//submitInfo.pCommandBuffers = commandBuffers.data();
-	//submitInfo.signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size());
-	//submitInfo.pSignalSemaphores = signalSemaphores.data();
 
     {
         TANG::QueueSubmitInfo info{};
@@ -464,22 +450,6 @@ void QueueCommandBuffers(const TANG::PrimaryCommandBuffer& assetCmdBuffer, const
         TANG::QueueCommandBuffer(assetCmdBuffer, info);
     }
 
-    // post processing queue
-	//std::array<VkCommandBuffer			, 1> commandBuffers		= { cmdBuffer->GetBuffer()							};
-	//std::array<VkSemaphore				, 1> waitSemaphores		= { frameData->coreRenderFinishedSemaphore			};
-	//std::array<VkSemaphore				, 1> signalSemaphores	= { frameData->postProcessingFinishedSemaphore		};
-	//std::array<VkPipelineStageFlags		, 1> waitStages			= { VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT				};
-
-	//VkSubmitInfo submitInfo{};
-	//submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	//submitInfo.waitSemaphoreCount = static_cast<uint32_t>(waitSemaphores.size());
-	//submitInfo.pWaitSemaphores = waitSemaphores.data();
-	//submitInfo.pWaitDstStageMask = waitStages.data();
-	//submitInfo.commandBufferCount = static_cast<uint32_t>(commandBuffers.size());
-	//submitInfo.pCommandBuffers = commandBuffers.data();
-	//submitInfo.signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size());
-	//submitInfo.pSignalSemaphores = signalSemaphores.data();
-
     {
         TANG::QueueSubmitInfo info{};
         info.waitSemaphore = coreRenderFinishedSemaphore[currentFrame];
@@ -487,23 +457,6 @@ void QueueCommandBuffers(const TANG::PrimaryCommandBuffer& assetCmdBuffer, const
         info.waitStages = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
         TANG::QueueCommandBuffer(postProcessingCmdBuffer, info);
     }
-
-
-    // LDR conversion queue
-	//std::array<VkCommandBuffer			, 1> commandBuffers		= { cmdBuffer->GetBuffer()						};
-	//std::array<VkSemaphore				, 1> waitSemaphores		= { frameData->postProcessingFinishedSemaphore	};
-	//std::array<VkSemaphore				, 1> signalSemaphores	= { frameData->renderFinishedSemaphore			};
-	//std::array<VkPipelineStageFlags		, 1> waitStages			= { VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT			};
-
-	//VkSubmitInfo submitInfo{};
-	//submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	//submitInfo.waitSemaphoreCount = static_cast<uint32_t>(waitSemaphores.size());
-	//submitInfo.pWaitSemaphores = waitSemaphores.data();
-	//submitInfo.pWaitDstStageMask = waitStages.data();
-	//submitInfo.commandBufferCount = static_cast<uint32_t>(commandBuffers.size());
-	//submitInfo.pCommandBuffers = commandBuffers.data();
-	//submitInfo.signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size());
-	//submitInfo.pSignalSemaphores = signalSemaphores.data();
 
     {
         TANG::QueueSubmitInfo info{};
@@ -513,6 +466,26 @@ void QueueCommandBuffers(const TANG::PrimaryCommandBuffer& assetCmdBuffer, const
         info.fence = TANG::GetCurrentFrameFence();
         TANG::QueueCommandBuffer(ldrCmdBuffer, info);
     }
+}
+
+static void RecreateFramebuffers(uint32_t newWidth, uint32_t newHeight)
+{
+    DestroyFramebuffer();
+    CreateFramebuffer(newWidth, newHeight);
+
+    // Fix the projection after swap chain is resized
+    camera.Update(0.0f);
+}
+
+static void Shutdown()
+{
+	// Clean up after TANG is shutdown so we know resources are not in-use
+    camera.Shutdown();
+	DestroyFramebuffer();
+	DestroyPasses();
+	DestroyRenderPasses();
+    DestroySyncObjects();
+    TANG::DestroyAllAssets();
 }
 
 int main(uint32_t argc, const char** argv)
@@ -529,11 +502,13 @@ int main(uint32_t argc, const char** argv)
 
 	// Initialize and set the camera attributes
     camera.Initialize({ 0.0f, 5.0f, 15.0f }, { 0.0f, 0.0f, 0.0f }); // Start the camera facing towards negative Z
-	camera.SetSpeed(2.5f);
+	camera.SetSpeed(4.0f);
 	camera.SetSensitivity(5.0f);
 
 
     TANG::Initialize();
+    TANG::RegisterSwapChainRecreatedCallback(RecreateFramebuffers);
+    TANG::RegisterRendererShutdownCallback(Shutdown);
 
 	uint32_t windowWidth, windowHeight;
 	TANG::GetWindowSize(windowWidth, windowHeight);
@@ -690,12 +665,6 @@ int main(uint32_t argc, const char** argv)
 
     TANG::Shutdown();
 
-    // Clean up after TANG is shutdown so we know resources are not in-use
-    DestroyFramebuffer();
-    DestroyPasses();
-    DestroyRenderPasses();
-
-    camera.Shutdown();
 
     return EXIT_SUCCESS;
 }
