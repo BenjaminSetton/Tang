@@ -1,18 +1,9 @@
 #ifndef ASSET_TYPES_H
 #define ASSET_TYPES_H
 
-// SILENCE WARNINGS FROM GLM
-// 4201: warning C4201: nonstandard extension used: nameless struct/union
-#pragma warning(push)
-#pragma warning(disable : 4201)
-
-#include <glm/glm.hpp>
-
-#pragma warning(pop)
-
 #include "utils/logger.h"
 #include "utils/uuid.h"
-#include "vertex_types.h"
+#include "utils/vec_types.h"
 
 #include "data_buffer/vertex_buffer.h"
 #include "data_buffer/index_buffer.h"
@@ -28,22 +19,16 @@ namespace TANG
 		{
 		}
 
-		Transform(glm::vec3 _position, glm::vec3 _rotation, glm::vec3 _scale) :
-			position(_position), rotation(_rotation), scale(_scale)
+		Transform(Vec3 _position, Vec3 _rotation, Vec3 _scale) : position(_position), rotation(_rotation), scale(_scale)
 		{
 		}
 
-		Transform(const Transform& other) : 
-			position(other.position), rotation(other.rotation), scale(other.scale)
+		Transform(const Transform& other) : position(other.position), rotation(other.rotation), scale(other.scale)
 		{
 		}
 
-		Transform(Transform&& other) :
-			position(other.position), rotation(other.rotation), scale(other.scale)
+		Transform(Transform&& other) : position(other.position), rotation(other.rotation), scale(other.scale)
 		{
-			other.position = glm::vec3(0);
-			other.rotation = glm::vec3(0);
-			other.scale = glm::vec3(1);
 		}
 
 		Transform& operator=(const Transform& other)
@@ -60,9 +45,9 @@ namespace TANG
 			return *this;
 		}
 
-		glm::vec3 position;
-		glm::vec3 rotation;
-		glm::vec3 scale;
+		Vec3 position;
+		Vec3 rotation;
+		Vec3 scale;
 	};
 
 	// TODO - Create a texture registry which holds all the texture data. The interface will only expose the texture UUIDs
@@ -72,7 +57,7 @@ namespace TANG
 	//        very often, so best-case scenario is that it has a look-up complexity closest to O(1)
 	struct Texture
 	{
-		Texture() : data(nullptr), size(0, 0), bytesPerPixel(0), fileName("")
+		Texture() : data(nullptr), size(0), bytesPerPixel(0), fileName("")
 		{
 		}
 
@@ -90,7 +75,7 @@ namespace TANG
 			// Temporary debug :)
 			LogWarning("Deep-copying texture!");
 
-			data = new char[static_cast<uint32_t>(other.size.x) * static_cast<uint32_t>(other.size.y) * bytesPerPixel];
+			data = new char[static_cast<uint32_t>(other.size.GetX()) * static_cast<uint32_t>(other.size.GetY()) * bytesPerPixel];
 		}
 
 		Texture(Texture&& other) : 
@@ -111,14 +96,14 @@ namespace TANG
 				return *this;
 			}
 
-			data = new char[static_cast<uint32_t>(other.size.x) * static_cast<uint32_t>(other.size.y) * bytesPerPixel];
+			data = new char[static_cast<uint32_t>(other.size.GetX()) * static_cast<uint32_t>(other.size.GetY()) * bytesPerPixel];
 			size = other.size;
 			bytesPerPixel = other.bytesPerPixel;
 			fileName = other.fileName;
 		}
 
 		void* data;
-		glm::vec2 size;
+		Vec2 size;
 		uint32_t bytesPerPixel; // Guaranteed to be 4 by assimp loader
 		std::string fileName;
 	};

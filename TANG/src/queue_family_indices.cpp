@@ -9,7 +9,7 @@
 namespace TANG
 {
 	// If anything changes with the QueueType enum, make sure to change every reference to queueFamilies below!
-	TNG_ASSERT_COMPILE(static_cast<uint32_t>(QUEUE_TYPE::COUNT) == 4);
+	TNG_STATIC_ASSERT(static_cast<uint32_t>(QUEUE_TYPE::COUNT) == 4);
 
 	QueueFamilyIndices::QueueFamilyIndices()
 	{

@@ -70,7 +70,7 @@ namespace TANG
 		void Create(const BaseImageCreateInfo* baseImageInfo, const ImageViewCreateInfo* viewInfo = nullptr, const SamplerCreateInfo* samplerInfo = nullptr);
 		
 		// NOTE - The width, height and mipmaps field from BaseImageCreateInfo in unused in this function. Those get pulled from the loaded image directly
-		void CreateFromFile(std::string_view fileName, const BaseImageCreateInfo* createInfo, const ImageViewCreateInfo* viewInfo = nullptr, const SamplerCreateInfo* samplerInfo = nullptr);
+		//void CreateFromFile(std::string_view fileName, const BaseImageCreateInfo* createInfo, const ImageViewCreateInfo* viewInfo = nullptr, const SamplerCreateInfo* samplerInfo = nullptr);
 
 		// Create image view from a provided base image. This is used to create an image into the swapchain's provided base images, since
 		// we don't want to create our own base images in this case
@@ -126,7 +126,7 @@ namespace TANG
 	private:
 
 		void CreateBaseImage(const BaseImageCreateInfo* baseImageInfo);
-		void CreateBaseImageFromFile(std::string_view filePath, const BaseImageCreateInfo* createInfo);
+		//void CreateBaseImageFromFile(std::string_view filePath, const BaseImageCreateInfo* createInfo);
 
 		// NOTE - This function stalls the graphics queue twice!
 		void GenerateMipmaps_Immediate(uint32_t mipCount);

@@ -13,7 +13,7 @@ namespace TANG
 	void CommandPoolRegistry::CreatePools(VkSurfaceKHR surface)
 	{
 		// Ensure a new pool is created after a new queue type is added!
-		TNG_ASSERT_COMPILE(static_cast<uint32_t>(QUEUE_TYPE::COUNT) == 4);
+		TNG_STATIC_ASSERT(static_cast<uint32_t>(QUEUE_TYPE::COUNT) == 4);
 
 		VkPhysicalDevice physicalDevice = GetPhysicalDevice();
 

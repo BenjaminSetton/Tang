@@ -11,16 +11,6 @@
 #include "utils/logger.h"
 #include "utils/sanity_check.h"
 
-// Silence stb_image warnings:
-// warning C4244: 'argument': conversion from 'int' to 'short', possible loss of data
-#pragma warning(push)
-#pragma warning(disable : 4244)
-
-//#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
-
-#pragma warning(pop)
-
 namespace TANG
 {
 
@@ -87,12 +77,12 @@ namespace TANG
 		if(_samplerInfo != nullptr)   CreateSampler(_samplerInfo);
 	}
 
-	void TextureResource::CreateFromFile(std::string_view fileName, const BaseImageCreateInfo* createInfo, const ImageViewCreateInfo* viewInfo, const SamplerCreateInfo* _samplerInfo)
-	{
-		CreateBaseImageFromFile(fileName, createInfo);
-		if(viewInfo != nullptr) CreateImageViews(viewInfo);
-		if(_samplerInfo != nullptr) CreateSampler(_samplerInfo);
-	}
+	//void TextureResource::CreateFromFile(std::string_view fileName, const BaseImageCreateInfo* createInfo, const ImageViewCreateInfo* viewInfo, const SamplerCreateInfo* _samplerInfo)
+	//{
+	//	CreateBaseImageFromFile(fileName, createInfo);
+	//	if(viewInfo != nullptr) CreateImageViews(viewInfo);
+	//	if(_samplerInfo != nullptr) CreateSampler(_samplerInfo);
+	//}
 
 	void TextureResource::Destroy()
 	{
@@ -288,41 +278,41 @@ namespace TANG
 		CreateBaseImage_Helper(_baseImageInfo);
 	}
 
-	void TextureResource::CreateBaseImageFromFile(std::string_view filePath, const BaseImageCreateInfo* createInfo)
-	{
-		int _width, _height, _channels;
-		void* data;
-		if (stbi_is_hdr(filePath.data()))
-		{
-			data = stbi_loadf(filePath.data(), &_width, &_height, &_channels, STBI_rgb_alpha);
-		}
-		else
-		{
-			data = stbi_load(filePath.data(), &_width, &_height, &_channels, STBI_rgb_alpha);
-		}
+	//void TextureResource::CreateBaseImageFromFile(std::string_view filePath, const BaseImageCreateInfo* createInfo)
+	//{
+	//	int _width, _height, _channels;
+	//	void* data;
+	//	if (stbi_is_hdr(filePath.data()))
+	//	{
+	//		data = stbi_loadf(filePath.data(), &_width, &_height, &_channels, STBI_rgb_alpha);
+	//	}
+	//	else
+	//	{
+	//		data = stbi_load(filePath.data(), &_width, &_height, &_channels, STBI_rgb_alpha);
+	//	}
 
-		if (data == nullptr)
-		{
-			LogError("Failed to create texture from file '%s'!", filePath.data());
-			return;
-		}
+	//	if (data == nullptr)
+	//	{
+	//		LogError("Failed to create texture from file '%s'!", filePath.data());
+	//		return;
+	//	}
 
-		// Get the fileName from the path
-		name = filePath.substr(filePath.rfind("/") + 1, filePath.size());
+	//	// Get the fileName from the path
+	//	name = filePath.substr(filePath.rfind("/") + 1, filePath.size());
 
-		BaseImageCreateInfo _baseImageInfo = *createInfo;
-		_baseImageInfo.width = _width;
-		_baseImageInfo.height = _height;
-		CreateBaseImage_Helper(&_baseImageInfo);
+	//	BaseImageCreateInfo _baseImageInfo = *createInfo;
+	//	_baseImageInfo.width = _width;
+	//	_baseImageInfo.height = _height;
+	//	CreateBaseImage_Helper(&_baseImageInfo);
 
-		VkDeviceSize imageSize = _width * _height * bytesPerPixel;
-		CopyFromData(data, imageSize);
+	//	VkDeviceSize imageSize = _width * _height * bytesPerPixel;
+	//	CopyFromData(data, imageSize);
 
-		// Now that we've copied over the data to the texture image, we don't need the original pixels array anymore
-		stbi_image_free(data);
+	//	// Now that we've copied over the data to the texture image, we don't need the original pixels array anymore
+	//	stbi_image_free(data);
 
-		TransitionLayout_Immediate(layout, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-	}
+	//	TransitionLayout_Immediate(layout, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	//}
 
 	void TextureResource::GenerateMipmaps_Helper(VkCommandBuffer cmdBuffer, uint32_t mipCount)
 	{

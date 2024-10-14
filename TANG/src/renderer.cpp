@@ -1,24 +1,6 @@
 
 #include "renderer.h"
 
-// DISABLE WARNINGS FROM GLM
-// 4201: warning C4201: nonstandard extension used: nameless struct/union
-// 4244: warning C4244: 'conversion' conversion from 'type1' to 'type2', possible loss of data
-#pragma warning(push)
-#pragma warning(disable : 4201 4244)
-
-#define GLM_FORCE_RADIANS
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE
-#define GLM_FORCE_ALIGNED_GENTYPES
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-
-#define GLM_ENABLE_EXPERIMENTAL
-#include <glm/gtx/hash.hpp>
-#include <glm/gtx/euler_angles.hpp>
-
-#pragma warning(pop) 
-
 #include <chrono>
 #include <cstdlib>
 #include <cstdint>
@@ -28,23 +10,20 @@
 // since the surface has to be initialized for other Vulkan objects to be properly initialized as well...
 #include <glfw/glfw3.h> // GLFWwindow, glfwCreateWindowSurface() and glfwGetRequiredInstanceExtensions()
 
-#include <glm/glm.hpp>
-#include <iostream>
 #include <limits>
 #include <set>
 #include <unordered_map>
 #include <vector>
 
-#include "asset_loader.h"
+//#include "asset_utils/asset_loader.h"
 #include "cmd_buffer/disposable_command.h"
-#include "data_buffer/vertex_buffer.h"
 #include "data_buffer/index_buffer.h"
-#include "default_material.h"
+#include "data_buffer/vertex_buffer.h"
 #include "descriptors/write_descriptor_set.h"
 #include "device_cache.h"
 #include "queue_family_indices.h"
 #include "utils/file_utils.h"
-#include "ubo_structs.h"
+#include "utils/logger.h"
 
 static std::vector<const char*> validationLayers = {
 	"VK_LAYER_KHRONOS_validation"
@@ -71,7 +50,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
 	UNUSED(messageType);
 	UNUSED(messageSeverity);
 
-	std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl;
+	TANG::LogError("Validation layer error: %s", pCallbackData->pMessage);
 
 	return VK_FALSE;
 }

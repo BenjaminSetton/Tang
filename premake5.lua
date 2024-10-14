@@ -1,15 +1,13 @@
 workspace "TANG"
 
 	architecture "x64"
-	startproject "TANG"
+	startproject "SceneDemo"
 	
 	configurations
 	{
 		"Debug",
 		"Release"
 	}
-	
-outputDir = "%{cfg.system}/%{cfg.buildcfg}/%{cfg.architecture}"
 
 -- Projects
 include "TANG/premake5.lua"

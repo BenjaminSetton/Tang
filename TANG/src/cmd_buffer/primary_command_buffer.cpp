@@ -4,7 +4,7 @@
 #include "../command_pool_registry.h"
 #include "../device_cache.h"
 #include "../framebuffer.h"
-#include "../render_passes/base_render_pass.h"
+#include "../render_pass/base_render_pass.h"
 #include "../texture_resource.h"
 #include "../utils/sanity_check.h"
 #include "../utils/logger.h"
@@ -47,7 +47,7 @@ namespace TANG
 		renderPassState = other.renderPassState;
 	}
 
-	void PrimaryCommandBuffer::CMD_BeginRenderPass(const BaseRenderPass* renderPass, const Framebuffer* framebuffer, VkExtent2D renderAreaExtent, bool usingSecondaryCmdBuffers, bool clearBuffers)
+	void PrimaryCommandBuffer::CMD_BeginRenderPass(const BaseRenderPass* renderPass, const Framebuffer* framebuffer, bool usingSecondaryCmdBuffers, bool clearBuffers)
 	{
 		if (renderPassState == PRIMARY_COMMAND_RENDER_PASS_STATE::BEGUN)
 		{
@@ -73,10 +73,10 @@ namespace TANG
 			return;
 		}
 
-		if (renderAreaExtent.width == 0.0f || renderAreaExtent.height == 0.0f)
-		{
-			LogWarning("Render area width or height is set to zero for render pass begin! Loading the contents of the previous frame will not work as expected");
-		}
+		//if (renderAreaExtent.width == 0.0f || renderAreaExtent.height == 0.0f)
+		//{
+		//	LogWarning("Render area width or height is set to zero for render pass begin! Loading the contents of the previous frame will not work as expected");
+		//}
 
 		std::array<VkClearValue, 2> clearValues{};
 		clearValues[0].color = { { 0.64f, 0.8f, 0.76f, 1.0f } };
@@ -87,7 +87,7 @@ namespace TANG
 		renderPassInfo.renderPass = renderPass->GetRenderPass();
 		renderPassInfo.framebuffer = framebuffer->GetFramebuffer();
 		renderPassInfo.renderArea.offset = { 0, 0 };
-		renderPassInfo.renderArea.extent = renderAreaExtent;
+		renderPassInfo.renderArea.extent = { framebuffer->GetWidth(), framebuffer->GetHeight() };
 
 		if (clearBuffers)
 		{

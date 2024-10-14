@@ -1,10 +1,12 @@
 
 include "vendor/dependencies.lua"
 
+outputDir = "%{cfg.system}/%{cfg.buildcfg}/%{cfg.architecture}"
+
 project "TANG"
 	location "out"
 	language "C++"
-	kind "ConsoleApp"
+	kind "StaticLib"
 	
 	targetdir ("out/bin/" .. outputDir)
 	objdir ("out/obj/" .. outputDir)
@@ -12,27 +14,19 @@ project "TANG"
 	files
 	{
 		"src/**.h",
-		"src/**.cpp",
-		"src/shaders/**.vert",
-		"src/shaders/**.geo",
-		"src/shaders/**.frag",
-		"src/shaders/**.comp",
-		"src/shaders/**.glsl"
+		"src/**.cpp"
 	}
 	
 	includedirs
 	{
-		"%{IncludeDirs.assimp}",
-		"%{IncludeDirs.glfw}",
-		"%{IncludeDirs.glm}",
-		"%{IncludeDirs.stb_image}",
-		"%{IncludeDirs.vulkan}",
-		"%{IncludeDirs.nlohmann_json}",
+		"%{TANG_IncludeDirs.vulkan}",
+		"%{TANG_IncludeDirs.glfw}",
+		"%{TANG_IncludeDirs.nlohmann_json}"
 	}
 	
 	links
 	{
-		"%{Libraries.vulkan}"
+		"%{TANG_Libraries.vulkan}"
 	}
 	
 	filter "system:windows"
@@ -41,10 +35,10 @@ project "TANG"
 		warnings "High"
 		defines "TNG_WINDOWS"
 		
-		-- Build shaders
+		-- Copy the header files into the include directory
 		prebuildcommands
 		{
-			("CALL \"%{wks.location}/TANG/tools/build_shaders.bat\"")
+			("CALL \"%{wks.location}/TANG/tools/copy_header_files.bat\"")
 		}
 	
 	filter "configurations:Debug"
@@ -53,14 +47,7 @@ project "TANG"
 		
 		links
 		{
-			"%{Libraries.assimp_debug}",
-			"%{Libraries.glfw_debug}",
-		}
-		
-		-- Copy assimp debug DLL into exe folder
-		postbuildcommands
-		{
-			("{COPYFILE} \"%{Libraries.assimp_debug_dll}\" \"%{cfg.targetdir}\"")
+			"%{TANG_Libraries.glfw_debug}",
 		}
 	
 	filter "configurations:Release"
@@ -69,12 +56,5 @@ project "TANG"
 		
 		links
 		{
-			"%{Libraries.assimp_release}",
-			"%{Libraries.glfw_release}",
-		}
-		
-		-- Copy assimp release DLL into exe folder
-		postbuildcommands
-		{
-			("{COPYFILE} \"%{Libraries.assimp_release_dll}\" \"%{cfg.targetdir}\"")
+			"%{TANG_Libraries.glfw_release}",
 		}

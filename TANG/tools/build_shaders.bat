@@ -11,7 +11,7 @@ cd %BAT_DIR%
 :: The shader include directory should only include any glsl files that are '#include'd in other shader files. If unspecified, the compiler will error out in any shader using that preprocessor directive
 :: Template - compile_shaders.py <src_dir> <out_dir> <include_dir>
 :: E.g. - build_shaders.py "C:\my_src_dir" "C:\my_out_dir" "C:\my_include_dir"
-call py ./python/build_shaders.py "src/shaders" "out/shaders" "src/shaders/common"
+call py ./python/build_shaders.py "SceneDemo/src/shaders" "SceneDemo/out/shaders" "SceneDemo/src/shaders/common"
 
 popd
 

@@ -29,7 +29,7 @@ namespace TANG
 		PrimaryCommandBuffer(PrimaryCommandBuffer&& other) noexcept;
 
 		// Begin and end commands for a render pass
-		void CMD_BeginRenderPass(const BaseRenderPass* renderPass, const Framebuffer* frameBuffer, VkExtent2D renderAreaExtent, bool usingSecondaryCmdBuffers, bool clearBuffers);
+		void CMD_BeginRenderPass(const BaseRenderPass* renderPass, const Framebuffer* frameBuffer, bool usingSecondaryCmdBuffers, bool clearBuffers);
 		void CMD_EndRenderPass(const BaseRenderPass* renderPass, Framebuffer* framebuffer);
 
 		void CMD_NextSubpass(bool usingSecondaryCmdBuffers);

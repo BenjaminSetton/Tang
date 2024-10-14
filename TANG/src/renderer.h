@@ -17,8 +17,7 @@
 #include "descriptors/set_layout/set_layout_cache.h"
 #include "descriptors/set_layout/set_layout_summary.h"
 
-#include "render_passes/hdr_render_pass.h"
-#include "render_passes/ldr_render_pass.h"
+#include "render_pass/core_render_pass.h"
 
 #include "callback_types.h"
 #include "config.h"
@@ -35,6 +34,7 @@ namespace TANG
 	struct SwapChainSupportDetails;
 	class QueueFamilyIndices;
 	class DisposableCommand;
+	class CoreRenderPass;
 
 	class Renderer
 	{
@@ -148,7 +148,7 @@ namespace TANG
 		std::array<FrameData, CONFIG::MaxFramesInFlight> m_frameData;
 		uint32_t currentFrame;
 
-		LDRRenderPass renderPass;
+		CoreRenderPass renderPass;
 
 		// TODO - Move to it's own manager
 		DescriptorPool descriptorPool;

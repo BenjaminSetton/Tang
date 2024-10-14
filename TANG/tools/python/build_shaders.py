@@ -3,6 +3,7 @@ import os
 import re
 import sys
 import hashlib # Hashing shader source files
+from print_utils import *
 
 from pathlib import Path
 
@@ -19,31 +20,6 @@ G_INCLUDE_PATH      = None
 G_OUTPUT_DIR        = None
 G_OUTPUT_PATH       = None
 G_SHADER_COMPILER   = None
-
-
-# Log a common message
-def LogCommon(msg: str):
-    print(f'[ SHADERS ] {msg}')
-
-
-# Log a shader build error
-def LogError(msg: str):
-    LogCommon(f'[ ERROR ] {msg}')
-    
-
-# Log a shader build warning
-def LogWarning(msg: str):
-    LogCommon(f'[ WARNING ] {msg}')
-    
-
-# Log a generic info message
-def LogInfo(msg: str):
-    LogCommon(f'[ INFO ] {msg}')
-    
-
-# Log a build step
-def LogBuildStep(msg: str):
-    LogCommon(f'[ {msg.upper()} ]')
     
 
 # Takes in the checksum source in binary format. Usually this comes from calling read() on a
@@ -405,7 +381,7 @@ def CheckShaderDependencies(shaderPath: str, checksums: dict, dependencyComputed
     return dependenciesRequiringRecompilation
 
 
-def main():
+def BuildShaders() -> int:
 
     global G_PROJECT_DIR
     global G_SOURCE_DIR
@@ -416,23 +392,30 @@ def main():
     global G_OUTPUT_PATH
     global G_SHADER_COMPILER
     
-    LogBuildStep("BUILDING SHADERS START")
-
-    G_PROJECT_DIR = str(Path(sys.argv[0]).parent.absolute().parent.parent) # This is ugly, but for some reason it won't let me do .parent 3 times...
+    G_PROJECT_DIR = os.getenv("TANG_PROJ_DIR")
+    if G_PROJECT_DIR is None:
+        LogError("Failed to build shaders, project directory is None!")
+        return 0
+        
+    G_PROJECT_DIR = os.path.normpath(G_PROJECT_DIR)
     
     # Shader source directory
     G_SOURCE_DIR = sys.argv[1]
     G_SOURCE_PATH = f'{G_PROJECT_DIR}/{G_SOURCE_DIR}'
     if G_SOURCE_DIR is None or not os.path.exists(G_SOURCE_PATH):
         LogError(f'Please provide a valid shader source directory, the following path does not exist: {G_SOURCE_PATH}')
-        return
+        return 0
+        
+    G_SOURCE_PATH = os.path.normpath(G_SOURCE_PATH)
     
     # Shader output directory
     G_OUTPUT_DIR = sys.argv[2]
     G_OUTPUT_PATH = f'{G_PROJECT_DIR}/{G_OUTPUT_DIR}'
     if G_OUTPUT_DIR is None:
         LogError(f'Please provide a valid shader output directory')
-        return
+        return 0
+        
+    G_OUTPUT_PATH = os.path.normpath(G_OUTPUT_PATH)
     
     # Check that the output directory exists. If not, create it
     os.makedirs(G_OUTPUT_PATH, exist_ok=True)
@@ -442,12 +425,12 @@ def main():
     G_INCLUDE_PATH = os.path.normpath(f'{G_PROJECT_DIR}/{G_INCLUDE_DIR}')
     if G_INCLUDE_DIR is None or not os.path.exists(G_INCLUDE_PATH):
         LogError(f'Please provide a valid shader include directory, the following path does not exist: {G_INCLUDE_PATH}')
-        return
+        return 0
     
     # Ensure the Vulkan SDK is installed
     if G_VULKAN_SDK is None:
         LogError("Please install the Vulkan SDK to compile shaders")
-        return
+        return 0
         
     G_SHADER_COMPILER = os.path.normpath(f"{G_VULKAN_SDK}/Bin/glslc.exe")
     
@@ -476,7 +459,7 @@ def main():
                 LogInfo(f'Checksum file loaded "{checksumFileName}"')
         except Exception as e:
             LogError(f'Failed to read shader checksum file contents! Exception raised: "{e}"')
-            return
+            return 0
         
     else: # file doesn't exists so we're going to create it beforehand
         checksumFileHandle = open(checksumFilePath, "w")
@@ -488,7 +471,6 @@ def main():
     newHashesFound = False
     dependencyComputedHashes = {} # Stores the hashes for all the dependencies (a.k.a included .glsl files). We cache them to avoid re-calculating hashes for dependencies
     LogInfo(f'Using shader compiler "{G_SHADER_COMPILER}"')
-    LogInfo(f'Found {len(shaderList)} shaders...')
     for i, shaderPath in enumerate(shaderList):
     
         shaderPathStr = str(shaderPath)
@@ -562,6 +544,17 @@ def main():
     checksumFileHandle.close()
     
     LogBuildStep("SHADER COMPILATION/METADATA END")
+    
+    return len(shaderList)
+
+
+def main():
+    
+    LogBuildStep("BUILDING SHADERS START")
+
+    numShadersBuilt = BuildShaders()
+    
+    LogInfo(f"Built {numShadersBuilt} shaders!")
     LogBuildStep("BUILDING SHADERS END")
 
 if __name__ == "__main__":

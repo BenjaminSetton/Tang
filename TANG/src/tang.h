@@ -42,6 +42,17 @@ namespace TANG
 {
 	///////////////////////////////////////////////////////////
 	//
+	//		RENDER BACKEND
+	// 
+	///////////////////////////////////////////////////////////
+	enum class RenderBackend
+	{
+		// Only Vulkan is supported currently
+		VULKAN
+	};
+
+	///////////////////////////////////////////////////////////
+	//
 	//		CORE
 	// 
 	///////////////////////////////////////////////////////////
@@ -53,11 +64,12 @@ namespace TANG
 	// NOTE - This must be the FIRST API function call.
 	void Initialize(const char* windowTitle = nullptr);
 
+	// Sets the render backend that will be used for rendering calls internally
+	void SetRenderBackend(RenderBackend backend);
+
 	// Core API update loop
 	void Update(float deltaTime);
 
-	////////////////////////////////////////////////////////////////////////
-	// TEMP TEMP TEMP
 	DescriptorSet AllocateDescriptorSet(const DescriptorSetLayout& setLayout);
 	PrimaryCommandBuffer AllocatePrimaryCommandBuffer(QUEUE_TYPE type);
 	SecondaryCommandBuffer AllocateSecondaryCommandBuffer(QUEUE_TYPE type);
@@ -86,9 +98,6 @@ namespace TANG
 
 	void RegisterSwapChainRecreatedCallback(SwapChainRecreatedCallback callback);
 	void RegisterRendererShutdownCallback(RendererShutdownCallback callback);
-
-	// TEMP TEMP TEMP
-	////////////////////////////////////////////////////////////////////////
 
 	void BeginFrame();
 
@@ -120,46 +129,11 @@ namespace TANG
 	// Returns the size of the main window
 	void GetWindowSize(uint32_t& outWidth, uint32_t& outHeight);
 
-	// Loads an asset given the filepath to the asset file on disk. If the asset has not been
-	// imported before, this function will import any of the supported asset types: FBX and OBJ. 
-	// Upon importing the asset, the Load() call will serialize a TASSET file corresponding to
-	// the loaded asset, and all subsequent attempts to load the same asset by name will instead
-	// load the TASSET file directly
-	UUID LoadAsset(const char* filepath);
-	void DestroyAsset(UUID uuid);
-	void DestroyAllAssets(); // Convenient for application shutdown
-
-	AssetResources* GetAssetResources(UUID uuid);
-
 	///////////////////////////////////////////////////////////
 	//
 	//		UPDATE
 	// 
 	///////////////////////////////////////////////////////////
-
-	// Renders an asset given it's UUID for this particular frame. This function will not do anything on the following
-	// cases:
-	// 1. The UUID points to an asset internally that does not exist
-	// 2. The UUID is invalid (refer to INVALID_UUID inside uuid.h)
-	//void ShowAsset(UUID uuid);
-
-	// Update the transform of the asset represented by the provided UUID. 
-	// NOTE - The position, rotation and scale parameters MUST be vectors with exactly three components
-	//void UpdateAssetTransform(UUID uuid, float* position, float* rotation, float* scale);
-
-	// Update the position of the asset represented by the provided UUID.
-	// NOTE - The position parameter MUST be a vector with exactly three components
-	//void UpdateAssetPosition(UUID uuid, float* position);
-
-	// Update the rotation of the asset represented by the provided UUID.
-	// If the given rotation is in degrees it must be specified using the "isDegrees" parameter,
-	// a value of false is interpreted as a rotation in radians instead.
-	// NOTE - The rotation parameter MUST be a vector with exactly three components
-	//void UpdateAssetRotation(UUID uuid, float* rotation, bool isDegrees);
-
-	// Update the scale of the asset represented by the provided UUID.
-	// NOTE - The scale parameter MUST be a vector with exactly three components
-	//void UpdateAssetScale(UUID uuid, float* scale);
 
 	// Returns whether the provided key is pressed. Note that this function will return true as long as the key is held down
 	bool IsKeyPressed(int key);

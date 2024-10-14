@@ -3,7 +3,7 @@
 #include "../command_pool_registry.h" // GetCommandPool()
 #include "../data_buffer/index_buffer.h" // GetIndexType()
 #include "../device_cache.h"
-#include "../pipelines/base_pipeline.h" // BasePipeline
+#include "../base_pipeline.h" // BasePipeline
 #include "../utils/logger.h"
 #include "../utils/sanity_check.h"
 #include "command_buffer.h"
