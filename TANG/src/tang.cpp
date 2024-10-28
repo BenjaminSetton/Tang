@@ -72,7 +72,6 @@ namespace TANG
 		renderer.Update(deltaTime);
 	}
 
-	// TEMP TEMP TEMP
 	DescriptorSet AllocateDescriptorSet(const DescriptorSetLayout& setLayout)
 	{
 		return Renderer::GetInstance().AllocateDescriptorSet(setLayout);
@@ -167,8 +166,6 @@ namespace TANG
 	{
 		Renderer::GetInstance().RegisterRendererShutdownCallback(callback);
 	}
-
-	// TEMP TEMP TEMP
 
 	void BeginFrame()
 	{

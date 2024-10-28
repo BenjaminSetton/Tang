@@ -5,6 +5,7 @@ A simple graphics framework that allows any project to quickly display stuff on 
 
 ## DISCLAIMER
 
+**This repository has been abandoned!**
 **This project currently supports Windows only!**
 
 ## INSTALLATION
